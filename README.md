@@ -47,6 +47,13 @@ land in the **Hall of Fame**. **EVO** pits your top 8 (by elo) against a
 persistent roster of elite world players who drift slightly year to year — the
 broadcast cuts out once the last arcade player is eliminated.
 
+**Streaming**: the arcade runs a stream channel (name it what you like). Once
+per hour you can put one setup's match on stream — curate close, high-level
+games between popular personalities to grow hype and followers. Every
+tournament match is auto-streamed, EVO is always packed, and live chat
+(random accounts, not your players) reacts line by line as matches play out.
+A brand-new channel streams into the void: zero viewers until you build hype.
+
 **Manage** lets you edit the game, arcade, schedule and roster mid-save.
 
 ## Code layout

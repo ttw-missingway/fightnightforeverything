@@ -162,10 +162,76 @@ function maybeUnlockTechnique(save, player, events) {
 
 // ---------- Interactions ----------
 
-function runInteraction(save, group, where, events) {
+/**
+ * Small narrated social moments with real effects — jokes that land or
+ * don't, compliments, trash talk, post-match afterglow and salt. Returns
+ * display strings; mood/relationship changes are applied as they happen.
+ */
+function makeBeats(save, group, where, results) {
+  const beats = []
+
+  const glow = group.find((p) => results[p.id] === 'won' && p.mood >= 6)
+  const salty = group.find((p) => results[p.id] === 'lost' && p.mood <= 5.5)
+  if (glow && chance(0.55)) beats.push(`${pName(save, glow)} is still buzzing about their win earlier.`)
+  else if (salty && chance(0.55)) beats.push(`${pName(save, salty)} is quietly salty about how their sets went today.`)
+
+  // Someone cracks a joke. Whether it lands depends on the target.
+  if (group.length >= 2 && chance(0.55)) {
+    const joker = [...group].sort((x, y) =>
+      (y.social.charisma + y.social.persona) - (x.social.charisma + x.social.persona))[0]
+    const target = choice(group.filter((p) => p !== joker))
+    const landChance = clamp(
+      0.45 + joker.social.charisma * 0.04 + getRel(target, joker) * 0.003 +
+      (target.mood - 5) * 0.03 - (results[target.id] === 'lost' ? 0.15 : 0),
+      0.1, 0.92)
+    beats.push(`${pName(save, joker)} cracks a joke at ${pName(save, target)}'s expense.`)
+    if (chance(landChance)) {
+      const dm = 0.2 + target.social.sensitivity * 0.06
+      target.mood = clamp(target.mood + dm, 0, 10)
+      shiftRel(target, joker, 1.5)
+      beats.push(`${pName(save, target)} cackles. (+${dm.toFixed(1)} mood)`)
+    } else {
+      const dm = 0.3 + target.social.sensitivity * 0.12
+      target.mood = clamp(target.mood - dm, 0, 10)
+      shiftRel(target, joker, -2.5)
+      beats.push(`${pName(save, target)} did not take it well. (−${dm.toFixed(1)} mood)`)
+    }
+  }
+
+  const kind = group.find((p) => p.social.politeness >= 7)
+  if (kind && group.length >= 2 && chance(0.3)) {
+    const target = choice(group.filter((p) => p !== kind))
+    const dm = 0.15 + target.social.sensitivity * 0.05
+    target.mood = clamp(target.mood + dm, 0, 10)
+    shiftRel(target, kind, 1.2)
+    beats.push(`${pName(save, kind)} compliments ${pName(save, target)}'s recent improvement. (+${dm.toFixed(1)} mood)`)
+  }
+
+  const loudmouth = group.find((p) => p.social.politeness <= 3 && p.personal.dominance >= 6)
+  if (loudmouth && group.length >= 2 && chance(0.3)) {
+    const target = choice(group.filter((p) => p !== loudmouth))
+    shiftRel(target, loudmouth, -1.5)
+    beats.push(`${pName(save, loudmouth)} talks a little too much trash; ${pName(save, target)} files it away for later.`)
+  }
+
+  if (where === 'at the concession stand' && save.arcade.foods.length && group.length >= 2 && chance(0.4)) {
+    const food = choice(save.arcade.foods)
+    const fans = group.filter((p) => p.foods.includes(food))
+    for (const f of fans) f.mood = clamp(f.mood + 0.3, 0, 10)
+    beats.push(`${pName(save, group[0])} splits ${food} with ${pName(save, group[1])}.` +
+      (fans.length ? ` ${fans.map((f) => pName(save, f)).join(' and ')} approve${fans.length === 1 ? 's' : ''}. (+0.3 mood)` : ''))
+  } else if (where.startsWith('playing') && group.length >= 2 && chance(0.4)) {
+    beats.push(`${pName(save, group[0])} and ${pName(save, group[1])} trade high scores between rounds.`)
+  }
+
+  return beats.slice(0, 4)
+}
+
+function runInteraction(save, group, where, events, results = {}) {
   const topic = choice(TOPICS)
   const feelings = []
   const outcomes = []
+  const beats = makeBeats(save, group, where, results)
   for (const a of group) {
     let totalDelta = 0
     for (const b of group) {
@@ -226,6 +292,7 @@ function runInteraction(save, group, where, events) {
     memberIds: group.map((p) => p.id),
     memberNames: group.map((p) => pName(save, p)),
     topic,
+    beats,
     feelings,
     outcomes,
   })
@@ -282,8 +349,9 @@ export function startDay(save) {
     attendeeIds: attendees.map((p) => p.id),
     newcomers,
     staysUntil,
+    results: {}, // playerId -> 'won' | 'lost' (latest result today, feeds social beats)
     openingEvents: events,
-    hours: [], // one entry per simulated hour: {label, events}
+    hours: [], // one entry per simulated hour: {label, events, streamedSetup}
   }
 }
 
@@ -293,6 +361,7 @@ export function startDay(save) {
 export function simHour(save) {
   const dip = save.dayInProgress
   if (!dip || save.hour >= HOURS_PER_DAY) return
+  dip.results ??= {} // days started before this field existed
   const hourIdx = save.hour
   const events = []
   const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
@@ -347,6 +416,8 @@ export function simHour(save) {
       // Post-match social: loser's read on the winner is shaped by winner's sportsmanship.
       const loser = result.loser
       const winner = result.winner
+      dip.results[winner.id] = 'won'
+      dip.results[loser.id] = 'lost'
       const d = socialDelta(loser, winner, { justLostTo: true })
       shiftRel(loser, winner, d)
       shiftRel(winner, loser, socialDelta(winner, loser) * 0.6)
@@ -389,7 +460,7 @@ export function simHour(save) {
       const where = chance(0.5) && save.arcade.otherGames.length
         ? `playing ${choice(save.arcade.otherGames)}`
         : 'at the concession stand'
-      runInteraction(save, g, where, events)
+      runInteraction(save, g, where, events, dip.results)
     }
     if (socPool.length === 1) {
       events.push({
@@ -403,6 +474,7 @@ export function simHour(save) {
     label: HOUR_LABELS[hourIdx],
     presentIds: present.map((p) => p.id),
     presentNames: present.map((p) => pName(save, p)),
+    streamedSetup: null, // setupIndex the user chose to stream this hour
     events,
   })
   save.hour = hourIdx + 1
@@ -451,11 +523,13 @@ export function endDay(save) {
     return true
   })
 
-  // Mood drifts back toward each player's baseline overnight.
+  // Mood drifts back toward each player's baseline overnight, and channel
+  // hype fades a touch without fresh content.
   for (const p of Object.values(save.players)) {
     p.mood = clamp(p.mood + (p.defaultMood - p.mood) * 0.25, 0, 10)
     p.respect = Math.round(p.respect * 10) / 10
   }
+  if (save.stream) save.stream.hype = clamp(save.stream.hype - 0.08, 0, 100)
 
   save.lastDayReport = {
     day: dip.day,

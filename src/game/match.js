@@ -116,39 +116,51 @@ export function updateElo(winner, loser, k = 32) {
 }
 
 // ---------- Narration ----------
+//
+// User-authored moves are SPECIAL moves — highlights, not the whole kit.
+// Jabs, movement, and gameplan come from the character's archetype, so a
+// created character fights like their archetype without the user having to
+// define "jab".
 
-function moveOfType(char, types) {
-  if (!char || !char.moves.length) return null
-  const pool = char.moves.filter((m) => types.includes(m.type))
-  return pool.length ? choice(pool) : choice(char.moves)
-}
+import { ARCHETYPE_FLAVOR, MOVE_VERBS } from './names.js'
 
 const OPENERS = [
   (a, b) => `${a.name} and ${b.name} step up. The cabinet hums.`,
   (a, b) => `Round one — ${a.name} vs ${b.name}. A small crowd leans in.`,
   (a, b) => `${a.name} cracks their knuckles as ${b.name} picks their character.`,
+  (a, b) => `Quarters up. ${a.name} versus ${b.name} — winner keeps the stick warm.`,
 ]
 
+function archetypeLine(char, pName, oppName) {
+  const pool = (char && ARCHETYPE_FLAVOR[char.archetype]) || ARCHETYPE_FLAVOR['All-Rounder']
+  return `${pName} ${choice(pool).replaceAll('{o}', oppName)}.`
+}
+
+function specialLine(char, pName, oppName) {
+  if (!char || !char.moves.length) return null
+  const move = choice(char.moves)
+  const verbs = MOVE_VERBS[move.type] || MOVE_VERBS['melee']
+  return `${pName} ${choice(verbs).replaceAll('{m}', move.name).replaceAll('{o}', oppName)}.`
+}
+
+// One beat of offense from pName: usually archetype fundamentals, sometimes
+// a named special as the highlight.
 function midLine(pName, char, oppName) {
-  const options = []
-  const proj = moveOfType(char, ['projectile'])
-  const heavy = moveOfType(char, ['heavy', 'super'])
-  const setup = moveOfType(char, ['set up', 'trap', 'install'])
-  const grab = moveOfType(char, ['command grab', 'melee'])
-  if (proj) options.push(`${pName} controls space with ${proj.name}, chipping ${oppName} down.`)
-  if (heavy) options.push(`${pName} lands a monstrous ${heavy.name} — the crowd winces.`)
-  if (setup) options.push(`${pName} sets the stage with ${setup.name}; ${oppName} is stuck guessing.`)
-  if (grab) options.push(`${pName} closes the gap and connects with ${grab.name}.`)
-  options.push(`${pName} out-paces ${oppName} in the neutral, taking round after round.`)
-  return choice(options)
+  if (char && char.moves.length && chance(0.45)) {
+    const line = specialLine(char, pName, oppName)
+    if (line) return line
+  }
+  return archetypeLine(char, pName, oppName)
 }
 
 function strugLine(pName, oppName) {
   return choice([
     `${pName} is getting cornered — ${oppName} smells blood.`,
-    `${pName} drops a combo at the worst moment.`,
+    `${pName} drops a combo at the worst possible moment.`,
     `${pName} keeps mashing out of pressure and paying for it.`,
     `${oppName} downloads ${pName} completely; every gamble gets read.`,
+    `${pName} burns all their meter and gets nothing for it.`,
+    `${pName} is stuck holding block while the chip damage piles up.`,
   ])
 }
 
@@ -167,15 +179,22 @@ export function narrateMatch({ aName, bName, charA, charB, probA, winnerIsA, lon
   lines.push(choice(OPENERS)(A, B))
 
   const beats = long ? 4 : 2
+  const pushFresh = (make) => {
+    // Re-roll once if a beat repeats a line we already used.
+    let line = make()
+    if (lines.includes(line)) line = make()
+    if (!lines.includes(line)) lines.push(line)
+  }
   for (let i = 0; i < beats; i++) {
     if (winnerProb > 0.78) {
       // A stomp: winner dominates almost every beat.
-      lines.push(chance(0.85) ? midLine(winner.name, winner.char, loser.name) : strugLine(loser.name, winner.name))
+      pushFresh(() => chance(0.85) ? midLine(winner.name, winner.char, loser.name) : strugLine(loser.name, winner.name))
     } else if (winnerProb < 0.35) {
       // Upset! The eventual winner struggles early.
-      lines.push(i < beats - 1 ? midLine(loser.name, loser.char, winner.name) : `Wait — ${winner.name} adapts out of nowhere!`)
+      if (i < beats - 1) pushFresh(() => midLine(loser.name, loser.char, winner.name))
+      else lines.push(`Wait — ${winner.name} adapts out of nowhere!`)
     } else {
-      lines.push(chance(0.5) ? midLine(A.name, A.char, B.name) : midLine(B.name, B.char, A.name))
+      pushFresh(() => chance(0.5) ? midLine(A.name, A.char, B.name) : midLine(B.name, B.char, A.name))
     }
   }
 

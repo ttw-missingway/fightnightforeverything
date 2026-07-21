@@ -4,6 +4,7 @@ import { newCharacter, newMove, newStage, newTechnique, newTournamentEntry, getM
 import {
   generateCharacter, generateMoveName, generateGameTitle, generateArcadeName,
   generateStage, generateTechnique, generateTournamentName, randomizeMatchups,
+  generateChannelName,
 } from '../game/generate.js'
 import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES } from '../game/constants.js'
 import { FOODS, OTHER_GAMES, CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
@@ -29,6 +30,12 @@ export function BasicsEditor({ save, update }) {
           <div className="row">
             <input value={save.arcade.name} onChange={(e) => update((s) => { s.arcade.name = e.target.value })} />
             <button className="small" title="random name" onClick={() => update((s) => { s.arcade.name = generateArcadeName() })}>🎲</button>
+          </div>
+        </Field>
+        <Field label="Stream channel name">
+          <div className="row">
+            <input value={save.stream?.channelName || ''} onChange={(e) => update((s) => { s.stream.channelName = e.target.value })} />
+            <button className="small" title="random name" onClick={() => update((s) => { s.stream.channelName = generateChannelName() })}>🎲</button>
           </div>
         </Field>
         <NumField label="Number of setups (cabinets for the main game)" value={save.settings.setups} min={1} max={20}

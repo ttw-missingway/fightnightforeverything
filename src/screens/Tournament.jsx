@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
+import StreamChat from '../components/StreamChat.jsx'
 
 export default function Tournament() {
   const { save, nav, mutate } = useStore()
@@ -50,6 +51,12 @@ export default function Tournament() {
           <span className="dim">{t.dateLabel} · {t.entrantCount} entrants · {
             t.type === 'evo' ? 'the biggest stage in the world' : t.type === 'teams' ? 'crew battle format' : 'single elimination'
           }</span>
+          {t.channelName && (
+            <div className="small">
+              <span className="pink">📡 live on {t.channelName}</span>
+              {done && t.peakViewers > 0 && <span className="dim"> · peak {t.peakViewers} viewers</span>}
+            </div>
+          )}
         </div>
         <div className="row">
           {!done && <button onClick={skipAll}>⏭ Skip to results</button>}
@@ -65,21 +72,12 @@ export default function Tournament() {
       )}
 
       {!done && current && (
-        <div className="card" style={{ borderColor: 'var(--pink)' }}>
-          <h3 className="pink" style={{ marginTop: 0 }}>
-            Up next — {t.rounds[current.ri].title}
-          </h3>
-          {'duels' in current.m && current.m.duels ? (
-            <p style={{ fontSize: 18 }}>{current.m.aName} <span className="dim">vs</span> {current.m.bName}</p>
-          ) : (
-            <p style={{ fontSize: 18 }}>
-              {current.m.aName} {current.m.aChar && <span className="dim small">({current.m.aChar})</span>}
-              {' '}<span className="dim">vs</span>{' '}
-              {current.m.bName} {current.m.bChar && <span className="dim small">({current.m.bChar})</span>}
-            </p>
-          )}
-          <button className="primary" onClick={playNext}>▶ Play the match</button>
-        </div>
+        <NowPlaying
+          key={current.m.id}
+          m={current.m}
+          roundTitle={t.rounds[current.ri].title}
+          onFinished={playNext}
+        />
       )}
 
       {done && (
@@ -135,6 +133,63 @@ export default function Tournament() {
   )
 }
 
+/**
+ * The match currently on the big screen: narration reveals line by line
+ * (winner only announced by the final line), with stream chat playing along.
+ */
+function NowPlaying({ m, roundTitle, onFinished }) {
+  const [lines, setLines] = useState(0) // 0 = not started
+  const total = m.narration?.length || 0
+  const started = lines > 0
+  const finished = started && lines >= total
+  const isTeamMatch = !!m.duels
+
+  return (
+    <div className="card" style={{ borderColor: 'var(--pink)' }}>
+      <h3 className="pink" style={{ marginTop: 0 }}>
+        {started ? 'Now playing' : 'Up next'} — {roundTitle}
+        {m.stream && started && <span className="small"> · 👁 {m.stream.viewers}</span>}
+      </h3>
+      <p style={{ fontSize: 18 }}>
+        {m.aName} {m.aChar && !isTeamMatch && <span className="dim small">({m.aChar})</span>}
+        {' '}<span className="dim">vs</span>{' '}
+        {m.bName} {m.bChar && !isTeamMatch && <span className="dim small">({m.bChar})</span>}
+      </p>
+
+      {!started && <button className="primary" onClick={() => setLines(1)}>▶ Play the match</button>}
+
+      {started && (
+        <div className={m.stream ? 'stream-split' : ''}>
+          <div className="narration" style={{ marginTop: 0 }}>
+            {m.narration.slice(0, lines).map((l, i) => <p key={i}>{l}</p>)}
+            {!finished && (
+              <button className="small" onClick={() => setLines(lines + 1)}>▶ What happens next?</button>
+            )}
+            {finished && isTeamMatch && m.duels.map((d, i) => (
+              <p key={`d${i}`} className="small" style={{ fontStyle: 'normal' }}>
+                {d.tiebreaker ? '⚔ tiebreaker: ' : `seat ${i + 1}: `}
+                {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
+              </p>
+            ))}
+            {finished && m.probA != null && (
+              <p className="dim small" style={{ fontStyle: 'normal' }}>
+                odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+              </p>
+            )}
+          </div>
+          {m.stream && <StreamChat stream={m.stream} revealed={lines} />}
+        </div>
+      )}
+
+      {finished && (
+        <button className="primary" style={{ marginTop: 8 }} onClick={onFinished}>
+          Continue to the next match ▶
+        </button>
+      )}
+    </div>
+  )
+}
+
 function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
   const [open, setOpen] = useState(false)
   if (m.bye) {
@@ -167,6 +222,7 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
       <div className={aWon ? 'winner' : 'loser'}>{m.aName} {m.aChar && <span className="small">({m.aChar})</span>}</div>
       <div className={!aWon ? 'winner' : 'loser'}>{m.bName} {m.bChar && <span className="small">({m.bChar})</span>}</div>
       {m.score && <div className="gold small">{m.score}</div>}
+      {m.stream && <div className="dim small">👁 {m.stream.viewers}</div>}
       {open && (
         <div className="narration" onClick={(e) => e.stopPropagation()}>
           {(m.narration || []).map((l, i) => <p key={i}>{l}</p>)}
@@ -180,6 +236,9 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
             <p className="dim small" style={{ fontStyle: 'normal' }}>
               odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
             </p>
+          )}
+          {m.stream && m.stream.comments.length > 0 && (
+            <StreamChat stream={m.stream} revealed={(m.narration || []).length} />
           )}
         </div>
       )}

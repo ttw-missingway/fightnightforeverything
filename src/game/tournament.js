@@ -4,6 +4,7 @@ import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult } from './match.js'
 import { getMatchup } from './model.js'
 import { shiftRel, socialDelta, teamLog } from './social.js'
+import { buildStream, personalityOf, elitePersonality } from './stream.js'
 
 const pName = (save, p) => displayName(p, save)
 
@@ -32,7 +33,11 @@ function entrantSkill(e) {
   return e.ref.skill
 }
 
-function resolveEntrantMatch(save, a, b, { long = true } = {}) {
+function entrantPersonality(e) {
+  return e.kind === 'arcade' ? personalityOf(e.ref) : elitePersonality(e.ref)
+}
+
+function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' } = {}) {
   const perfA = entrantPerformance(save, a)
   const perfB = entrantPerformance(save, b)
   // Matchup chart only really bites at high-level play.
@@ -68,12 +73,22 @@ function resolveEntrantMatch(save, a, b, { long = true } = {}) {
     aName: a.name, bName: b.name, charA, charB, probA, winnerIsA: aWins, long,
     winnerPhrase: winner.kind === 'arcade' ? winner.ref.catchphrase : '',
   })
+  // Every tournament match goes out on the arcade's stream channel.
+  const stream = buildStream(save, {
+    level: (entrantSkill(a) + entrantSkill(b)) / 200,
+    personality: (entrantPersonality(a) + entrantPersonality(b)) / 2,
+    probA, aWins, narration,
+    aName: a.name, bName: b.name, winnerName: winner.name,
+    context,
+  })
+
   return {
     id: uid('m'),
     aId: a.id, bId: b.id,
     aName: a.name, bName: b.name,
     aChar: entrantCharName(save, a), bChar: entrantCharName(save, b),
     probA, winnerId: winner.id, winnerName: winner.name, narration,
+    stream,
     bye: false,
   }
 }
@@ -103,7 +118,7 @@ function seedBracket(entrants) {
  * stopWhenNoArcade: rounds after every arcade player is out are simulated
  * silently (so the wider world stays consistent) but flagged as off-screen.
  */
-function runBracket(save, entrants, { stopWhenNoArcade = false } = {}) {
+function runBracket(save, entrants, { stopWhenNoArcade = false, context = 'tournament' } = {}) {
   let current = seedBracket(entrants)
   const rounds = []
   const exitRound = new Map()
@@ -130,7 +145,7 @@ function runBracket(save, entrants, { stopWhenNoArcade = false } = {}) {
         continue
       }
       if (!a && !b) { next.push(null); continue }
-      const m = resolveEntrantMatch(save, a, b)
+      const m = resolveEntrantMatch(save, a, b, { context })
       const winner = m.winnerId === a.id ? a : b
       const loser = m.winnerId === a.id ? b : a
       exitRound.set(loser.id, { entrant: loser, round: roundIdx, remaining: current.filter(Boolean).length })
@@ -253,6 +268,7 @@ export function runSinglesTournament(save, scheduleEntry) {
     champion: champion.name,
     entrantCount: entrants.length,
   }
+  decorateStreamStats(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   return { ok: true, record }
@@ -367,6 +383,7 @@ export function runTeamTournament(save, scheduleEntry) {
     champion: champion.name,
     entrantCount: entrants.length,
   }
+  decorateStreamStats(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   return { ok: true, record }
@@ -386,7 +403,7 @@ export function runEvo(save) {
     ...qualified.map((p) => arcadeEntrant(save, p)),
     ...elites.map(eliteEntrant),
   ]
-  const { rounds, placements, champion, abruptEndRound } = runBracket(save, entrants, { stopWhenNoArcade: true })
+  const { rounds, placements, champion, abruptEndRound } = runBracket(save, entrants, { stopWhenNoArcade: true, context: 'evo' })
 
   const arcadePlacements = placements.filter((pl) => pl.entrant.kind === 'arcade')
   for (const { entrant, place } of arcadePlacements) {
@@ -443,9 +460,23 @@ export function runEvo(save) {
     abrupt: abruptEndRound !== null,
     entrantCount: entrants.length,
   }
+  decorateStreamStats(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   return { ok: true, record }
+}
+
+function decorateStreamStats(save, record) {
+  let peak = 0
+  for (const round of record.rounds) {
+    for (const m of round.matches) {
+      if (m.stream) peak = Math.max(peak, m.stream.viewers)
+      for (const d of m.duels || []) if (d.stream) peak = Math.max(peak, d.stream.viewers)
+    }
+  }
+  record.channelName = save.stream.channelName
+  record.peakViewers = peak
+  return record
 }
 
 function summaryOf(record) {

@@ -168,6 +168,18 @@ tr.clickable:hover td { background: var(--card2); }
 
 .notice { background: rgba(255, 206, 79, 0.12); border: 1px solid var(--gold); color: var(--gold); border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; }
 
+.stream-split { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; align-items: start; }
+@media (max-width: 700px) { .stream-split { grid-template-columns: 1fr; } }
+.chatpanel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.chatbox { max-height: 220px; overflow-y: auto; }
+.chatline { font-size: 12.5px; padding: 2px 0; line-height: 1.35; word-break: break-word; }
+.chatuser { font-weight: 700; }
+
 .zonecard {
   background: var(--card);
   border: 2px solid var(--border);

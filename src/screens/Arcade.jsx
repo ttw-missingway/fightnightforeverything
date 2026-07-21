@@ -4,7 +4,9 @@ import { formatDay, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS
 import { whatHappensToday } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace } from '../components/ui.jsx'
+import StreamChat from '../components/StreamChat.jsx'
 import { displayName } from '../game/util.js'
+import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
 
 export default function Arcade() {
   const { save, screen, advance, nav } = useStore()
@@ -33,6 +35,11 @@ export default function Arcade() {
           <div>
             <h2 style={{ margin: 0 }}>{save.arcade.name}</h2>
             <span className="dim">{WEEKDAYS[weekdayOf(save.day)]}, {formatDay(save.day, save.year)} · running <span className="cyan">{save.game.name}</span></span>
+            <div className="small" style={{ marginTop: 2 }}>
+              <span className="pink">📡 {save.stream.channelName}</span>
+              <span className="dim"> · {save.stream.followers} followers · {hypeLabel(save.stream.hype)}</span>
+              {save.stream.peakViewers > 0 && <span className="dim"> · peak {save.stream.peakViewers} viewers</span>}
+            </div>
             {dip && (
               <div className="row" style={{ marginTop: 8 }}>
                 {HOUR_LABELS.map((h, i) => (
@@ -75,12 +82,28 @@ function splitZones(hour) {
 }
 
 function LiveDay({ save, nav }) {
+  const { mutate } = useStore()
   const dip = save.dayInProgress
   const [viewHour, setViewHour] = useState(null) // null = latest
   const [zone, setZone] = useState(null) // null = overview map
   const hourIdx = viewHour ?? dip.hours.length - 1
   const hour = dip.hours[hourIdx]
   const isCurrent = hourIdx === dip.hours.length - 1
+
+  // Put one match per hour on the arcade's stream channel.
+  const streamMatch = (setupIndex) => mutate((s) => {
+    const d = s.dayInProgress
+    if (!d) return
+    const h = d.hours[hourIdx]
+    if (!h || h.streamedSetup != null) return
+    const ev = h.events.find((e) => e.type === 'match' && e.setupIndex === setupIndex)
+    if (!ev || ev.stream) return
+    const a = s.players[ev.aId]
+    const b = s.players[ev.bId]
+    if (!a || !b) return
+    h.streamedSetup = setupIndex
+    ev.stream = buildStreamForPlayers(s, a, b, ev, 'daily')
+  })
 
   if (!hour) return <div className="card"><p className="dim">The doors just opened…</p></div>
 
@@ -149,6 +172,9 @@ function LiveDay({ save, nav }) {
           hourIdx={hourIdx}
           isCurrent={isCurrent}
           gameName={save.game.name}
+          channelName={save.stream.channelName}
+          streamedSetup={hour.streamedSetup}
+          onStream={isCurrent ? streamMatch : null}
           back={() => setZone(null)}
         />
       )}
@@ -167,12 +193,15 @@ function ZoneCard({ meta, teaser, onClick }) {
   )
 }
 
-function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, back }) {
+function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, channelName, streamedSetup, onStream, back }) {
   return (
     <div style={{ marginTop: 10 }}>
       <div className="row">
         <button onClick={back}>← Back to the floor plan</button>
         <h3 style={{ color: meta.accent, margin: 0 }}>{meta.icon} {meta.title}</h3>
+        {zone === 'setups' && isCurrent && streamedSetup == null && (
+          <span className="dim small">pick one match to put on {channelName} this hour</span>
+        )}
       </div>
       <div style={{ marginTop: 8 }}>
         {meta.events.length === 0 && (
@@ -183,7 +212,15 @@ function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, back }) {
           </p>
         )}
         {meta.events.map((ev, i) => {
-          if (ev.type === 'match') return <LiveMatch key={`${hourIdx}-${ev.setupIndex}`} m={ev} spoil={!isCurrent} />
+          if (ev.type === 'match') {
+            return (
+              <LiveMatch
+                key={`${hourIdx}-${ev.setupIndex}`} m={ev} spoil={!isCurrent}
+                canStream={!!onStream && streamedSetup == null && !ev.stream}
+                onStream={onStream ? () => onStream(ev.setupIndex) : null}
+              />
+            )
+          }
           if (ev.type === 'interaction') return <InteractionEvent key={`i${i}`} ev={ev} />
           return <PlainEvent key={`p${i}`} ev={ev} />
         })}
@@ -197,7 +234,7 @@ function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, back }) {
  * winner is only announced by the final line. Past hours (and the recap)
  * show results freely.
  */
-function LiveMatch({ m, spoil = false }) {
+function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
   const [open, setOpen] = useState(false)
   const [revealed, setRevealed] = useState(spoil ? m.narration.length : 0)
   const fullyRevealed = revealed >= m.narration.length
@@ -210,22 +247,38 @@ function LiveMatch({ m, spoil = false }) {
         {fullyRevealed
           ? <span className="gold">— {m.winnerName} wins</span>
           : <span className="dim small">— in progress…</span>}
-        {m.watcherNames?.length > 0 && <span className="dim small"> · {m.watcherNames.length} watching</span>}
+        {m.stream && <span className="pink small"> · 📡 {m.stream.viewers} viewers</span>}
+        {m.watcherNames?.length > 0 && <span className="dim small"> · {m.watcherNames.length} railbirds</span>}
       </span>
       {open && (
         <div className="narration" onClick={(e) => e.stopPropagation()}>
-          {m.narration.slice(0, revealed).map((l, i) => <p key={i}>{l}</p>)}
-          {!fullyRevealed && (
-            <button className="small" onClick={() => setRevealed(revealed + 1)}>
-              ▶ {revealed === 0 ? 'Watch the match' : 'What happens next?'}
+          {canStream && (
+            <button className="small primary" style={{ marginBottom: 8 }} onClick={onStream}>
+              📡 Put this match on stream
             </button>
           )}
-          {fullyRevealed && (
-            <p className="dim small" style={{ fontStyle: 'normal' }}>
-              win chance was {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}% · ±{m.eloDelta} elo
-              {m.watcherNames?.length > 0 && <> · railbirds: {m.watcherNames.join(', ')}</>}
-            </p>
-          )}
+          <div className={m.stream ? 'stream-split' : ''}>
+            <div>
+              {m.narration.slice(0, revealed).map((l, i) => <p key={i}>{l}</p>)}
+              {!fullyRevealed && (
+                <button className="small" onClick={() => setRevealed(revealed + 1)}>
+                  ▶ {revealed === 0 ? 'Watch the match' : 'What happens next?'}
+                </button>
+              )}
+              {fullyRevealed && (
+                <p className="dim small" style={{ fontStyle: 'normal' }}>
+                  win chance was {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}% · ±{m.eloDelta} elo
+                  {m.watcherNames?.length > 0 && <> · railbirds: {m.watcherNames.join(', ')}</>}
+                </p>
+              )}
+              {fullyRevealed && m.stream && (
+                <p className="small pink" style={{ fontStyle: 'normal' }}>
+                  📡 stream quality {m.stream.quality}/100 · channel hype {m.stream.gain >= 0 ? '+' : ''}{m.stream.gain}
+                </p>
+              )}
+            </div>
+            {m.stream && <StreamChat stream={m.stream} revealed={revealed} />}
+          </div>
         </div>
       )}
     </div>
@@ -240,6 +293,11 @@ function InteractionEvent({ ev }) {
     >
       <div className="narration">
         <p style={{ fontStyle: 'normal' }} className="dim">Talking about: <span className="cyan">{ev.topic}</span></p>
+        {(ev.beats || []).map((b, i) => (
+          <p key={`b${i}`} style={{ fontStyle: 'normal' }}>
+            {b.includes('(−') ? '💢' : b.includes('(+') ? '✨' : '•'} {b}
+          </p>
+        ))}
         {ev.feelings.map((f) => (
           <p key={f.id} style={{ fontStyle: 'normal' }}>
             {moodFace(f.mood)} {f.name} is {f.note} <span className="dim small">(mood: {moodLabel(f.mood)})</span>

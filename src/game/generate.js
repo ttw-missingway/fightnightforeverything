@@ -28,6 +28,10 @@ export function generateArcadeName() {
   return `${choice(ARCADE_NAME_PARTS.a)} ${choice(ARCADE_NAME_PARTS.b)}`
 }
 
+export function generateChannelName() {
+  return `${choice(ARCADE_NAME_PARTS.a)}${choice(ARCADE_NAME_PARTS.b)}${choice(['TV', 'Live', 'FGC', 'Fights', 'Cast', 'HD'])}`
+}
+
 export function generateStage(existing = []) {
   const used = new Set(existing.map((s) => s.name))
   const fresh = STAGE_IDEAS.filter(([n]) => !used.has(n))

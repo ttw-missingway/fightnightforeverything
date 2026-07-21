@@ -137,6 +137,13 @@ export function newSave(partial = {}) {
       otherGames: [],
       schedule: [], // newTournamentEntry()
     },
+    stream: {
+      channelName: 'ArcadeTV',
+      followers: 0,
+      hype: 0, // 0-100 channel popularity; grows with good streams
+      totalStreams: 0,
+      peakViewers: 0,
+    },
     players: {}, // id -> player
     teams: {}, // id -> team
     mentorships: [], // {mentorId, studentId, startedDay, startedYear}
@@ -185,6 +192,7 @@ export function migrateSave(save) {
   save.hour ??= 0
   save.dayInProgress ??= null
   save.charMilestones ??= []
+  save.stream ??= { channelName: 'ArcadeTV', followers: 0, hype: 0, totalStreams: 0, peakViewers: 0 }
   save.settings.nameDisplay ??= 'alias'
   save.game.playerTags ??= []
   for (const p of Object.values(save.players)) {
