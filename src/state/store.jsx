@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
-import { simDay, advanceDay, whatHappensToday } from '../game/sim.js'
+import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game/sim.js'
+import { HOURS_PER_DAY } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo } from '../game/tournament.js'
 import { generateEvoRoster } from '../game/generate.js'
+import { migrateSave } from '../game/model.js'
 
 const INDEX_KEY = 'fightnight:index'
 const saveKey = (id) => `fightnight:save:${id}`
@@ -36,7 +38,8 @@ export function persistSave(save) {
 
 export function loadSaveById(id) {
   try {
-    return JSON.parse(localStorage.getItem(saveKey(id)))
+    const save = JSON.parse(localStorage.getItem(saveKey(id)))
+    return save ? migrateSave(save) : null
   } catch {
     return null
   }
@@ -92,34 +95,49 @@ export function StoreProvider({ children }) {
     setScreen({ name: 'menu' })
   }, [setSave])
 
-  // Simulate the next day. Tournament/EVO days replace the normal arcade day
-  // and the UI jumps to the tournament screen.
-  const simulateDay = useCallback(() => {
+  // Advance time one step: open the arcade (first hour), simulate the next
+  // hour, or close up for the night. Tournament/EVO days replace the normal
+  // arcade day entirely and jump to the tournament screen.
+  const advance = useCallback(() => {
     const prev = saveRef.current
     if (!prev) return
     const next = structuredClone(prev)
-    let outcome = { type: 'day' }
-    const today = whatHappensToday(next)
-    if (today === 'evo') {
-      const res = runEvo(next)
-      outcome = res.ok ? { type: 'tournament' } : { type: 'day', notice: res.reason }
-      if (!res.ok) simDay(next)
-    } else if (today) {
-      const res = today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
-      outcome = res.ok ? { type: 'tournament' } : { type: 'day', notice: res.reason }
-      if (!res.ok) simDay(next)
+    let outcome = { type: 'hour' }
+
+    if (!next.dayInProgress) {
+      const today = whatHappensToday(next)
+      if (today === 'evo' || today) {
+        const res = today === 'evo'
+          ? runEvo(next)
+          : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+        if (res.ok) {
+          advanceDay(next)
+          outcome = { type: 'tournament' }
+        } else {
+          // Tournament fell through — run a normal day instead.
+          startDay(next)
+          simHour(next)
+          outcome = { type: 'hour', notice: res.reason }
+        }
+      } else {
+        startDay(next)
+        simHour(next)
+      }
+    } else if (next.hour < HOURS_PER_DAY) {
+      simHour(next)
     } else {
-      simDay(next)
+      endDay(next) // produces the daily recap and ticks the calendar
+      outcome = { type: 'recap' }
     }
-    advanceDay(next)
+
     persistSave(next)
     setSave(next)
     setScreen(outcome.type === 'tournament' ? { name: 'tournament' } : { name: 'arcade', notice: outcome.notice })
   }, [setSave])
 
   const value = useMemo(() => ({
-    save, screen, nav, mutate, startSave, openSave, closeSave, simulateDay,
-  }), [save, screen, nav, mutate, startSave, openSave, closeSave, simulateDay])
+    save, screen, nav, mutate, startSave, openSave, closeSave, advance,
+  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance])
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>
 }

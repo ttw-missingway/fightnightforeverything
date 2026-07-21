@@ -23,6 +23,15 @@ export function BasicsEditor({ save, update }) {
         </Field>
         <NumField label="Number of setups (cabinets for the main game)" value={save.settings.setups} min={1} max={20}
           onChange={(v) => update((s) => { s.settings.setups = v })} />
+        <Field label="Refer to players by">
+          <select
+            value={save.settings.nameDisplay || 'alias'}
+            onChange={(e) => update((s) => { s.settings.nameDisplay = e.target.value })}
+          >
+            <option value="alias">Alias / gamer tag</option>
+            <option value="fullname">First + last name</option>
+          </select>
+        </Field>
       </div>
       <div className="card">
         <h3>Generated Players</h3>
@@ -46,14 +55,25 @@ export function BasicsEditor({ save, update }) {
 
 export function TagsEditor({ save, update }) {
   return (
-    <div className="card">
-      <h3>Character Tags</h3>
-      <p className="dim small">
-        Create any tags you like (e.g. "edgy", "cute", "big damage", "honest"). Assign them to characters,
-        then mark players as attracted to or repelled by them — this shapes who mains whom.
-      </p>
-      <StringListEditor items={save.game.tags} placeholder="new tag…"
-        onChange={(items) => update((s) => { s.game.tags = items })} />
+    <div className="grid2">
+      <div className="card">
+        <h3>Character Tags</h3>
+        <p className="dim small">
+          Create any tags you like (e.g. "edgy", "cute", "big damage", "honest"). Assign them to characters,
+          then mark players as attracted to or repelled by them — this shapes who mains whom.
+        </p>
+        <StringListEditor items={save.game.tags} placeholder="new character tag…"
+          onChange={(items) => update((s) => { s.game.tags = items })} />
+      </div>
+      <div className="card">
+        <h3>Player Tags</h3>
+        <p className="dim small">
+          Vibe tags for people (e.g. "loud", "meme lord", "old head", "tryhard"). Give players their own tags,
+          then mark who's drawn to or put off by each vibe — this pulls players together or pushes them apart.
+        </p>
+        <StringListEditor items={save.game.playerTags || []} placeholder="new player tag…"
+          onChange={(items) => update((s) => { s.game.playerTags = items })} />
+      </div>
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { newPlayer, newCharacter, newMove } from './model.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, MOVE_TYPES, GENDERS } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
-  ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES,
+  ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES, CATCHPHRASES,
 } from './names.js'
 
 export function rollStatBlock(keys) {
@@ -39,6 +39,12 @@ export function generatePlayer(save, overrides = {}) {
   const repelled = tags.length
     ? sample(tags.filter((t) => !attracted.includes(t)), randInt(0, 1))
     : []
+  const pTags = save.game.playerTags || []
+  const ownTags = pTags.length ? sample(pTags, randInt(0, Math.min(2, pTags.length))) : []
+  const drawnTo = pTags.length ? sample(pTags, randInt(0, Math.min(2, pTags.length))) : []
+  const putOffBy = pTags.length
+    ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1))
+    : []
   return newPlayer({
     firstName: first,
     lastName: last,
@@ -50,8 +56,12 @@ export function generatePlayer(save, overrides = {}) {
     social: rollStatBlock(SOCIAL_KEYS),
     defaultMood: randInt(4, 7),
     mood: randInt(4, 7),
+    catchphrase: choice(CATCHPHRASES),
     attractedTags: attracted,
     repelledTags: repelled,
+    playerTags: ownTags,
+    attractedPlayerTags: drawnTo,
+    repelledPlayerTags: putOffBy,
     otherGames: sample(save.arcade.otherGames.length ? save.arcade.otherGames : OTHER_GAMES, randInt(1, 3)),
     foods: sample(save.arcade.foods.length ? save.arcade.foods : FOODS, randInt(1, 3)),
     ...overrides,

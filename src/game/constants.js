@@ -54,7 +54,8 @@ export function formatDay(dayOfYear, year) {
   return `${MONTH_NAMES[m]} ${d}, Year ${year}`
 }
 
-export const SLOTS_PER_DAY = 6 // activity rounds a player gets in one arcade day
+export const HOURS_PER_DAY = 6 // the arcade is open 4 PM - 10 PM
+export const HOUR_LABELS = ['4 PM', '5 PM', '6 PM', '7 PM', '8 PM', '9 PM']
 
 export const TOPICS = [
   'frame data', 'the current meta', 'a controversial tier list', 'an old tournament moment',

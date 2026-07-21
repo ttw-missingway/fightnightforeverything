@@ -1,15 +1,15 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName } from './util.js'
-import { SLOTS_PER_DAY, TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
 import { newInnovation } from './model.js'
 import { resolveMatch, narrateMatch, winProbability, gainSkill } from './match.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
-  tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf,
+  tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dissolveTinyTeams,
 } from './social.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
 
-const pName = (save, p) => displayName(p, save.teams)
+const pName = (save, p) => displayName(p, save)
 
 // ---------- Main character selection ----------
 
@@ -21,6 +21,11 @@ function charAppeal(save, player, char) {
     if (player.repelledTags.includes(t)) score -= 5
   }
   score += (player.charSkill[char.id] || 0) * 0.15 // sunk cost is real
+  // Nothing sells a character like winning with them.
+  const rec = player.charRecord?.[char.id]
+  if (rec && rec.w + rec.l >= 8) {
+    score += (rec.w / (rec.w + rec.l) - 0.5) * 14
+  }
   return score + rand() * 3
 }
 
@@ -38,8 +43,10 @@ export function pickMainChar(save, player) {
 
 function maybeSwitchMain(save, player, events) {
   if (player.lockedMain || !player.mainCharId) return
-  // Frustrated, disloyal players shop around.
-  const frustration = player.mood < 4 ? 1.6 : 1
+  // Frustrated, disloyal players shop around. Winning keeps them anchored.
+  const rec = player.charRecord?.[player.mainCharId]
+  const winning = rec && rec.w + rec.l >= 8 && rec.w > rec.l
+  const frustration = (player.mood < 4 ? 1.6 : 1) * (winning ? 0.4 : 1)
   if (!chance((10 - player.personal.loyalty) * 0.004 * frustration)) return
   const alt = pickMainChar(save, player)
   if (alt && alt !== player.mainCharId) {
@@ -102,6 +109,12 @@ function maybeInnovate(save, player, events) {
   player.respect += 5
   const leap = gainSkill(save, player, player.mainCharId, innov.xp)
   const char = save.game.characters.find((c) => c.id === innov.charId)
+  if (char && save.charMilestones) {
+    save.charMilestones.push({
+      charId: char.id, day: save.day, year: save.year,
+      text: `${pName(save, player)} discovered "${innov.name}"`,
+    })
+  }
   events.push({
     type: 'innovation',
     text: `${pName(save, player)} discovered a new technique: "${innov.name}"${char ? ` (${char.name} tech)` : ' (universal tech)'}! (+${leap.toFixed(1)} skill)`,
@@ -189,7 +202,10 @@ function runInteraction(save, group, where, events) {
     outcomes.push(`${pName(save, mentor)} started mentoring ${pName(save, student)}!`)
   }
 
-  // Team formation & recruitment.
+  // Team formation & recruitment. Existing teams make outsiders want their
+  // own banner — rivalry breeds rivalry.
+  const teamCount = Object.keys(save.teams).length
+  const foundingPressure = 1 + Math.min(teamCount, 3) * 0.6
   for (const a of group) {
     const team = teamOf(save, a)
     if (team) {
@@ -198,7 +214,7 @@ function runInteraction(save, group, where, events) {
           if (tryJoinTeam(save, team, b, a, events)) break
         }
       }
-    } else if (chance(a.social.community * 0.012)) {
+    } else if (chance(a.social.community * 0.012 * foundingPressure)) {
       const buddy = group.find((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 40 && getRel(b, a) > 30)
       if (buddy) tryFoundTeam(save, a, buddy, save.day, save.year, events)
     }
@@ -215,11 +231,14 @@ function runInteraction(save, group, where, events) {
   })
 }
 
-// ---------- The day loop ----------
+// ---------- The day, hour by hour ----------
 
-export function simDay(save) {
+/**
+ * Opens the arcade for the day: who shows up, who's new, who picked a main.
+ * Populates save.dayInProgress; hours are then simulated one at a time.
+ */
+export function startDay(save) {
   const events = []
-  const dateLabel = formatDay(save.day, save.year)
 
   // A new generated player may wander in.
   const cpuCount = Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
@@ -250,22 +269,42 @@ export function simDay(save) {
   }
 
   // How long each attendee sticks around (spark = stays longer).
-  const staysUntil = new Map()
+  const staysUntil = {}
   for (const p of attendees) {
-    staysUntil.set(p.id, clamp(2 + Math.round(p.personal.spark * 0.45 + rand() * 2 - 1), 1, SLOTS_PER_DAY))
+    staysUntil[p.id] = clamp(2 + Math.round(p.personal.spark * 0.45 + rand() * 2 - 1), 1, HOURS_PER_DAY)
   }
 
-  const setupsCount = Math.max(1, save.settings.setups)
+  save.hour = 0
+  save.dayInProgress = {
+    day: save.day,
+    year: save.year,
+    dateLabel: formatDay(save.day, save.year),
+    attendeeIds: attendees.map((p) => p.id),
+    newcomers,
+    staysUntil,
+    openingEvents: events,
+    hours: [], // one entry per simulated hour: {label, events}
+  }
+}
 
-  for (let slot = 0; slot < SLOTS_PER_DAY; slot++) {
-    const present = shuffle(attendees.filter((p) => staysUntil.get(p.id) > slot))
-    if (present.length === 0) continue
+/**
+ * Simulates one hour of arcade time. Requires startDay to have run.
+ */
+export function simHour(save) {
+  const dip = save.dayInProgress
+  if (!dip || save.hour >= HOURS_PER_DAY) return
+  const hourIdx = save.hour
+  const events = []
+  const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
+  const present = shuffle(attendees.filter((p) => (dip.staysUntil[p.id] || 0) > hourIdx))
 
-    // Only some players are itching to play this slot; the rest hang out.
+  if (present.length > 0) {
+    // Only some players are itching to play this hour; the rest hang out.
     const wantsToPlay = present.filter((p) =>
       chance(0.28 + p.personal.spark * 0.02 + p.personal.dominance * 0.015))
     const matches = []
     const pool = [...wantsToPlay]
+    const setupsCount = Math.max(1, save.settings.setups)
     while (matches.length < setupsCount && pool.length >= 2) {
       const a = pool.shift()
       // Prefer an opponent near their elo, or a rival they want to run it back with.
@@ -303,6 +342,7 @@ export function simDay(save) {
       const narration = narrateMatch({
         aName: pName(save, a), bName: pName(save, b),
         charA, charB, probA, winnerIsA: result.aWins,
+        winnerPhrase: result.winner.catchphrase,
       })
       // Post-match social: loser's read on the winner is shaped by winner's sportsmanship.
       const loser = result.loser
@@ -351,7 +391,31 @@ export function simDay(save) {
         : 'at the concession stand'
       runInteraction(save, g, where, events)
     }
+    if (socPool.length === 1) {
+      events.push({
+        type: 'idle',
+        text: `${pName(save, socPool[0])} nurses a drink alone at the concession stand.`,
+      })
+    }
   }
+
+  dip.hours.push({
+    label: HOUR_LABELS[hourIdx],
+    presentIds: present.map((p) => p.id),
+    presentNames: present.map((p) => pName(save, p)),
+    events,
+  })
+  save.hour = hourIdx + 1
+}
+
+/**
+ * Closes up for the night: end-of-day checks, the daily recap, calendar tick.
+ */
+export function endDay(save) {
+  const dip = save.dayInProgress
+  if (!dip) return
+  const events = []
+  const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
 
   // Once-per-day per attendee checks.
   for (const p of attendees) {
@@ -359,6 +423,7 @@ export function simDay(save) {
     maybeSwitchMain(save, p, events)
     checkFallingOut(save, p, events)
   }
+  dissolveTinyTeams(save, events)
 
   // Active mentorships pay out when both parties attended.
   const attendeeIds = new Set(attendees.map((p) => p.id))
@@ -387,23 +452,33 @@ export function simDay(save) {
   })
 
   // Mood drifts back toward each player's baseline overnight.
-  for (const p of everyone) {
+  for (const p of Object.values(save.players)) {
     p.mood = clamp(p.mood + (p.defaultMood - p.mood) * 0.25, 0, 10)
     p.respect = Math.round(p.respect * 10) / 10
   }
 
   save.lastDayReport = {
-    day: save.day,
-    year: save.year,
-    dateLabel,
-    attendeeIds: attendees.map((p) => p.id),
+    day: dip.day,
+    year: dip.year,
+    dateLabel: dip.dateLabel,
+    attendeeIds: dip.attendeeIds,
     attendeeNames: attendees.map((p) => pName(save, p)),
-    newcomers,
-    events,
+    newcomers: dip.newcomers,
+    events: [...dip.openingEvents, ...dip.hours.flatMap((h) => h.events), ...events],
   }
+  save.dayInProgress = null
+  save.hour = 0
+  advanceDay(save)
 }
 
-// Advance the calendar; returns 'evo' | 'tournament' | null for what fires today.
+// Whole day at once — used by headless testing and "skip day" convenience.
+export function simDay(save) {
+  startDay(save)
+  while (save.hour < HOURS_PER_DAY) simHour(save)
+  endDay(save)
+}
+
+// What fires today: 'evo' | schedule entry | null.
 export function whatHappensToday(save) {
   if (save.day === EVO_DAY) return 'evo'
   const t = save.arcade.schedule.find((s) => s.dayOfYear === save.day && !s.done)

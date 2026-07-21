@@ -20,7 +20,7 @@ export default function HallOfFame() {
           {mostGlorious.map((p, i) => (
             <div className="row spread" key={p.id} style={{ padding: '3px 0' }}>
               <span className="clickable" style={{ cursor: 'pointer' }} onClick={() => nav('players', { playerId: p.id })}>
-                {['🥇', '🥈', '🥉', '', ''][i]} {displayName(p, save.teams)}
+                {['🥇', '🥈', '🥉', '', ''][i]} {displayName(p, save)}
               </span>
               <span className="gold">{Math.round(p.glory)} glory</span>
             </div>

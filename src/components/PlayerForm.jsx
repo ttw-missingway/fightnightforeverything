@@ -36,6 +36,33 @@ export default function PlayerForm({ save, player, patch }) {
           <Field label="Physical description">
             <textarea value={player.description} onChange={(e) => patch((p) => { p.description = e.target.value })} />
           </Field>
+          <Field label='Catchphrase (they might say it when they win)'>
+            <input value={player.catchphrase || ''} placeholder='"Too easy!"'
+              onChange={(e) => patch((p) => { p.catchphrase = e.target.value })} />
+          </Field>
+          <Field label="Their vibe (player tags)">
+            <PillPicker options={save.game.playerTags || []} selected={player.playerTags || []}
+              onToggle={(t) => patch((p) => {
+                p.playerTags = (p.playerTags || []).includes(t)
+                  ? p.playerTags.filter((x) => x !== t) : [...(p.playerTags || []), t]
+              })} />
+          </Field>
+          <Field label="Drawn to people who are…">
+            <PillPicker options={save.game.playerTags || []} selected={player.attractedPlayerTags || []}
+              onToggle={(t) => patch((p) => {
+                p.attractedPlayerTags = (p.attractedPlayerTags || []).includes(t)
+                  ? p.attractedPlayerTags.filter((x) => x !== t) : [...(p.attractedPlayerTags || []), t]
+                p.repelledPlayerTags = (p.repelledPlayerTags || []).filter((x) => x !== t)
+              })} />
+          </Field>
+          <Field label="Put off by people who are…">
+            <PillPicker options={save.game.playerTags || []} selected={[]} badSelected={player.repelledPlayerTags || []}
+              onToggle={(t) => patch((p) => {
+                p.repelledPlayerTags = (p.repelledPlayerTags || []).includes(t)
+                  ? p.repelledPlayerTags.filter((x) => x !== t) : [...(p.repelledPlayerTags || []), t]
+                p.attractedPlayerTags = (p.attractedPlayerTags || []).filter((x) => x !== t)
+              })} />
+          </Field>
         </div>
 
         <div className="card sub">
@@ -148,71 +175,76 @@ function DirectStats({ player, patch }) {
 }
 
 /**
- * D&D-style stat allocation: roll a pool of numbers, then assign each rolled
- * value to a stat slot of your choosing.
+ * D&D-style stat allocation: roll a pool of numbers, every rolled value is
+ * auto-assigned to a slot, and picking a value already used by another stat
+ * swaps the two. Apply is always one click away.
  */
 function RollAllocate({ patch }) {
   const [pools, setPools] = useState(null) // {personal: [...12], social: [...6]}
-  const [assign, setAssign] = useState({ personal: {}, social: {} }) // statKey -> pool index
+  const [assign, setAssign] = useState(null) // {personal: {statKey: poolIdx}, social: {...}}
+  const [applied, setApplied] = useState(false)
 
   const roll = () => {
     setPools({
       personal: Array.from({ length: PERSONAL_STATS.length }, rollStat),
       social: Array.from({ length: SOCIAL_STATS.length }, rollStat),
     })
-    setAssign({ personal: {}, social: {} })
+    // Start fully assigned (stat i gets rolled value i); the user swaps from there.
+    setAssign({
+      personal: Object.fromEntries(PERSONAL_STATS.map(([k], i) => [k, i])),
+      social: Object.fromEntries(SOCIAL_STATS.map(([k], i) => [k, i])),
+    })
+    setApplied(false)
   }
 
-  const groupUI = (group, stats) => {
-    if (!pools) return null
-    const pool = pools[group]
-    const used = new Set(Object.values(assign[group]))
-    return (
-      <div>
-        <h4 className={group === 'personal' ? 'cyan' : 'pink'}>{group}</h4>
-        <div style={{ marginBottom: 6 }}>
-          {pool.map((v, i) => (
-            <span key={i} className={`rollchip ${used.has(i) ? 'used' : ''}`}>{v}</span>
-          ))}
-        </div>
-        {stats.map(([key, desc]) => (
-          <div className="row" key={key} title={desc} style={{ marginBottom: 4 }}>
-            <span className="small" style={{ width: 120, color: 'var(--dim)' }}>{key}</span>
-            <select
-              value={assign[group][key] ?? ''}
-              onChange={(e) => setAssign((a) => ({
-                ...a,
-                [group]: { ...a[group], [key]: e.target.value === '' ? undefined : Number(e.target.value) },
-              }))}
-            >
-              <option value="">—</option>
-              {pool.map((v, i) => (
-                (!used.has(i) || assign[group][key] === i) && <option key={i} value={i}>{v}</option>
-              ))}
-            </select>
-          </div>
-        ))}
-      </div>
-    )
+  // Assign poolIdx to key; whoever held poolIdx gets key's old value (a swap).
+  const setStat = (group, key, poolIdx) => {
+    setAssign((a) => {
+      const g = { ...a[group] }
+      const prevIdx = g[key]
+      const holder = Object.keys(g).find((k) => g[k] === poolIdx)
+      g[key] = poolIdx
+      if (holder && holder !== key) g[holder] = prevIdx
+      return { ...a, [group]: g }
+    })
+    setApplied(false)
   }
-
-  const complete = pools &&
-    PERSONAL_STATS.every(([k]) => assign.personal[k] !== undefined) &&
-    SOCIAL_STATS.every(([k]) => assign.social[k] !== undefined)
 
   const apply = () => {
     patch((p) => {
       for (const [k] of PERSONAL_STATS) p.personal[k] = pools.personal[assign.personal[k]]
       for (const [k] of SOCIAL_STATS) p.social[k] = pools.social[assign.social[k]]
     })
+    setApplied(true)
   }
+
+  const groupUI = (group, stats) => (
+    <div>
+      <h4 className={group === 'personal' ? 'cyan' : 'pink'}>{group}</h4>
+      <div style={{ marginBottom: 6 }}>
+        {pools[group].map((v, i) => <span key={i} className="rollchip">{v}</span>)}
+      </div>
+      {stats.map(([key, desc]) => (
+        <div className="row" key={key} title={desc} style={{ marginBottom: 4 }}>
+          <span className="small" style={{ width: 120, color: 'var(--dim)' }}>{key}</span>
+          <select
+            value={assign[group][key]}
+            onChange={(e) => setStat(group, key, Number(e.target.value))}
+          >
+            {pools[group].map((v, i) => <option key={i} value={i}>{v}</option>)}
+          </select>
+        </div>
+      ))}
+    </div>
+  )
 
   return (
     <div>
       <div className="row">
         <button onClick={roll}>🎲 {pools ? 'Re-roll' : 'Roll stats'}</button>
-        {pools && <button className="primary" disabled={!complete} onClick={apply}>Apply allocation</button>}
-        {pools && !complete && <span className="dim small">assign every rolled number to a stat</span>}
+        {pools && <button className="primary" onClick={apply}>Apply allocation</button>}
+        {pools && !applied && <span className="dim small">picking a number another stat holds swaps them</span>}
+        {applied && <span className="green small">✓ applied — check "Edit directly" to confirm</span>}
       </div>
       {pools && (
         <div className="grid2" style={{ marginTop: 10 }}>

@@ -1,10 +1,10 @@
 import { uid, chance, rand, displayName, clamp } from './util.js'
 import { formatDay } from './constants.js'
-import { performance as playerPerf, narrateMatch, updateElo, gainSkill } from './match.js'
+import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult } from './match.js'
 import { getMatchup } from './model.js'
-import { shiftRel, socialDelta } from './social.js'
+import { shiftRel, socialDelta, teamLog } from './social.js'
 
-const pName = (save, p) => displayName(p, save.teams)
+const pName = (save, p) => displayName(p, save)
 
 // ---------- Entrants (arcade players and EVO elites share one shape) ----------
 
@@ -26,10 +26,18 @@ function entrantCharName(save, e) {
   return c ? c.name : 'Random Select'
 }
 
+function entrantSkill(e) {
+  if (e.kind === 'arcade') return e.ref.charSkill[e.charId] || 0
+  return e.ref.skill
+}
+
 function resolveEntrantMatch(save, a, b, { long = true } = {}) {
   const perfA = entrantPerformance(save, a)
   const perfB = entrantPerformance(save, b)
-  const matchupShift = a.charId && b.charId ? (getMatchup(save.game, a.charId, b.charId) - 50) * 0.25 : 0
+  // Matchup chart only really bites at high-level play.
+  const weight = matchupWeight(entrantSkill(a), entrantSkill(b))
+  const matchupShift = a.charId && b.charId
+    ? (getMatchup(save.game, a.charId, b.charId) - 50) * 0.35 * weight : 0
   const probA = 1 / (1 + Math.pow(10, -(perfA - perfB + matchupShift) / 22))
   const aWins = rand() < probA
   const winner = aWins ? a : b
@@ -41,11 +49,13 @@ function resolveEntrantMatch(save, a, b, { long = true } = {}) {
     winner.ref.wins += 1
     winner.ref.mood = clamp(winner.ref.mood + 0.6, 0, 10)
     gainSkill(save, winner.ref, winner.ref.mainCharId, 0.15 + winner.ref.personal.dominance * 0.05)
+    recordCharResult(winner.ref, winner.charId, true)
   }
   if (loser.kind === 'arcade') {
     loser.ref.losses += 1
     loser.ref.mood = clamp(loser.ref.mood - (10 - loser.ref.personal.temperance) * 0.2, 0, 10)
     gainSkill(save, loser.ref, loser.ref.mainCharId, 0.15 + loser.ref.personal.determination * 0.06)
+    recordCharResult(loser.ref, loser.charId, false)
   }
   if (winner.kind === 'arcade' && loser.kind === 'arcade') {
     shiftRel(loser.ref, winner.ref, socialDelta(loser.ref, winner.ref, { justLostTo: true }))
@@ -55,6 +65,7 @@ function resolveEntrantMatch(save, a, b, { long = true } = {}) {
   const charB = save.game.characters.find((c) => c.id === b.charId)
   const narration = narrateMatch({
     aName: a.name, bName: b.name, charA, charB, probA, winnerIsA: aWins, long,
+    winnerPhrase: winner.kind === 'arcade' ? winner.ref.catchphrase : '',
   })
   return {
     id: uid('m'),
@@ -168,6 +179,15 @@ export function runSinglesTournament(save, scheduleEntry) {
     else if (place === 2) { p.glory += 8; p.respect += 5 }
     else if (place <= 4) { p.glory += 4; p.respect += 2 }
   }
+  if (champion.charId && save.charMilestones) {
+    const c = save.game.characters.find((x) => x.id === champion.charId)
+    if (c) {
+      save.charMilestones.push({
+        charId: c.id, day: save.day, year: save.year,
+        text: `${champion.name} won ${scheduleEntry?.name || 'a tournament'} playing ${c.name}`,
+      })
+    }
+  }
 
   const record = {
     id: uid('t'),
@@ -265,6 +285,7 @@ export function runTeamTournament(save, scheduleEntry) {
   for (const p of champion.squad) { p.glory += 8; p.respect += 5; p.mood = clamp(p.mood + 1.5, 0, 10) }
   // Winning together bonds a team.
   for (const a of champion.squad) for (const b of champion.squad) if (a !== b) shiftRel(a, b, 4)
+  teamLog(save, champion.team, `🏆 Won ${scheduleEntry?.name || 'a team battle'} (${entrants.length} teams)`)
 
   const record = {
     id: uid('t'),
@@ -309,6 +330,30 @@ export function runEvo(save) {
   }
   if (champion.kind === 'elite') {
     champion.ref.titles = (champion.ref.titles || 0) + 1
+  }
+  if (champion.charId && save.charMilestones) {
+    const c = save.game.characters.find((x) => x.id === champion.charId)
+    if (c) {
+      save.charMilestones.push({
+        charId: c.id, day: save.day, year: save.year,
+        text: `${champion.name} won EVO Year ${save.year} playing ${c.name}`,
+      })
+    }
+  }
+  for (const { entrant, place } of arcadePlacements) {
+    if (place <= 8 && entrant.charId && save.charMilestones) {
+      const c = save.game.characters.find((x) => x.id === entrant.charId)
+      if (c) {
+        save.charMilestones.push({
+          charId: c.id, day: save.day, year: save.year,
+          text: `${entrant.name} took ${c.name} to top 8 at EVO Year ${save.year}`,
+        })
+      }
+    }
+    const p = save.players[entrant.id]
+    if (p && p.teamId && place <= 8) {
+      teamLog(save, save.teams[p.teamId], `${entrant.name} placed top 8 at EVO Year ${save.year}`)
+    }
   }
 
   const record = {

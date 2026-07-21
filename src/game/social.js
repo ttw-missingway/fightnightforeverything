@@ -52,6 +52,12 @@ export function socialDelta(a, b, context = {}) {
   const sharedFoods = a.foods.filter((f) => b.foods.includes(f)).length
   delta += (sharedGames + sharedFoods) * 0.4
 
+  // Player-tag chemistry: a is drawn to or put off by b's vibe.
+  for (const t of b.playerTags || []) {
+    if ((a.attractedPlayerTags || []).includes(t)) delta += 1.2
+    if ((a.repelledPlayerTags || []).includes(t)) delta -= 1.5
+  }
+
   if (context.justLostTo) {
     // b beat a recently; b's sportsmanship decides how it lands.
     delta += (b.social.sportsmanship - 5) * 0.6
@@ -69,18 +75,23 @@ export function applySocialMood(player, delta) {
 // ---------- Teams ----------
 
 export function generateTeamName(existing) {
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 40; i++) {
     const name = `${choice(TEAM_WORDS[0])} ${choice(TEAM_WORDS[1])}`
-    if (!existing.some((t) => t.name === name)) {
-      const acronym = name.split(' ').map((w) => w[0]).join('').toUpperCase()
+    const acronym = name.split(' ').map((w) => w[0]).join('').toUpperCase()
+    if (!existing.some((t) => t.name === name || t.acronym === acronym)) {
       return { name, acronym }
     }
   }
-  return { name: 'The Crew', acronym: 'TC' }
+  return { name: 'The Crew', acronym: `TC${existing.length}` }
 }
 
 export function teamOf(save, player) {
   return player.teamId ? save.teams[player.teamId] : null
+}
+
+export function teamLog(save, team, text) {
+  if (!team.history) team.history = []
+  team.history.push({ day: save.day, year: save.year, text })
 }
 
 /**
@@ -105,6 +116,7 @@ export function tryFoundTeam(save, founder, cofounder, day, year, events) {
   founder.teamId = team.id
   cofounder.teamId = team.id
   founder.respect += 3
+  teamLog(save, team, `Founded by ${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName}`)
   events.push({
     type: 'team',
     text: `${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName} founded a new team: ${name} [${acronym}]!`,
@@ -117,6 +129,7 @@ export function tryJoinTeam(save, team, player, inviter, events) {
   if (!chance(teamRecruitChance(team))) return false
   team.memberIds.push(player.id)
   player.teamId = team.id
+  teamLog(save, team, `${player.alias || player.firstName} joined, recruited by ${inviter.alias || inviter.firstName}`)
   events.push({
     type: 'team',
     text: `${inviter.alias || inviter.firstName} brought ${player.alias || player.firstName} into ${team.name} [${team.acronym}].`,
@@ -136,10 +149,30 @@ export function checkFallingOut(save, player, events) {
     team.memberIds = team.memberIds.filter((id) => id !== player.id)
     player.teamId = null
     player.mood = clamp(player.mood - 1.5, 0, 10)
+    teamLog(save, team, `${player.alias || player.firstName} left after a falling out`)
     events.push({
       type: 'team',
       text: `${player.alias || player.firstName} had a falling out with ${team.name} and left the team.`,
     })
-    if (team.memberIds.length === 0) delete save.teams[team.id]
+  }
+}
+
+// A team can't be a team of one — lone survivors quietly fold the banner.
+export function dissolveTinyTeams(save, events) {
+  for (const team of Object.values(save.teams)) {
+    if (team.memberIds.length <= 1) {
+      const last = team.memberIds[0] ? save.players[team.memberIds[0]] : null
+      if (last) {
+        last.teamId = null
+        last.mood = clamp(last.mood - 1, 0, 10)
+        events.push({
+          type: 'team',
+          text: `${team.name} [${team.acronym}] disbanded — ${last.alias || last.firstName} was the only member left.`,
+        })
+      } else {
+        events.push({ type: 'team', text: `${team.name} [${team.acronym}] quietly disbanded.` })
+      }
+      delete save.teams[team.id]
+    }
   }
 }

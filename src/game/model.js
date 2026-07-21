@@ -46,6 +46,7 @@ export function newPlayer(partial = {}) {
     alias: '',
     gender: 'non-binary',
     description: '',
+    catchphrase: '',
     createdBy: 'user', // 'user' | 'cpu'
     personal: blankStats(PERSONAL_KEYS),
     social: blankStats(SOCIAL_KEYS),
@@ -63,6 +64,10 @@ export function newPlayer(partial = {}) {
     teamId: null,
     attractedTags: [],
     repelledTags: [],
+    playerTags: [], // this player's own vibe tags (from game.playerTags)
+    attractedPlayerTags: [], // drawn to people with these tags
+    repelledPlayerTags: [], // put off by people with these tags
+    charRecord: {}, // charId -> {w, l} lifetime record on that character
     otherGames: [],
     foods: [],
     wins: 0,
@@ -82,6 +87,7 @@ export function newTeam(partial = {}) {
     founderId: null,
     memberIds: [],
     foundedDay: 0,
+    history: [], // {day, year, text} — joins, departures, wins, milestones
     ...partial,
   }
 }
@@ -105,17 +111,21 @@ export function newSave(partial = {}) {
     updatedAt: Date.now(),
     day: 1, // day of year, 1..336
     year: 1,
+    hour: 0, // hours simulated so far in the current day
+    dayInProgress: null, // live day state while the arcade is open
     settings: {
       allowGeneratedPlayers: true,
       maxGeneratedPlayers: 12,
       setups: 4,
+      nameDisplay: 'alias', // 'alias' | 'fullname'
     },
     game: {
       name: 'Untitled Fighter',
       characters: [],
       stages: [],
       techniques: [],
-      tags: [], // plain strings
+      tags: [], // character tags (plain strings)
+      playerTags: [], // player vibe tags (plain strings)
       matchups: {}, // "charIdA|charIdB" -> win % for the lower-sorted id (50 = even)
     },
     arcade: {
@@ -128,6 +138,7 @@ export function newSave(partial = {}) {
     teams: {}, // id -> team
     mentorships: [], // {mentorId, studentId, startedDay, startedYear}
     innovations: [], // {id, name, charId|null, creatorId, day, year, xp, difficulty}
+    charMilestones: [], // {charId, text, day, year} — notable moments per character
     hallOfFame: [], // tournament + EVO results
     evoRoster: [], // persistent elite CPU players
     evoLegacy: {}, // eliteId -> {titles}
@@ -164,4 +175,27 @@ export function getMatchup(game, aId, bId) {
 export function setMatchup(game, aId, bId, winPctForA) {
   const [lo, hi] = aId < bId ? [aId, bId] : [bId, aId]
   game.matchups[`${lo}|${hi}`] = aId === lo ? winPctForA : 100 - winPctForA
+}
+
+// Fill in fields added after a save was created, so old saves keep working.
+export function migrateSave(save) {
+  save.hour ??= 0
+  save.dayInProgress ??= null
+  save.charMilestones ??= []
+  save.settings.nameDisplay ??= 'alias'
+  save.game.playerTags ??= []
+  for (const p of Object.values(save.players)) {
+    p.catchphrase ??= ''
+    p.playerTags ??= []
+    p.attractedPlayerTags ??= []
+    p.repelledPlayerTags ??= []
+    p.charRecord ??= {}
+  }
+  for (const t of Object.values(save.teams)) {
+    t.history ??= []
+  }
+  for (const c of save.game.characters) {
+    c.tags ??= []
+  }
+  return save
 }

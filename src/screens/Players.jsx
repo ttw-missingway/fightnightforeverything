@@ -38,7 +38,7 @@ export default function Players() {
             return (
               <tr key={p.id} className="clickable" onClick={() => nav('players', { playerId: p.id })}>
                 <td className="dim">{i + 1}</td>
-                <td><strong>{displayName(p, save.teams)}</strong><br />
+                <td><strong>{displayName(p, save)}</strong><br />
                   <span className="dim small">{p.firstName} {p.lastName}</span></td>
                 <td className="cyan">{main ? main.name : '—'}</td>
                 <td>{Math.round(p.elo)}</td>
@@ -81,11 +81,17 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
       </div>
 
       <div className="card">
-        <h2 style={{ margin: '4px 0' }}>{displayName(p, save.teams)} {moodFace(p.mood)}</h2>
+        <h2 style={{ margin: '4px 0' }}>{displayName(p, save)} {moodFace(p.mood)}</h2>
         <p className="dim">
           {p.firstName} "{p.alias || '—'}" {p.lastName} · {p.gender} · {p.createdBy === 'user' ? 'created player' : 'generated player'}
           {p.description && <> · {p.description}</>}
         </p>
+        {p.catchphrase && <p className="cyan" style={{ margin: '2px 0' }}>“{p.catchphrase}”</p>}
+        {(p.playerTags || []).length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            {p.playerTags.map((t) => <span key={t} className="pill">{t}</span>)}
+          </div>
+        )}
         <div className="row">
           <span className="pill">Elo {Math.round(p.elo)}</span>
           <span className="pill gold">Glory {Math.round(p.glory)}</span>
@@ -117,7 +123,13 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           {Object.entries(p.charSkill).sort((a, b) => b[1] - a[1]).map(([cid, v]) => {
             const c = save.game.characters.find((x) => x.id === cid)
             if (!c || v <= 0) return null
-            return <StatBar key={cid} label={c.name} value={Math.round(v)} max={100} title={`cap ${skillCap(save, p, cid)} — learn ${c.name} innovations to raise it`} />
+            const rec = p.charRecord?.[cid]
+            return (
+              <div key={cid}>
+                <StatBar label={c.name} value={Math.round(v)} max={100} title={`cap ${skillCap(save, p, cid)} — learn ${c.name} innovations to raise it`} />
+                {rec && <p className="dim small" style={{ margin: '0 0 4px 126px' }}>{rec.w}–{rec.l} lifetime</p>}
+              </div>
+            )
           })}
           {Object.values(p.charSkill).every((v) => !v) && <p className="dim">Hasn't put in the reps yet.</p>}
 
@@ -136,8 +148,8 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           {mentorship && (
             <p className="small gold">
               🎓 {mentorship.mentorId === p.id
-                ? `Mentoring ${displayName(save.players[mentorship.studentId], save.teams)}`
-                : `Mentored by ${displayName(save.players[mentorship.mentorId], save.teams)}`}
+                ? `Mentoring ${displayName(save.players[mentorship.studentId], save)}`
+                : `Mentored by ${displayName(save.players[mentorship.mentorId], save)}`}
             </p>
           )}
 
@@ -145,7 +157,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           {rels.length === 0 && <p className="dim">Hasn't met anyone yet.</p>}
           {rels.map(({ other, v }) => (
             <div className="row spread" key={other.id} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
-              <span style={{ cursor: 'pointer' }} onClick={() => goTo(other.id)}>{displayName(other, save.teams)}</span>
+              <span style={{ cursor: 'pointer' }} onClick={() => goTo(other.id)}>{displayName(other, save)}</span>
               <span className={`small ${v >= 20 ? 'green' : v <= -20 ? 'red' : 'dim'}`}>
                 {relLabel(v)} ({Math.round(v)})
               </span>

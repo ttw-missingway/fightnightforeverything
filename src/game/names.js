@@ -56,6 +56,13 @@ export const OTHER_GAMES = [
   'Star Shooter EX', 'Dance Cascade', 'Crane Game', 'Pinball: Dragon Lair', 'Time Crisis Delta',
 ]
 
+export const CATCHPHRASES = [
+  'Too easy!', 'Run it back.', "That's the gap.", 'Study the tape!', "Don't blink.",
+  'Absolutely free.', 'On my screen, you lose.', 'Lab hours pay off.', 'Respect the process.',
+  'GGs only.', 'Call an ambulance — but not for me.', 'Downloaded.', 'Read like a book.',
+  'Who else?', 'The king stays the king.', 'Another day at the office.',
+]
+
 export const APPEARANCES = [
   'always wears a faded esports hoodie', 'has dyed hair that changes color monthly',
   'never takes off their headphones', 'wears fingerless gloves unironically',

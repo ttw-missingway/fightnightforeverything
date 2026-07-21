@@ -52,8 +52,11 @@ export function fullName(p) {
   return p.alias ? `${p.firstName} "${p.alias}" ${p.lastName}` : `${p.firstName} ${p.lastName}`
 }
 
-export function displayName(p, teams) {
-  const base = p.alias || `${p.firstName} ${p.lastName}`
-  const team = p.teamId && teams ? teams[p.teamId] : null
+export function displayName(p, save) {
+  const useAlias = !save?.settings || save.settings.nameDisplay !== 'fullname'
+  const base = useAlias
+    ? (p.alias || `${p.firstName} ${p.lastName}`)
+    : `${p.firstName} ${p.lastName}`
+  const team = p.teamId && save?.teams ? save.teams[p.teamId] : null
   return team ? `${team.acronym} | ${base}` : base
 }

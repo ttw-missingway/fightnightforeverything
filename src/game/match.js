@@ -1,4 +1,4 @@
-import { clamp, rand, choice, chance } from './util.js'
+import { clamp, rand, choice, chance, displayName } from './util.js'
 import { getMatchup } from './model.js'
 
 // ---------- Character skill & learning curve ----------
@@ -37,6 +37,21 @@ export function gainSkill(save, player, charId, baseAmount) {
   const gain = Math.max(0, baseAmount * skillGainMultiplier(save, player, charId))
   const next = clamp(cur + gain, 0, cap)
   player.charSkill[charId] = Math.round(next * 100) / 100
+  if (save.charMilestones) {
+    const char = save.game.characters.find((c) => c.id === charId)
+    if (char && cur < 90 && next >= 90) {
+      save.charMilestones.push({
+        charId, day: save.day, year: save.year,
+        text: `${displayName(player, save)} entered the mastery tier with ${char.name} (skill 90)`,
+      })
+    }
+    if (char && cur < 100 && next >= 100) {
+      save.charMilestones.push({
+        charId, day: save.day, year: save.year,
+        text: `${displayName(player, save)} achieved complete mastery of ${char.name} — every innovation, skill 100`,
+      })
+    }
+  }
   return next - cur
 }
 
@@ -58,6 +73,13 @@ export function techniqueBonus(save, player, charId) {
 export function performance(save, player, charId) {
   const skill = player.charSkill[charId] || 0
   let perf = skill * 0.75 + (player.elo - 1200) / 40
+  // Easy characters carry beginners: strong bonus at low skill that fades
+  // completely by skill 60. Hard characters only pay off once learned.
+  const char = save.game.characters.find((c) => c.id === charId)
+  if (char) {
+    const lowSkillFactor = Math.max(0, 1 - skill / 60)
+    perf += (10 - char.difficulty) * lowSkillFactor * 0.7
+  }
   // Mojo: bonus in a good mood, mild penalty in a foul one.
   if (player.mood >= 7) perf += player.personal.mojo * 0.8
   else if (player.mood <= 2) perf -= (10 - player.personal.temperance) * 0.4
@@ -67,11 +89,20 @@ export function performance(save, player, charId) {
   return perf
 }
 
+// Matchup knowledge is a high-level phenomenon: at low skill nobody is
+// optimizing hard enough for a 60-40 to matter. The cubic curve means the
+// chart barely registers below ~skill 60 and dominates near mastery.
+export function matchupWeight(skillA, skillB) {
+  const avg = clamp((skillA + skillB) / 2, 0, 100)
+  return Math.pow(avg / 100, 3)
+}
+
 export function winProbability(save, a, aCharId, b, bCharId) {
   const perfA = performance(save, a, aCharId)
   const perfB = performance(save, b, bCharId)
   const matchup = getMatchup(save.game, aCharId, bCharId) // 50 = even
-  const matchupShift = (matchup - 50) * 0.25
+  const weight = matchupWeight(a.charSkill[aCharId] || 0, b.charSkill[bCharId] || 0)
+  const matchupShift = (matchup - 50) * 0.35 * weight
   const diff = perfA - perfB + matchupShift
   return 1 / (1 + Math.pow(10, -diff / 22))
 }
@@ -126,7 +157,7 @@ function strugLine(pName, oppName) {
  * narration reflects a stomp; close matches read as nail-biters.
  * aName/bName are display names; charA/charB are character objects (or null).
  */
-export function narrateMatch({ aName, bName, charA, charB, probA, winnerIsA, long = false }) {
+export function narrateMatch({ aName, bName, charA, charB, probA, winnerIsA, long = false, winnerPhrase = '' }) {
   const A = { name: aName, char: charA }
   const B = { name: bName, char: charB }
   const winner = winnerIsA ? A : B
@@ -159,7 +190,20 @@ export function narrateMatch({ aName, bName, charA, charB, probA, winnerIsA, lon
       `Down to the wire, but ${winner.name} finds the finisher.`,
     ]))
   }
+  if (winnerPhrase && chance(0.4)) {
+    lines.push(`${winner.name} stands up: "${winnerPhrase}"`)
+  }
   return lines
+}
+
+// Lifetime record per character — players gravitate toward characters they
+// win with.
+export function recordCharResult(player, charId, won) {
+  if (!charId) return
+  if (!player.charRecord) player.charRecord = {}
+  const rec = player.charRecord[charId] || (player.charRecord[charId] = { w: 0, l: 0 })
+  if (won) rec.w += 1
+  else rec.l += 1
 }
 
 /**
@@ -176,6 +220,8 @@ export function resolveMatch(save, a, b) {
   const eloDelta = updateElo(winner, loser)
   winner.wins += 1
   loser.losses += 1
+  recordCharResult(winner, winner.mainCharId, true)
+  recordCharResult(loser, loser.mainCharId, false)
 
   // Temperance dampens mood swings from game results.
   const swing = (10 - loser.personal.temperance) * 0.25
