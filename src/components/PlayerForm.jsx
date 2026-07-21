@@ -79,8 +79,14 @@ export default function PlayerForm({ save, player, patch }) {
             </button>
           </div>
           <Field label="Main character">
-            <select value={player.mainCharId || ''} onChange={(e) => patch((p) => { p.mainCharId = e.target.value || null })}>
-              <option value="">Let them find their own main</option>
+            <select value={player.mainCharId || ''} onChange={(e) => patch((p) => {
+              p.mainCharId = e.target.value || null
+              p.settledMain = !!p.mainCharId
+              if (p.mainCharId && !(p.exploredChars || []).includes(p.mainCharId)) {
+                p.exploredChars = [...(p.exploredChars || []), p.mainCharId]
+              }
+            })}>
+              <option value="">Let them explore and find their own main</option>
               {save.game.characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>

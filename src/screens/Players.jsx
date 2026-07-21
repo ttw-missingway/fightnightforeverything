@@ -40,7 +40,10 @@ export default function Players() {
                 <td className="dim">{i + 1}</td>
                 <td><strong>{displayName(p, save)}</strong><br />
                   <span className="dim small">{p.firstName} {p.lastName}</span></td>
-                <td className="cyan">{main ? main.name : '—'}</td>
+                <td className="cyan">
+                  {main ? main.name : '—'}
+                  {main && !p.settledMain && <span className="dim small"> (trying out)</span>}
+                </td>
                 <td>{Math.round(p.elo)}</td>
                 <td className="dim">{p.wins}–{p.losses}</td>
                 <td className="gold">{Math.round(p.glory)}</td>
@@ -98,7 +101,8 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           <span className="pill">Respect {Math.round(p.respect)}</span>
           <span className="pill">{p.wins}–{p.losses}</span>
           <span className="pill">Mood: {moodLabel(p.mood)}</span>
-          {main && <span className="pill on">Mains {main.name}{p.lockedMain ? ' 🔒' : ''}</span>}
+          {main && p.settledMain && <span className="pill on">Mains {main.name}{p.lockedMain ? ' 🔒' : ''}</span>}
+          {main && !p.settledMain && <span className="pill">🔍 Exploring — {main.name} today ({(p.exploredChars || []).length} tried)</span>}
           {team && <span className="pill gold">{team.name} [{team.acronym}]</span>}
           {p.tournamentWins > 0 && <span className="pill gold">🏆 ×{p.tournamentWins}</span>}
         </div>

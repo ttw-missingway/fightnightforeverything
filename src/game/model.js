@@ -56,7 +56,9 @@ export function newPlayer(partial = {}) {
     elo: 1200,
     glory: 0,
     respect: 0,
-    mainCharId: null,
+    mainCharId: null, // current character (rotates daily while exploring)
+    settledMain: false, // false = still trying characters out before committing
+    exploredChars: [], // charIds tried during the exploration phase
     lockedMain: false, // user pinned the main; sim won't switch it
     charSkill: {}, // charId -> 0..100
     knownTechniques: [], // technique ids (user-authored techniques)
@@ -197,6 +199,8 @@ export function migrateSave(save) {
   save.settings.nameDisplay ??= 'alias'
   save.game.playerTags ??= []
   for (const p of Object.values(save.players)) {
+    p.settledMain ??= !!p.mainCharId // pre-exploration players keep their mains
+    p.exploredChars ??= p.mainCharId ? [p.mainCharId] : []
     p.catchphrase ??= ''
     p.playerTags ??= []
     p.attractedPlayerTags ??= []

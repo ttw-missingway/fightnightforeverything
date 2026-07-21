@@ -1,4 +1,4 @@
-import { clamp, chance, choice, shuffle, rand, randInt, displayName } from './util.js'
+import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01 } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
 import { newInnovation } from './model.js'
@@ -14,8 +14,12 @@ const pName = (save, p) => displayName(p, save)
 // ---------- Main character selection ----------
 
 function charAppeal(save, player, char) {
-  let score = char.popularity * 1.1
+  let score = char.popularity * 0.7
   score -= char.difficulty * (1 - player.personal.aptitude / 14) * 0.9
+  // Personal taste: a stable per-player pull toward certain characters, so a
+  // batch of players spreads across the roster instead of piling onto the
+  // objectively "best" two or three picks.
+  score += (hash01(`${player.id}:${char.id}:vibes`) - 0.5) * 11
   for (const t of char.tags || []) {
     if (player.attractedTags.includes(t)) score += 4
     if (player.repelledTags.includes(t)) score -= 5
@@ -39,6 +43,74 @@ export function pickMainChar(save, player) {
     if (s > bestScore) { bestScore = s; best = c }
   }
   return best ? best.id : null
+}
+
+// ---------- The exploration phase ----------
+// New players don't commit: they rotate through characters for a while,
+// then settle on a main based on taste, results and their stats.
+
+function explorationGames(player) {
+  return Object.values(player.charRecord || {}).reduce((n, r) => n + r.w + r.l, 0)
+}
+
+// How many games it takes before they commit: loyal players settle fast.
+function settleThreshold(player) {
+  return Math.round(8 + (10 - player.personal.loyalty) * 2.2)
+}
+
+// Today's lab character: mostly something untried, sometimes a second look
+// at one that's been working.
+function pickExplorationChar(save, player) {
+  const chars = save.game.characters
+  if (!chars.length) return null
+  const untried = chars.filter((c) => !player.exploredChars.includes(c.id))
+  const pool = untried.length && chance(0.7) ? untried : chars
+  let best = null
+  let bestScore = -Infinity
+  for (const c of pool) {
+    let s = charAppeal(save, player, c)
+    if (c.id === player.mainCharId) s -= 3 // nudge toward variety day to day
+    if (s > bestScore) { bestScore = s; best = c }
+  }
+  return best ? best.id : null
+}
+
+function startExplorationDay(save, player, events) {
+  const charId = pickExplorationChar(save, player)
+  if (!charId) return
+  player.mainCharId = charId
+  if (!player.exploredChars.includes(charId)) {
+    player.exploredChars.push(charId)
+    const char = save.game.characters.find((c) => c.id === charId)
+    if (char) events.push({ type: 'main', text: `${pName(save, player)} is trying out ${char.name} today.` })
+  }
+}
+
+function maybeSettleMain(save, player, events) {
+  const games = explorationGames(player)
+  const roster = save.game.characters.length
+  const triedEnough = player.exploredChars.length >= Math.min(3, roster)
+  const playedEnough = games >= settleThreshold(player)
+  const forceSettle = player.daysAttended >= 45 // nobody labs forever
+  if (!(triedEnough && playedEnough) && !forceSettle) return
+  // Commit to the best fit among everything they've touched (or the roster,
+  // if somehow nothing stuck).
+  const candidates = player.exploredChars.length
+    ? save.game.characters.filter((c) => player.exploredChars.includes(c.id))
+    : save.game.characters
+  let best = null
+  let bestScore = -Infinity
+  for (const c of candidates) {
+    const s = charAppeal(save, player, c) + (player.charSkill[c.id] || 0) * 0.2
+    if (s > bestScore) { bestScore = s; best = c }
+  }
+  if (!best) return
+  player.mainCharId = best.id
+  player.settledMain = true
+  events.push({
+    type: 'main',
+    text: `${pName(save, player)} has settled on ${best.name} as their main after trying ${player.exploredChars.length} character${player.exploredChars.length === 1 ? '' : 's'}.`,
+  })
 }
 
 function maybeSwitchMain(save, player, events) {
@@ -327,11 +399,12 @@ export function startDay(save) {
         newcomers.push(p.id)
         events.push({ type: 'arrival', text: `${p.firstName} "${p.alias || '—'}" ${p.lastName} came to ${save.arcade.name} for the first time.` })
       }
-      if (!p.mainCharId) {
-        p.mainCharId = pickMainChar(save, p)
-        const char = save.game.characters.find((c) => c.id === p.mainCharId)
-        if (char) events.push({ type: 'main', text: `${pName(save, p)} has been gravitating toward ${char.name}.` })
+      if (p.mainCharId && (p.lockedMain || p.exploredChars.length === 0)) {
+        // A main chosen at creation counts as already settled.
+        p.settledMain = true
+        if (!p.exploredChars.includes(p.mainCharId)) p.exploredChars.push(p.mainCharId)
       }
+      if (!p.settledMain) startExplorationDay(save, p, events)
     }
   }
 
@@ -492,7 +565,8 @@ export function endDay(save) {
   // Once-per-day per attendee checks.
   for (const p of attendees) {
     maybeInnovate(save, p, events)
-    maybeSwitchMain(save, p, events)
+    if (p.settledMain) maybeSwitchMain(save, p, events)
+    else maybeSettleMain(save, p, events)
     checkFallingOut(save, p, events)
   }
   dissolveTinyTeams(save, events)
