@@ -46,7 +46,10 @@ function TechniqueIndex({ save }) {
             <tbody>
               {save.game.techniques.map((t) => (
                 <tr key={t.id}>
-                  <td><strong>{t.name}</strong></td>
+                  <td>
+                    <strong>{t.name}</strong>
+                    {t.description && <div className="dim small">{t.description}</div>}
+                  </td>
                   <td className="cyan">{charName(save, t.charId) || <span className="dim">universal</span>}</td>
                   <td className="dim">{t.difficulty}</td>
                   <td className="dim">{t.xp}</td>

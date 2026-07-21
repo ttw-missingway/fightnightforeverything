@@ -39,14 +39,28 @@ export function generateStage(existing = []) {
   return newStage({ name, description })
 }
 
-export function generateTechnique(save) {
+const TECH_DESCRIPTIONS = [
+  'Squeezes extra frames out of a cancel window almost nobody knows exists.',
+  'A timing-strict input that converts a stray hit into full damage.',
+  'Turns a defensive option into a surprise offensive tool.',
+  'Abuses a movement quirk to approach from an angle the game never intended.',
+  'A resource trick that banks meter where others would burn it.',
+  'A defensive escape that only works if you buffer it a beat early.',
+  'A setup that looks unsafe on paper and is completely airtight in practice.',
+  'Milks a knockdown for one extra guess the opponent never gets used to.',
+]
+
+// charId: undefined = random scope, null = general, otherwise that character.
+export function generateTechnique(save, charId = undefined) {
   const chars = save.game.characters
-  const charSpecific = chars.length > 0 && chance(0.5)
+  let scope = charId
+  if (scope === undefined) scope = chars.length > 0 && chance(0.5) ? choice(chars).id : null
   return newTechnique({
     name: `${choice(TECHNIQUE_NAME_PARTS.prefix)} ${choice(TECHNIQUE_NAME_PARTS.suffix)}`,
-    charId: charSpecific ? choice(chars).id : null,
+    charId: scope,
     difficulty: randInt(2, 9),
     xp: randInt(3, 12),
+    description: choice(TECH_DESCRIPTIONS),
   })
 }
 

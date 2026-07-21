@@ -30,6 +30,7 @@ export function newTechnique(partial = {}) {
     charId: null, // null = general technique
     difficulty: 5, // 1-10 how hard to unlock
     xp: 5, // skill points granted when unlocked
+    description: '',
     ...partial,
   }
 }
@@ -207,6 +208,9 @@ export function migrateSave(save) {
   }
   for (const c of save.game.characters) {
     c.tags ??= []
+  }
+  for (const t of save.game.techniques) {
+    t.description ??= ''
   }
   for (const t of save.arcade.schedule) {
     t.cadence ??= 'yearly' // old entries were yearly by construction

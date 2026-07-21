@@ -280,52 +280,78 @@ export function StagesEditor({ save, update }) {
 }
 
 export function TechniquesEditor({ save, update }) {
+  // One page per character, plus a General page. 'general' = charId null.
+  const [page, setPage] = useState('general')
+  const pageCharId = page === 'general' ? null : page
+  const pageChar = pageCharId ? save.game.characters.find((c) => c.id === pageCharId) : null
+  // Selected character got deleted (or page is stale) — fall back to General.
+  if (pageCharId && !pageChar) setPage('general')
+
+  const patchTech = (id, fn) => update((s) => {
+    const x = s.game.techniques.find((y) => y.id === id)
+    if (x) fn(x)
+  })
+  const countFor = (charId) => save.game.techniques.filter((t) => t.charId === charId).length
+  const pageTechs = save.game.techniques.filter((t) => t.charId === pageCharId)
+
   return (
     <div className="card">
-      <div className="row spread">
-        <h3>Techniques</h3>
-        <div className="row">
-          <button className="small" onClick={() => update((s) => { s.game.techniques.push(newTechnique()) })}>+ Add technique</button>
-          <button className="small" onClick={() => update((s) => {
-            s.game.techniques.push(generateTechnique(s))
-          })}>🎲 Generate</button>
-        </div>
-      </div>
+      <h3>Techniques</h3>
       <p className="dim small">
         Skills players can unlock through play. Difficulty controls how hard they are to unlock;
-        XP is the skill boost when learned. Character-specific or general.
+        XP is the skill boost when learned. General techniques work on every character.
       </p>
-      <table>
-        <thead>
-          <tr><th>Name</th><th>Scope</th><th>Difficulty</th><th>XP</th><th /></tr>
-        </thead>
-        <tbody>
-          {save.game.techniques.map((t) => (
-            <tr key={t.id}>
-              <td><input value={t.name} onChange={(e) => update((s) => {
-                const x = s.game.techniques.find((y) => y.id === t.id); if (x) x.name = e.target.value
-              })} /></td>
-              <td>
-                <select value={t.charId || ''} onChange={(e) => update((s) => {
-                  const x = s.game.techniques.find((y) => y.id === t.id); if (x) x.charId = e.target.value || null
-                })}>
-                  <option value="">General</option>
-                  {save.game.characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </td>
-              <td><input type="number" min={1} max={10} value={t.difficulty} onChange={(e) => update((s) => {
-                const x = s.game.techniques.find((y) => y.id === t.id); if (x) x.difficulty = Number(e.target.value)
-              })} /></td>
-              <td><input type="number" min={1} max={30} value={t.xp} onChange={(e) => update((s) => {
-                const x = s.game.techniques.find((y) => y.id === t.id); if (x) x.xp = Number(e.target.value)
-              })} /></td>
-              <td><button className="small danger" onClick={() => update((s) => {
-                s.game.techniques = s.game.techniques.filter((y) => y.id !== t.id)
-              })}>×</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="tabs">
+        <button className={`small ${page === 'general' ? 'active' : ''}`} onClick={() => setPage('general')}>
+          🌐 General ({countFor(null)})
+        </button>
+        {save.game.characters.map((c) => (
+          <button key={c.id} className={`small ${page === c.id ? 'active' : ''}`} onClick={() => setPage(c.id)}>
+            {c.name} ({countFor(c.id)})
+          </button>
+        ))}
+      </div>
+
+      <div className="row" style={{ marginBottom: 10 }}>
+        <button className="small" onClick={() => update((s) => {
+          s.game.techniques.push(newTechnique({ charId: pageCharId }))
+        })}>+ Add {pageChar ? `${pageChar.name} technique` : 'general technique'}</button>
+        <button className="small" onClick={() => update((s) => {
+          s.game.techniques.push(generateTechnique(s, pageCharId))
+        })}>🎲 Generate</button>
+      </div>
+
+      {pageTechs.length === 0 && (
+        <p className="dim">
+          {pageChar ? `${pageChar.name} has no signature techniques yet.` : 'No general techniques yet.'}
+        </p>
+      )}
+      {pageTechs.map((t) => (
+        <div className="card sub" key={t.id}>
+          <div className="row spread">
+            <div className="row">
+              <input value={t.name} style={{ minWidth: 200 }}
+                onChange={(e) => patchTech(t.id, (x) => { x.name = e.target.value })} />
+              <label className="row small dim">
+                difficulty
+                <input type="number" min={1} max={10} value={t.difficulty}
+                  onChange={(e) => patchTech(t.id, (x) => { x.difficulty = Number(e.target.value) })} />
+              </label>
+              <label className="row small dim">
+                xp
+                <input type="number" min={1} max={30} value={t.xp}
+                  onChange={(e) => patchTech(t.id, (x) => { x.xp = Number(e.target.value) })} />
+              </label>
+            </div>
+            <button className="small danger" onClick={() => update((s) => {
+              s.game.techniques = s.game.techniques.filter((y) => y.id !== t.id)
+            })}>×</button>
+          </div>
+          <textarea placeholder="what this tech actually does…" value={t.description || ''}
+            style={{ marginTop: 6, minHeight: 40 }}
+            onChange={(e) => patchTech(t.id, (x) => { x.description = e.target.value })} />
+        </div>
+      ))}
     </div>
   )
 }
