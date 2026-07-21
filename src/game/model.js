@@ -1,0 +1,167 @@
+import { uid } from './util.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS } from './constants.js'
+
+export function newCharacter(partial = {}) {
+  return {
+    id: uid('char'),
+    name: 'New Fighter',
+    archetype: 'Shoto',
+    difficulty: 5, // 1-10, how hard to learn
+    popularity: 5, // 1-10, how likely players gravitate to them
+    description: '',
+    moves: [], // {id, name, type}
+    tags: [], // strings from game.tags — players are attracted/repelled by these
+    ...partial,
+  }
+}
+
+export function newMove(partial = {}) {
+  return { id: uid('move'), name: 'New Move', type: 'melee', ...partial }
+}
+
+export function newStage(partial = {}) {
+  return { id: uid('stage'), name: 'New Stage', description: '', ...partial }
+}
+
+export function newTechnique(partial = {}) {
+  return {
+    id: uid('tech'),
+    name: 'New Technique',
+    charId: null, // null = general technique
+    difficulty: 5, // 1-10 how hard to unlock
+    xp: 5, // skill points granted when unlocked
+    ...partial,
+  }
+}
+
+export function blankStats(keys, value = 5) {
+  return Object.fromEntries(keys.map((k) => [k, value]))
+}
+
+export function newPlayer(partial = {}) {
+  return {
+    id: uid('player'),
+    firstName: 'New',
+    lastName: 'Player',
+    alias: '',
+    gender: 'non-binary',
+    description: '',
+    createdBy: 'user', // 'user' | 'cpu'
+    personal: blankStats(PERSONAL_KEYS),
+    social: blankStats(SOCIAL_KEYS),
+    defaultMood: 5,
+    mood: 5,
+    elo: 1200,
+    glory: 0,
+    respect: 0,
+    mainCharId: null,
+    lockedMain: false, // user pinned the main; sim won't switch it
+    charSkill: {}, // charId -> 0..100
+    knownTechniques: [], // technique ids (user-authored techniques)
+    knownInnovations: [], // innovation ids (sim-created techniques)
+    relationships: {}, // otherPlayerId -> -100..100
+    teamId: null,
+    attractedTags: [],
+    repelledTags: [],
+    otherGames: [],
+    foods: [],
+    wins: 0,
+    losses: 0,
+    tournamentWins: 0,
+    isRegular: false, // has discovered the arcade yet
+    daysAttended: 0,
+    ...partial,
+  }
+}
+
+export function newTeam(partial = {}) {
+  return {
+    id: uid('team'),
+    name: 'New Team',
+    acronym: 'NT',
+    founderId: null,
+    memberIds: [],
+    foundedDay: 0,
+    ...partial,
+  }
+}
+
+export function newTournamentEntry(partial = {}) {
+  return {
+    id: uid('tourney'),
+    name: 'Weekly Rumble',
+    dayOfYear: 28,
+    type: 'singles', // 'singles' | 'teams'
+    repeats: true,
+    ...partial,
+  }
+}
+
+export function newSave(partial = {}) {
+  return {
+    id: uid('save'),
+    saveName: 'New Save',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    day: 1, // day of year, 1..336
+    year: 1,
+    settings: {
+      allowGeneratedPlayers: true,
+      maxGeneratedPlayers: 12,
+      setups: 4,
+    },
+    game: {
+      name: 'Untitled Fighter',
+      characters: [],
+      stages: [],
+      techniques: [],
+      tags: [], // plain strings
+      matchups: {}, // "charIdA|charIdB" -> win % for the lower-sorted id (50 = even)
+    },
+    arcade: {
+      name: 'The Arcade',
+      foods: [],
+      otherGames: [],
+      schedule: [], // newTournamentEntry()
+    },
+    players: {}, // id -> player
+    teams: {}, // id -> team
+    mentorships: [], // {mentorId, studentId, startedDay, startedYear}
+    innovations: [], // {id, name, charId|null, creatorId, day, year, xp, difficulty}
+    hallOfFame: [], // tournament + EVO results
+    evoRoster: [], // persistent elite CPU players
+    evoLegacy: {}, // eliteId -> {titles}
+    lastDayReport: null, // events from the most recent simulated day
+    lastTournament: null, // full bracket/narration of most recent tournament
+    ...partial,
+  }
+}
+
+export function newInnovation(partial = {}) {
+  return {
+    id: uid('innov'),
+    name: 'New Tech',
+    charId: null,
+    creatorId: null,
+    day: 1,
+    year: 1,
+    xp: 6,
+    difficulty: 5,
+    ...partial,
+  }
+}
+
+// Matchup helpers: stored once per pair, from the perspective of the
+// alphabetically-lower character id.
+export function getMatchup(game, aId, bId) {
+  if (aId === bId) return 50
+  const [lo, hi] = aId < bId ? [aId, bId] : [bId, aId]
+  const stored = game.matchups[`${lo}|${hi}`]
+  if (stored == null) return 50
+  return aId === lo ? stored : 100 - stored
+}
+
+export function setMatchup(game, aId, bId, winPctForA) {
+  const [lo, hi] = aId < bId ? [aId, bId] : [bId, aId]
+  game.matchups[`${lo}|${hi}`] = aId === lo ? winPctForA : 100 - winPctForA
+}
