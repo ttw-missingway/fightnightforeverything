@@ -1,5 +1,6 @@
-import { uid, chance, rand, displayName, clamp } from './util.js'
+import { uid, chance, rand, choice, displayName, clamp } from './util.js'
 import { formatDay } from './constants.js'
+import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult } from './match.js'
 import { getMatchup } from './model.js'
 import { shiftRel, socialDelta, teamLog } from './social.js'
@@ -161,23 +162,74 @@ const roundName = (idx, total) => {
   return `Round of ${remaining}`
 }
 
+// ---------- Invitations ----------
+
+/**
+ * Who deserves a slot: elo, discounted for unproven players (few games),
+ * plus reputation — respect and glory. A fresh 1200 with 6 games shouldn't
+ * bump a proven vet.
+ */
+export function invitationScore(p) {
+  const games = p.wins + p.losses
+  const proven = clamp(games / 40, 0.25, 1)
+  return 1200 + (p.elo - 1200) * proven + p.respect * 6 + p.glory * 1.5
+}
+
+function dropoutChance(p) {
+  let c = 0.05 + (5 - p.mood) * 0.01 + (5 - p.personal.spark) * 0.008
+  return clamp(c, 0.01, 0.16)
+}
+
+/**
+ * Fill `size` slots from the ranked invite list, narrating anyone whose life
+ * gets in the way. Returns null (cancellation) if the bracket can't fill.
+ */
+function fillBracket(save, ranked, size, storylines) {
+  if (ranked.length < size) return null
+  const field = ranked.slice(0, size)
+  const alternates = ranked.slice(size)
+  for (let i = 0; i < field.length; i++) {
+    const p = field[i]
+    if (chance(dropoutChance(p))) {
+      const sub = alternates.shift()
+      if (sub) {
+        storylines.push(`${pName(save, p)} dropped out — ${choice(LIFE_EVENTS)}. ${pName(save, sub)} slides into the bracket.`)
+        field[i] = sub
+      } else {
+        storylines.push(`${pName(save, p)} dropped out — ${choice(LIFE_EVENTS)} — and there was no one left to take the slot.`)
+        return null
+      }
+    }
+  }
+  return field
+}
+
 // ---------- Singles tournaments ----------
 
 export function runSinglesTournament(save, scheduleEntry) {
-  const regulars = Object.values(save.players).filter((p) => p.isRegular && p.mainCharId)
-  // Nearly everyone shows for a tournament; very low spark players might skip.
-  const entrantsPlayers = regulars.filter((p) => chance(clamp(0.6 + p.personal.spark * 0.05, 0, 0.98)))
-  if (entrantsPlayers.length < 2) {
-    return { ok: false, reason: 'Fewer than two players showed up — the tournament was cancelled.' }
+  const size = scheduleEntry?.size || 8
+  const name = scheduleEntry?.name || 'Tournament'
+  const ranked = Object.values(save.players)
+    .filter((p) => p.isRegular && p.mainCharId)
+    .sort((a, b) => invitationScore(b) - invitationScore(a))
+  if (ranked.length < size) {
+    return { ok: false, reason: `${name} cancelled — only ${ranked.length} of ${size} slots could be filled.` }
   }
-  const entrants = entrantsPlayers.map((p) => arcadeEntrant(save, p))
+  const storylines = []
+  const field = fillBracket(save, ranked, size, storylines)
+  if (!field) {
+    return { ok: false, reason: `${name} cancelled — too many dropouts left the bracket short of ${size}.` }
+  }
+  const entrants = field.map((p) => arcadeEntrant(save, p))
   const { rounds, placements, champion } = runBracket(save, entrants)
 
+  // Glory scales with the size of the field: a weekly 8-man is a nice line
+  // on the resume; a 64-man major is legacy. (EVO pays out far more still.)
   for (const { entrant, place } of placements) {
     const p = entrant.ref
-    if (place === 1) { p.glory += 15; p.respect += 10; p.tournamentWins += 1; p.mood = clamp(p.mood + 2, 0, 10) }
-    else if (place === 2) { p.glory += 8; p.respect += 5 }
-    else if (place <= 4) { p.glory += 4; p.respect += 2 }
+    if (place === 1) { p.glory += size; p.respect += Math.ceil(size * 0.75); p.tournamentWins += 1; p.mood = clamp(p.mood + 2, 0, 10) }
+    else if (place === 2) { p.glory += Math.ceil(size / 2); p.respect += Math.ceil(size / 3) }
+    else if (place <= 4) { p.glory += Math.ceil(size / 4); p.respect += 2 }
   }
   if (champion.charId && save.charMilestones) {
     const c = save.game.characters.find((x) => x.id === champion.charId)
@@ -192,8 +244,10 @@ export function runSinglesTournament(save, scheduleEntry) {
   const record = {
     id: uid('t'),
     type: 'singles',
-    name: scheduleEntry?.name || 'Tournament',
+    name,
     day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
+    storylines,
+    revealed: 0,
     rounds: rounds.map((ms, i) => ({ title: roundName(i, rounds.length), matches: ms })),
     placements: placements.slice(0, 8).map(({ entrant, place }) => ({ place, name: entrant.name })),
     champion: champion.name,
@@ -201,24 +255,36 @@ export function runSinglesTournament(save, scheduleEntry) {
   }
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
-  if (scheduleEntry && !scheduleEntry.repeats) scheduleEntry.done = true
   return { ok: true, record }
 }
 
 // ---------- Team battles ----------
 
 export function runTeamTournament(save, scheduleEntry) {
-  const squads = Object.values(save.teams)
+  const allSquads = Object.values(save.teams)
     .filter((t) => t.memberIds.length >= 4)
     .map((t) => ({
       team: t,
       squad: t.memberIds.map((id) => save.players[id]).filter((p) => p && p.mainCharId)
         .sort((a, b) => b.elo - a.elo).slice(0, 4),
+      avgScore: 0,
     }))
     .filter((s) => s.squad.length === 4)
-  if (squads.length < 2) {
-    return { ok: false, reason: 'Fewer than two full teams (4+ members) exist — team battle cancelled.' }
+  const minSize = Math.min(scheduleEntry?.size || 2, 8)
+  if (allSquads.length < Math.max(2, minSize)) {
+    return {
+      ok: false,
+      reason: `${scheduleEntry?.name || 'Team battle'} cancelled — only ${allSquads.length} full team${allSquads.length === 1 ? '' : 's'} (need ${Math.max(2, minSize)}).`,
+    }
   }
+  // Power-of-two field: the strongest teams by average invitation score.
+  for (const s of allSquads) {
+    s.avgScore = s.squad.reduce((sum, p) => sum + invitationScore(p), 0) / 4
+  }
+  allSquads.sort((a, b) => b.avgScore - a.avgScore)
+  let fieldSize = 2
+  while (fieldSize * 2 <= allSquads.length) fieldSize *= 2
+  const squads = allSquads.slice(0, fieldSize)
 
   // Team bracket: each "entrant" wraps a squad; team elo = average.
   const entrants = squads.map((s) => ({
@@ -292,6 +358,10 @@ export function runTeamTournament(save, scheduleEntry) {
     type: 'teams',
     name: scheduleEntry?.name || 'Team Battle',
     day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
+    storylines: allSquads.length > fieldSize
+      ? [`${allSquads.length - fieldSize} team${allSquads.length - fieldSize === 1 ? '' : 's'} missed the ${fieldSize}-team cut.`]
+      : [],
+    revealed: 0,
     rounds: rounds.map((ms, i) => ({ title: roundName(i, rounds.length), matches: ms })),
     placements: [{ place: 1, name: champion.name }],
     champion: champion.name,
@@ -299,7 +369,6 @@ export function runTeamTournament(save, scheduleEntry) {
   }
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
-  if (scheduleEntry && !scheduleEntry.repeats) scheduleEntry.done = true
   return { ok: true, record }
 }
 
@@ -308,7 +377,7 @@ export function runTeamTournament(save, scheduleEntry) {
 export function runEvo(save) {
   const regulars = Object.values(save.players)
     .filter((p) => p.isRegular && p.mainCharId)
-    .sort((a, b) => b.elo - a.elo)
+    .sort((a, b) => invitationScore(b) - invitationScore(a))
   const qualified = regulars.slice(0, 8)
   if (!qualified.length) return { ok: false, reason: 'No arcade players qualified for EVO this year.' }
 
@@ -361,6 +430,8 @@ export function runEvo(save) {
     type: 'evo',
     name: `EVO — Year ${save.year}`,
     day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
+    storylines: [],
+    revealed: 0,
     rounds: rounds.map((ms, i) => ({
       title: roundName(i, rounds.length),
       matches: ms,

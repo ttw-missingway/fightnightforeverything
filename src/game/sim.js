@@ -1,5 +1,5 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
 import { newInnovation } from './model.js'
 import { resolveMatch, narrateMatch, winProbability, gainSkill } from './match.js'
@@ -481,7 +481,12 @@ export function simDay(save) {
 // What fires today: 'evo' | schedule entry | null.
 export function whatHappensToday(save) {
   if (save.day === EVO_DAY) return 'evo'
-  const t = save.arcade.schedule.find((s) => s.dayOfYear === save.day && !s.done)
+  const t = save.arcade.schedule.find((s) => {
+    if (s.done) return false
+    if (s.cadence === 'weekly') return weekdayOf(save.day) === (s.weekday || 0)
+    if (s.cadence === 'monthly') return dayOfMonthOf(save.day) === (s.dayOfMonth || 1)
+    return s.dayOfYear === save.day // yearly (and pre-cadence saves)
+  })
   return t || null
 }
 

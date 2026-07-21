@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
-import { formatDay, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS } from '../game/constants.js'
+import { formatDay, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf } from '../game/constants.js'
 import { whatHappensToday } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace } from '../components/ui.jsx'
@@ -32,7 +32,7 @@ export default function Arcade() {
         <div className="row spread">
           <div>
             <h2 style={{ margin: 0 }}>{save.arcade.name}</h2>
-            <span className="dim">{formatDay(save.day, save.year)} · running <span className="cyan">{save.game.name}</span></span>
+            <span className="dim">{WEEKDAYS[weekdayOf(save.day)]}, {formatDay(save.day, save.year)} · running <span className="cyan">{save.game.name}</span></span>
             {dip && (
               <div className="row" style={{ marginTop: 8 }}>
                 {HOUR_LABELS.map((h, i) => (

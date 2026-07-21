@@ -2,18 +2,43 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 
 export default function Tournament() {
-  const { save, nav } = useStore()
+  const { save, nav, mutate } = useStore()
   const t = save.lastTournament
 
   if (!t) {
     return (
       <div className="card">
         <h2>Tournament Hall</h2>
-        <p className="dim">No tournament has been run yet. Schedule one from the Manage screen, then simulate to that day.</p>
+        <p className="dim">No tournament has been run yet. Schedule one from the Manage screen, then play to that day.</p>
         <button onClick={() => nav('arcade')}>Back to the arcade</button>
       </div>
     )
   }
+
+  // Flatten the bracket into broadcast order (round by round).
+  const flat = []
+  const roundStarts = []
+  t.rounds.forEach((round, ri) => {
+    roundStarts.push(flat.length)
+    round.matches.forEach((m) => flat.push({ m, ri, offScreen: round.offScreen }))
+  })
+
+  // Byes air instantly; an off-screen round means the broadcast is over.
+  let cursor = Math.min(t.revealed ?? 0, flat.length)
+  while (cursor < flat.length && flat[cursor].m.bye) cursor++
+  const broadcastEnded = cursor < flat.length && flat[cursor].offScreen
+  const revealedCount = broadcastEnded ? flat.length : cursor
+  const done = revealedCount >= flat.length
+  const current = done ? null : flat[revealedCount]
+  const isRevealed = (idx) => idx < revealedCount || flat[idx].m.bye
+  const roundDetermined = (ri) => ri === 0 || revealedCount >= roundStarts[ri]
+
+  const playNext = () => mutate((s) => {
+    if (s.lastTournament) s.lastTournament.revealed = revealedCount + 1
+  })
+  const skipAll = () => mutate((s) => {
+    if (s.lastTournament) s.lastTournament.revealed = 999999
+  })
 
   return (
     <div>
@@ -27,24 +52,51 @@ export default function Tournament() {
           }</span>
         </div>
         <div className="row">
+          {!done && <button onClick={skipAll}>⏭ Skip to results</button>}
           <button onClick={() => nav('halloffame')}>Hall of Fame</button>
           <button onClick={() => nav('arcade')}>Back to arcade →</button>
         </div>
       </div>
 
-      <div className="card" style={{ borderColor: 'var(--gold)' }}>
-        <h3 className="gold" style={{ margin: '2px 0' }}>Champion: {t.champion}</h3>
-        {t.type === 'evo' && t.abrupt && (
-          <p className="dim small">
-            The arcade crew's run ended before the finish — results past their elimination trickled in online.
-          </p>
-        )}
-        {t.arcadeResults && (
-          <p className="small">
-            Arcade results: {t.arcadeResults.map((r) => `${r.name} — ${ordinal(r.place)}`).join(' · ')}
-          </p>
-        )}
-      </div>
+      {(t.storylines || []).length > 0 && (
+        <div className="card sub">
+          {t.storylines.map((s, i) => <p key={i} className="small" style={{ margin: '4px 0' }}>📰 {s}</p>)}
+        </div>
+      )}
+
+      {!done && current && (
+        <div className="card" style={{ borderColor: 'var(--pink)' }}>
+          <h3 className="pink" style={{ marginTop: 0 }}>
+            Up next — {t.rounds[current.ri].title}
+          </h3>
+          {'duels' in current.m && current.m.duels ? (
+            <p style={{ fontSize: 18 }}>{current.m.aName} <span className="dim">vs</span> {current.m.bName}</p>
+          ) : (
+            <p style={{ fontSize: 18 }}>
+              {current.m.aName} {current.m.aChar && <span className="dim small">({current.m.aChar})</span>}
+              {' '}<span className="dim">vs</span>{' '}
+              {current.m.bName} {current.m.bChar && <span className="dim small">({current.m.bChar})</span>}
+            </p>
+          )}
+          <button className="primary" onClick={playNext}>▶ Play the match</button>
+        </div>
+      )}
+
+      {done && (
+        <div className="card" style={{ borderColor: 'var(--gold)' }}>
+          <h3 className="gold" style={{ margin: '2px 0' }}>Champion: {t.champion}</h3>
+          {t.type === 'evo' && t.abrupt && (
+            <p className="dim small">
+              The arcade crew's run ended before the finish — results past their elimination trickled in online.
+            </p>
+          )}
+          {t.arcadeResults && (
+            <p className="small">
+              Arcade results: {t.arcadeResults.map((r) => `${r.name} — ${ordinal(r.place)}`).join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
 
       <h2>Bracket</h2>
       <div className="bracket">
@@ -53,20 +105,59 @@ export default function Tournament() {
             <h4 className={round.offScreen ? 'dim' : 'cyan'} style={{ textAlign: 'center' }}>
               {round.title}{round.offScreen ? ' (off-screen)' : ''}
             </h4>
-            {round.matches.map((m) => <BracketMatch key={m.id} m={m} offScreen={round.offScreen} />)}
+            {round.matches.map((m, mi) => {
+              const flatIdx = roundStarts[ri] + mi
+              return (
+                <BracketMatch
+                  key={m.id} m={m}
+                  offScreen={round.offScreen}
+                  revealed={isRevealed(flatIdx)}
+                  determined={roundDetermined(ri)}
+                  isNext={!done && current && flatIdx === revealedCount}
+                />
+              )
+            })}
           </div>
         ))}
       </div>
+
+      {done && t.placements && (
+        <div className="card">
+          <h3 className="gold">Final Standings</h3>
+          <div className="row">
+            {t.placements.slice(0, 8).map((pl, i) => (
+              <span key={i} className={`pill ${pl.arcade ? 'on' : ''}`}>{ordinal(pl.place)} — {pl.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function BracketMatch({ m, offScreen }) {
+function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
   const [open, setOpen] = useState(false)
   if (m.bye) {
     return (
       <div className={`bmatch ${offScreen ? 'offscreen' : ''}`} style={{ cursor: 'default' }}>
-        <span className="winner">{m.winnerName}</span> <span className="dim small">— bye</span>
+        <span className="winner">{m.aName}</span> <span className="dim small">— bye</span>
+      </div>
+    )
+  }
+  if (!determined) {
+    return (
+      <div className="bmatch" style={{ cursor: 'default', opacity: 0.5 }}>
+        <div className="dim">TBD</div>
+        <div className="dim">TBD</div>
+      </div>
+    )
+  }
+  if (!revealed) {
+    return (
+      <div className="bmatch" style={isNext ? { borderColor: 'var(--pink)' } : { cursor: 'default' }}>
+        <div>{m.aName} {m.aChar && <span className="dim small">({m.aChar})</span>}</div>
+        <div>{m.bName} {m.bChar && <span className="dim small">({m.bChar})</span>}</div>
+        <div className={`small ${isNext ? 'pink' : 'dim'}`}>{isNext ? '▶ up next' : 'waiting…'}</div>
       </div>
     )
   }

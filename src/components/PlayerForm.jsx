@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Field, NumField, PillPicker } from './ui.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS, GENDERS } from '../game/constants.js'
 import { rollStat } from '../game/util.js'
+import { randomIdentity, randomPreferences } from '../game/generate.js'
 
 /**
  * Full player editor. `patch(fn)` applies fn to the live player object inside
@@ -14,7 +15,12 @@ export default function PlayerForm({ save, player, patch }) {
     <div>
       <div className="grid2">
         <div className="card sub">
-          <h4>Identity</h4>
+          <div className="row spread">
+            <h4>Identity</h4>
+            <button className="small" onClick={() => patch((p) => Object.assign(p, randomIdentity(save)))}>
+              🎲 Randomize identity
+            </button>
+          </div>
           <div className="row">
             <Field label="First name">
               <input value={player.firstName} onChange={(e) => patch((p) => { p.firstName = e.target.value })} />
@@ -66,7 +72,12 @@ export default function PlayerForm({ save, player, patch }) {
         </div>
 
         <div className="card sub">
-          <h4>Play Style</h4>
+          <div className="row spread">
+            <h4>Play Style</h4>
+            <button className="small" onClick={() => patch((p) => Object.assign(p, randomPreferences(save)))}>
+              🎲 Randomize preferences
+            </button>
+          </div>
           <Field label="Main character">
             <select value={player.mainCharId || ''} onChange={(e) => patch((p) => { p.mainCharId = e.target.value || null })}>
               <option value="">Let them find their own main</option>

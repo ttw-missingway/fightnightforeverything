@@ -4,7 +4,10 @@ import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, MOVE_TYPES, GENDERS } from './c
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
   ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES, CATCHPHRASES,
+  GAME_TITLE_PARTS, ARCADE_NAME_PARTS, STAGE_IDEAS, TOURNAMENT_NAME_PARTS,
+  TECHNIQUE_NAME_PARTS,
 } from './names.js'
+import { newStage, newTechnique, setMatchup } from './model.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
@@ -12,6 +15,81 @@ export function rollStatBlock(keys) {
 
 export function generateMoveName() {
   return `${choice(MOVE_NAME_PARTS.prefix)} ${choice(MOVE_NAME_PARTS.suffix)}`
+}
+
+// ---------- One-click randomizers for the creation screens ----------
+
+export function generateGameTitle() {
+  const base = `${choice(GAME_TITLE_PARTS.a)} ${choice(GAME_TITLE_PARTS.b)}`
+  return chance(0.6) ? `${base} ${choice(GAME_TITLE_PARTS.c)}` : base
+}
+
+export function generateArcadeName() {
+  return `${choice(ARCADE_NAME_PARTS.a)} ${choice(ARCADE_NAME_PARTS.b)}`
+}
+
+export function generateStage(existing = []) {
+  const used = new Set(existing.map((s) => s.name))
+  const fresh = STAGE_IDEAS.filter(([n]) => !used.has(n))
+  const [name, description] = fresh.length ? choice(fresh) : choice(STAGE_IDEAS)
+  return newStage({ name, description })
+}
+
+export function generateTechnique(save) {
+  const chars = save.game.characters
+  const charSpecific = chars.length > 0 && chance(0.5)
+  return newTechnique({
+    name: `${choice(TECHNIQUE_NAME_PARTS.prefix)} ${choice(TECHNIQUE_NAME_PARTS.suffix)}`,
+    charId: charSpecific ? choice(chars).id : null,
+    difficulty: randInt(2, 9),
+    xp: randInt(3, 12),
+  })
+}
+
+export function generateTournamentName() {
+  return `${choice(TOURNAMENT_NAME_PARTS.a)} ${choice(TOURNAMENT_NAME_PARTS.b)}`
+}
+
+// Randomize every character pair: mostly close matchups, a few lopsided ones.
+export function randomizeMatchups(game) {
+  for (let i = 0; i < game.characters.length; i++) {
+    for (let j = i + 1; j < game.characters.length; j++) {
+      const spread = chance(0.15) ? randInt(10, 20) : randInt(0, 10)
+      const sign = chance(0.5) ? 1 : -1
+      setMatchup(game, game.characters[i].id, game.characters[j].id, 50 + sign * spread)
+    }
+  }
+}
+
+// Fresh identity for the player form's 🎲 button.
+export function randomIdentity(save) {
+  const taken = new Set(Object.values(save.players).map((p) => p.alias))
+  const freeAliases = ALIASES.filter((a) => !taken.has(a))
+  return {
+    firstName: choice(FIRST_NAMES),
+    lastName: choice(LAST_NAMES),
+    alias: freeAliases.length ? choice(freeAliases) : `${choice(ALIASES)}${randInt(2, 99)}`,
+    gender: choice(GENDERS),
+    description: choice(APPEARANCES),
+    catchphrase: choice(CATCHPHRASES),
+  }
+}
+
+// Random tag/likes preferences for the player form's 🎲 button.
+export function randomPreferences(save) {
+  const tags = save.game.tags
+  const pTags = save.game.playerTags || []
+  const attracted = tags.length ? sample(tags, randInt(0, Math.min(2, tags.length))) : []
+  const drawnTo = pTags.length ? sample(pTags, randInt(0, Math.min(2, pTags.length))) : []
+  return {
+    attractedTags: attracted,
+    repelledTags: tags.length ? sample(tags.filter((t) => !attracted.includes(t)), randInt(0, 1)) : [],
+    playerTags: pTags.length ? sample(pTags, randInt(0, Math.min(2, pTags.length))) : [],
+    attractedPlayerTags: drawnTo,
+    repelledPlayerTags: pTags.length ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1)) : [],
+    otherGames: sample(save.arcade.otherGames.length ? save.arcade.otherGames : OTHER_GAMES, randInt(1, 3)),
+    foods: sample(save.arcade.foods.length ? save.arcade.foods : FOODS, randInt(1, 3)),
+  }
 }
 
 export function generateCharacter(usedNames = new Set()) {

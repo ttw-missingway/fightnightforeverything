@@ -56,6 +56,54 @@ export const OTHER_GAMES = [
   'Star Shooter EX', 'Dance Cascade', 'Crane Game', 'Pinball: Dragon Lair', 'Time Crisis Delta',
 ]
 
+export const GAME_TITLE_PARTS = {
+  a: ['Savage', 'Eternal', 'Hyper', 'Crimson', 'Final', 'Ultra', 'Neon', 'Iron', 'Astral', 'Burning'],
+  b: ['Fist', 'Clash', 'Duel', 'Rivals', 'Impact', 'Fury', 'Brawlers', 'Vanguard', 'Combat', 'Reckoning'],
+  c: ['II', 'III', 'EX', 'Turbo', 'Zero', 'Unlimited', 'Rebirth', 'Prime', "Champion Edition", 'X'],
+}
+
+export const ARCADE_NAME_PARTS = {
+  a: ['Neon', 'Quarter', 'Pixel', 'Midnight', 'Golden', 'Electric', 'Downtown', 'Galaxy', 'Retro', 'Lucky'],
+  b: ['Palace', 'Alley', 'Dungeon', 'Station', 'Vault', 'Corner', 'Grid', 'Den', 'Coliseum', 'Basement'],
+}
+
+export const STAGE_IDEAS = [
+  ['Rooftop Rumble', 'A windy skyscraper rooftop at dusk, neon signs buzzing below.'],
+  ['Temple of the Old Masters', 'Crumbling stone, incense smoke, and watching statues.'],
+  ['Dockside Brawl', 'Shipping containers, seagulls, and one very unlucky forklift.'],
+  ['Neon Alley', 'Rain-slick pavement reflecting a wall of holographic ads.'],
+  ['The Foundry', 'Molten metal pours behind the fighters. OSHA has given up.'],
+  ['Cherry Blossom Bridge', 'Petals drift across a wooden bridge at golden hour.'],
+  ['Underground Parking Lot B4', 'Flickering fluorescents and infinite echo.'],
+  ['Grand Arena', 'A packed stadium with pyrotechnics on every knockdown.'],
+  ['Frozen Summit', 'A mountain peak above the clouds, wind howling.'],
+  ['Night Market', 'Fighters weave between food stalls; nobody stops eating.'],
+]
+
+export const TAG_SUGGESTIONS = [
+  'edgy', 'cute', 'honest', 'cheap', 'big damage', 'technical', 'flashy', 'creepy',
+  'cool', 'goofy', 'classic', 'anime', 'monster', 'military', 'royal', 'underdog',
+]
+
+export const PLAYER_TAG_SUGGESTIONS = [
+  'loud', 'chill', 'tryhard', 'meme lord', 'old head', 'salty', 'wholesome', 'cocky',
+  'quiet', 'hype beast', 'theory crafter', 'masher', 'grinder', 'clown', 'stoic', 'dramatic',
+]
+
+export const TOURNAMENT_NAME_PARTS = {
+  a: ['Friday Night', 'Sunday', 'Weekly', 'Monthly', 'Midnight', 'Basement', 'Neon', 'King of the', 'Quarter Circle', 'Last Stock'],
+  b: ['Throwdown', 'Rumble', 'Clash', 'Showdown', 'Brawl', 'Gauntlet', 'Classic', 'Open', 'Invitational', 'Wars'],
+}
+
+export const LIFE_EVENTS = [
+  'their car broke down on the highway', 'they got called into a double shift',
+  'they came down with a nasty cold', 'a family dinner ran way too long',
+  'their controller gave up the ghost this morning', 'they slept through three alarms',
+  'their landlord scheduled an "emergency" inspection', 'they had a final exam tomorrow',
+  'their dog ate something it absolutely should not have', 'a friend needed help moving a couch',
+  'they got stuck babysitting their cousins', 'their bus simply never came',
+]
+
 export const CATCHPHRASES = [
   'Too easy!', 'Run it back.', "That's the gap.", 'Study the tape!', "Don't blink.",
   'Absolutely free.', 'On my screen, you lose.', 'Lab hours pay off.', 'Respect the process.',

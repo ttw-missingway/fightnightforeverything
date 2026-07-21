@@ -96,9 +96,12 @@ export function newTournamentEntry(partial = {}) {
   return {
     id: uid('tourney'),
     name: 'Weekly Rumble',
-    dayOfYear: 28,
     type: 'singles', // 'singles' | 'teams'
-    repeats: true,
+    cadence: 'weekly', // 'weekly' | 'monthly' | 'yearly'
+    weekday: 0, // 0=Sunday .. 6=Saturday (weekly cadence)
+    dayOfMonth: 1, // 1..28 (monthly cadence)
+    dayOfYear: 28, // 1..336 (yearly cadence)
+    size: 8, // bracket size: always a power of two; cancelled if it can't fill
     ...partial,
   }
 }
@@ -196,6 +199,18 @@ export function migrateSave(save) {
   }
   for (const c of save.game.characters) {
     c.tags ??= []
+  }
+  for (const t of save.arcade.schedule) {
+    t.cadence ??= 'yearly' // old entries were yearly by construction
+    t.weekday ??= 0
+    t.dayOfMonth ??= 1
+    t.dayOfYear ??= 28
+    t.size ??= 8
+  }
+  // Old tournament records predate progressive reveal — show them finished.
+  // (A large finite number: Infinity would not survive JSON round-trips.)
+  if (save.lastTournament && save.lastTournament.revealed == null) {
+    save.lastTournament.revealed = 999999
   }
   return save
 }

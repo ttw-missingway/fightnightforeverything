@@ -48,6 +48,14 @@ export const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+// Day 1 of every year is a Sunday (28-day months keep weekdays aligned).
+export const weekdayOf = (dayOfYear) => (dayOfYear - 1) % 7
+export const dayOfMonthOf = (dayOfYear) => ((dayOfYear - 1) % DAYS_PER_MONTH) + 1
+
+export const BRACKET_SIZES = [2, 4, 8, 16, 32, 64]
+
 export function formatDay(dayOfYear, year) {
   const m = Math.floor((dayOfYear - 1) / DAYS_PER_MONTH)
   const d = ((dayOfYear - 1) % DAYS_PER_MONTH) + 1

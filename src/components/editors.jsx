@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { Field, NumField, StringListEditor, PillPicker } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTechnique, newTournamentEntry, getMatchup, setMatchup } from '../game/model.js'
-import { generateCharacter } from '../game/generate.js'
-import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay } from '../game/constants.js'
-import { FOODS, OTHER_GAMES } from '../game/names.js'
+import {
+  generateCharacter, generateMoveName, generateGameTitle, generateArcadeName,
+  generateStage, generateTechnique, generateTournamentName, randomizeMatchups,
+} from '../game/generate.js'
+import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES } from '../game/constants.js'
+import { FOODS, OTHER_GAMES, CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
+import { choice, sample } from '../game/util.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
@@ -16,10 +20,16 @@ export function BasicsEditor({ save, update }) {
           <input value={save.saveName} onChange={(e) => update((s) => { s.saveName = e.target.value })} />
         </Field>
         <Field label="Fighting game title">
-          <input value={save.game.name} onChange={(e) => update((s) => { s.game.name = e.target.value })} />
+          <div className="row">
+            <input value={save.game.name} onChange={(e) => update((s) => { s.game.name = e.target.value })} />
+            <button className="small" title="random title" onClick={() => update((s) => { s.game.name = generateGameTitle() })}>🎲</button>
+          </div>
         </Field>
         <Field label="Arcade name">
-          <input value={save.arcade.name} onChange={(e) => update((s) => { s.arcade.name = e.target.value })} />
+          <div className="row">
+            <input value={save.arcade.name} onChange={(e) => update((s) => { s.arcade.name = e.target.value })} />
+            <button className="small" title="random name" onClick={() => update((s) => { s.arcade.name = generateArcadeName() })}>🎲</button>
+          </div>
         </Field>
         <NumField label="Number of setups (cabinets for the main game)" value={save.settings.setups} min={1} max={20}
           onChange={(v) => update((s) => { s.settings.setups = v })} />
@@ -64,6 +74,10 @@ export function TagsEditor({ save, update }) {
         </p>
         <StringListEditor items={save.game.tags} placeholder="new character tag…"
           onChange={(items) => update((s) => { s.game.tags = items })} />
+        <button className="small" style={{ marginTop: 6 }} onClick={() => update((s) => {
+          const fresh = TAG_SUGGESTIONS.filter((t) => !s.game.tags.includes(t))
+          s.game.tags.push(...sample(fresh, Math.min(3, fresh.length)))
+        })}>🎲 Add random tags</button>
       </div>
       <div className="card">
         <h3>Player Tags</h3>
@@ -73,6 +87,10 @@ export function TagsEditor({ save, update }) {
         </p>
         <StringListEditor items={save.game.playerTags || []} placeholder="new player tag…"
           onChange={(items) => update((s) => { s.game.playerTags = items })} />
+        <button className="small" style={{ marginTop: 6 }} onClick={() => update((s) => {
+          const fresh = PLAYER_TAG_SUGGESTIONS.filter((t) => !(s.game.playerTags || []).includes(t))
+          s.game.playerTags.push(...sample(fresh, Math.min(3, fresh.length)))
+        })}>🎲 Add random tags</button>
       </div>
     </div>
   )
@@ -127,7 +145,16 @@ export function CharactersEditor({ save, update }) {
             }) }}>Delete</button>
           </div>
           <Field label="Name">
-            <input value={sel.name} onChange={(e) => patchChar((c) => { c.name = e.target.value })} />
+            <div className="row">
+              <input value={sel.name} onChange={(e) => patchChar((c) => { c.name = e.target.value })} />
+              <button className="small" title="random name" onClick={() => update((s) => {
+                const c = s.game.characters.find((x) => x.id === sel.id)
+                if (!c) return
+                const used = new Set(s.game.characters.map((x) => x.name))
+                const free = CHARACTER_NAMES.filter((n) => !used.has(n))
+                if (free.length) c.name = choice(free)
+              })}>🎲</button>
+            </div>
           </Field>
           <Field label="Archetype">
             <select value={sel.archetype} onChange={(e) => patchChar((c) => { c.archetype = e.target.value })}>
@@ -166,7 +193,12 @@ export function CharactersEditor({ save, update }) {
               })}>×</button>
             </div>
           ))}
-          <button className="small" onClick={() => patchChar((c) => { c.moves.push(newMove()) })}>+ Add move</button>
+          <div className="row">
+            <button className="small" onClick={() => patchChar((c) => { c.moves.push(newMove()) })}>+ Add move</button>
+            <button className="small" onClick={() => patchChar((c) => {
+              c.moves.push(newMove({ name: generateMoveName(), type: choice(MOVE_TYPES) }))
+            })}>🎲 Random move</button>
+          </div>
         </div>
       )}
     </div>
@@ -181,9 +213,17 @@ export function MatchupsEditor({ save, update }) {
   }
   return (
     <div className="card">
-      <h3>Matchup Chart</h3>
+      <div className="row spread">
+        <h3>Matchup Chart</h3>
+        {pairs.length > 0 && (
+          <button className="small" onClick={() => update((s) => randomizeMatchups(s.game))}>
+            🎲 Randomize all
+          </button>
+        )}
+      </div>
       <p className="dim small">
         Win advantage for the left character, out of 100. 50 is an even matchup; 60 means a 60-40 advantage.
+        Matchups mostly matter at very high skill levels.
       </p>
       {pairs.length === 0 && <p className="dim">Need at least two characters.</p>}
       <div className="grid3">
@@ -205,7 +245,12 @@ export function StagesEditor({ save, update }) {
     <div className="card">
       <div className="row spread">
         <h3>Stages</h3>
-        <button className="small" onClick={() => update((s) => { s.game.stages.push(newStage()) })}>+ Add stage</button>
+        <div className="row">
+          <button className="small" onClick={() => update((s) => { s.game.stages.push(newStage()) })}>+ Add stage</button>
+          <button className="small" onClick={() => update((s) => {
+            s.game.stages.push(generateStage(s.game.stages))
+          })}>🎲 Generate</button>
+        </div>
       </div>
       <p className="dim small">Flavor only for now — stages don't affect the simulation.</p>
       {save.game.stages.map((st) => (
@@ -232,7 +277,12 @@ export function TechniquesEditor({ save, update }) {
     <div className="card">
       <div className="row spread">
         <h3>Techniques</h3>
-        <button className="small" onClick={() => update((s) => { s.game.techniques.push(newTechnique()) })}>+ Add technique</button>
+        <div className="row">
+          <button className="small" onClick={() => update((s) => { s.game.techniques.push(newTechnique()) })}>+ Add technique</button>
+          <button className="small" onClick={() => update((s) => {
+            s.game.techniques.push(generateTechnique(s))
+          })}>🎲 Generate</button>
+        </div>
       </div>
       <p className="dim small">
         Skills players can unlock through play. Difficulty controls how hard they are to unlock;
@@ -280,6 +330,10 @@ export function ArcadeEditor({ save, update }) {
       {list.filter((x) => !save.arcade[key].includes(x)).slice(0, 6).map((x) => (
         <span key={x} className="pill clickable" onClick={() => update((s) => { s.arcade[key].push(x) })}>{x}</span>
       ))}
+      <button className="small" onClick={() => update((s) => {
+        const fresh = list.filter((x) => !s.arcade[key].includes(x))
+        s.arcade[key].push(...sample(fresh, Math.min(3, fresh.length)))
+      })}>🎲 Add random</button>
     </div>
   )
   return (
@@ -303,50 +357,72 @@ export function ArcadeEditor({ save, update }) {
 }
 
 export function ScheduleEditor({ save, update }) {
+  const patchEntry = (id, fn) => update((s) => {
+    const x = s.arcade.schedule.find((y) => y.id === id)
+    if (x) fn(x)
+  })
   return (
     <div className="card">
       <div className="row spread">
-        <h3>Tournament Schedule</h3>
-        <button className="small" onClick={() => update((s) => { s.arcade.schedule.push(newTournamentEntry()) })}>
-          + Schedule tournament
-        </button>
+        <h3>Recurring Tournaments</h3>
+        <button className="small" onClick={() => update((s) => {
+          s.arcade.schedule.push(newTournamentEntry({ name: generateTournamentName() }))
+        })}>+ Schedule tournament</button>
       </div>
       <p className="dim small">
-        The year has {DAYS_PER_YEAR} days. EVO happens automatically on day {EVO_DAY} ({formatDay(EVO_DAY, 1).replace(', Year 1', '')}) every year —
-        your top 8 players qualify.
+        Brackets are always a power of two — the bracket size you set here is the invite list, filled by
+        elo + reputation. If the slots can't be filled, that running of the tournament is cancelled.
+        EVO happens automatically on day {EVO_DAY} ({formatDay(EVO_DAY, 1).replace(', Year 1', '')}) every year — your top 8 qualify.
       </p>
-      <table>
-        <thead><tr><th>Name</th><th>Day of year</th><th>Date</th><th>Type</th><th>Repeats yearly</th><th /></tr></thead>
-        <tbody>
-          {save.arcade.schedule.map((t) => (
-            <tr key={t.id}>
-              <td><input value={t.name} onChange={(e) => update((s) => {
-                const x = s.arcade.schedule.find((y) => y.id === t.id); if (x) x.name = e.target.value
-              })} /></td>
-              <td><input type="number" min={1} max={DAYS_PER_YEAR} value={t.dayOfYear} onChange={(e) => update((s) => {
-                const x = s.arcade.schedule.find((y) => y.id === t.id); if (x) x.dayOfYear = Number(e.target.value)
-              })} /></td>
-              <td className="dim small">{formatDay(t.dayOfYear, save.year).replace(`, Year ${save.year}`, '')}</td>
-              <td>
-                <select value={t.type} onChange={(e) => update((s) => {
-                  const x = s.arcade.schedule.find((y) => y.id === t.id); if (x) x.type = e.target.value
-                })}>
-                  <option value="singles">Singles</option>
-                  <option value="teams">Team battle</option>
-                </select>
-              </td>
-              <td>
-                <input type="checkbox" checked={t.repeats} onChange={(e) => update((s) => {
-                  const x = s.arcade.schedule.find((y) => y.id === t.id); if (x) x.repeats = e.target.checked
-                })} />
-              </td>
-              <td><button className="small danger" onClick={() => update((s) => {
-                s.arcade.schedule = s.arcade.schedule.filter((y) => y.id !== t.id)
-              })}>×</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {save.arcade.schedule.map((t) => (
+        <div className="card sub" key={t.id}>
+          <div className="row">
+            <input value={t.name} style={{ minWidth: 180 }}
+              onChange={(e) => patchEntry(t.id, (x) => { x.name = e.target.value })} />
+            <button className="small" title="random name"
+              onClick={() => patchEntry(t.id, (x) => { x.name = generateTournamentName() })}>🎲</button>
+            <select value={t.type} onChange={(e) => patchEntry(t.id, (x) => { x.type = e.target.value })}>
+              <option value="singles">Singles</option>
+              <option value="teams">Team battle</option>
+            </select>
+            <select value={t.cadence || 'weekly'} onChange={(e) => patchEntry(t.id, (x) => { x.cadence = e.target.value })}>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+            {(t.cadence || 'weekly') === 'weekly' && (
+              <select value={t.weekday || 0} onChange={(e) => patchEntry(t.id, (x) => { x.weekday = Number(e.target.value) })}>
+                {WEEKDAYS.map((w, i) => <option key={w} value={i}>every {w}</option>)}
+              </select>
+            )}
+            {t.cadence === 'monthly' && (
+              <label className="row small dim">
+                day
+                <input type="number" min={1} max={28} value={t.dayOfMonth || 1}
+                  onChange={(e) => patchEntry(t.id, (x) => { x.dayOfMonth = Number(e.target.value) })} />
+                of each month
+              </label>
+            )}
+            {t.cadence === 'yearly' && (
+              <label className="row small dim">
+                day
+                <input type="number" min={1} max={DAYS_PER_YEAR} value={t.dayOfYear}
+                  onChange={(e) => patchEntry(t.id, (x) => { x.dayOfYear = Number(e.target.value) })} />
+                ({formatDay(t.dayOfYear || 1, 1).replace(', Year 1', '')})
+              </label>
+            )}
+            <label className="row small dim">
+              bracket
+              <select value={t.size || 8} onChange={(e) => patchEntry(t.id, (x) => { x.size = Number(e.target.value) })}>
+                {BRACKET_SIZES.map((n) => <option key={n} value={n}>{n} {t.type === 'teams' ? 'teams' : 'players'}</option>)}
+              </select>
+            </label>
+            <button className="small danger" onClick={() => update((s) => {
+              s.arcade.schedule = s.arcade.schedule.filter((y) => y.id !== t.id)
+            })}>×</button>
+          </div>
+        </div>
+      ))}
       {save.arcade.schedule.length === 0 && <p className="dim">Nothing scheduled yet.</p>}
     </div>
   )
