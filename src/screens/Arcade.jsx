@@ -58,19 +58,44 @@ export default function Arcade() {
 
 // ---------- Live (hour-by-hour) view ----------
 
+// Route each event to the zone of the arcade where it's happening.
+function splitZones(hour) {
+  const setups = []
+  const concession = []
+  const floor = []
+  for (const ev of hour.events) {
+    if (ev.type === 'match' || ev.type === 'technique') setups.push(ev)
+    else if (ev.type === 'interaction') {
+      if (ev.where && ev.where.startsWith('playing')) floor.push(ev)
+      else concession.push(ev)
+    } else if (ev.type === 'idle') concession.push(ev)
+    else floor.push(ev)
+  }
+  return { setups, concession, floor }
+}
+
 function LiveDay({ save, nav }) {
   const dip = save.dayInProgress
   const [viewHour, setViewHour] = useState(null) // null = latest
+  const [zone, setZone] = useState(null) // null = overview map
   const hourIdx = viewHour ?? dip.hours.length - 1
   const hour = dip.hours[hourIdx]
   const isCurrent = hourIdx === dip.hours.length - 1
 
   if (!hour) return <div className="card"><p className="dim">The doors just opened…</p></div>
 
-  const matches = hour.events.filter((e) => e.type === 'match')
-  const interactions = hour.events.filter((e) => e.type === 'interaction')
-  const misc = hour.events.filter((e) => e.type !== 'match' && e.type !== 'interaction')
-  const opening = hourIdx === 0 ? dip.openingEvents : []
+  const zones = splitZones(hour)
+  if (hourIdx === 0) zones.floor = [...dip.openingEvents, ...zones.floor]
+  const matchCount = zones.setups.filter((e) => e.type === 'match').length
+  const railbirds = zones.setups.reduce((n, e) => n + (e.watcherIds?.length || 0), 0)
+  const concessionPeople = new Set(zones.concession.flatMap((e) => e.memberIds || [])).size
+  const floorGroups = zones.floor.filter((e) => e.type === 'interaction').length
+
+  const zoneMeta = {
+    setups: { icon: '🕹', title: 'The Setups', accent: 'var(--pink)', events: zones.setups },
+    concession: { icon: '🌭', title: 'Concession Stand', accent: 'var(--gold)', events: zones.concession },
+    floor: { icon: '👾', title: 'Arcade Floor', accent: 'var(--cyan)', events: zones.floor },
+  }
 
   return (
     <div>
@@ -86,40 +111,82 @@ function LiveDay({ save, nav }) {
         <span className="dim small">{hour.presentIds.length} in the building</span>
       </div>
 
-      <div className="grid2" style={{ gridTemplateColumns: '2fr 1fr', marginTop: 10 }}>
-        <div>
-          {opening.map((ev, i) => <PlainEvent key={`o${i}`} ev={ev} />)}
+      {zone === null ? (
+        <div style={{ marginTop: 10 }}>
+          <div className="grid3">
+            <ZoneCard meta={zoneMeta.setups} onClick={() => setZone('setups')}
+              teaser={matchCount === 0 ? `no games of ${save.game.name} running`
+                : `${matchCount} match${matchCount === 1 ? '' : 'es'} under way${railbirds ? ` · ${railbirds} watching` : ''}`} />
+            <ZoneCard meta={zoneMeta.concession} onClick={() => setZone('concession')}
+              teaser={concessionPeople === 0 ? 'quiet right now'
+                : `${concessionPeople} ${concessionPeople === 1 ? 'person' : 'people'} hanging out`} />
+            <ZoneCard meta={zoneMeta.floor} onClick={() => setZone('floor')}
+              teaser={floorGroups === 0 ? 'the side cabinets sit idle'
+                : `${floorGroups} group${floorGroups === 1 ? '' : 's'} on the side cabinets`} />
+          </div>
 
-          <h3 className="pink">🕹 On the setups</h3>
-          {matches.length === 0 && <p className="dim small">No one is playing {save.game.name} this hour.</p>}
-          {matches.map((m) => (
-            <LiveMatch key={`${hourIdx}-${m.setupIndex}`} m={m} spoil={!isCurrent} />
-          ))}
-
-          <h3 className="cyan">🍿 Around the arcade</h3>
-          {interactions.length === 0 && <p className="dim small">The concession stand is quiet.</p>}
-          {interactions.map((ev, i) => <InteractionEvent key={`i${i}`} ev={ev} />)}
-          {misc.map((ev, i) => <PlainEvent key={`m${i}`} ev={ev} />)}
+          <div className="card" style={{ marginTop: 12 }}>
+            <h3>In the building</h3>
+            <div className="row">
+              {hour.presentIds.map((id) => {
+                const p = save.players[id]
+                if (!p) return null
+                return (
+                  <span key={id} className="pill clickable" title={moodLabel(p.mood)}
+                    onClick={() => nav('players', { playerId: id })}>
+                    {moodFace(p.mood)} {displayName(p, save)}
+                  </span>
+                )
+              })}
+              {hour.presentIds.length === 0 && <p className="dim">Nobody around this hour.</p>}
+            </div>
+          </div>
         </div>
+      ) : (
+        <ZoneView
+          meta={zoneMeta[zone]}
+          zone={zone}
+          hourIdx={hourIdx}
+          isCurrent={isCurrent}
+          gameName={save.game.name}
+          back={() => setZone(null)}
+        />
+      )}
+    </div>
+  )
+}
 
-        <div className="card">
-          <h3>In the building</h3>
-          {hour.presentIds.map((id) => {
-            const p = save.players[id]
-            if (!p) return null
-            return (
-              <div className="row spread" key={id} style={{ borderBottom: '1px solid var(--border)', padding: '4px 0' }}>
-                <span style={{ cursor: 'pointer' }} onClick={() => nav('players', { playerId: id })}>
-                  {displayName(p, save)}
-                </span>
-                <span className="small dim" title={moodLabel(p.mood)}>
-                  <span className="mood-face">{moodFace(p.mood)}</span> {Math.round(p.elo)}
-                </span>
-              </div>
-            )
-          })}
-          {hour.presentIds.length === 0 && <p className="dim">Nobody around this hour.</p>}
-        </div>
+function ZoneCard({ meta, teaser, onClick }) {
+  return (
+    <div className="zonecard" style={{ borderColor: meta.accent }} onClick={onClick}>
+      <div className="zone-icon">{meta.icon}</div>
+      <h3 style={{ color: meta.accent, margin: '4px 0' }}>{meta.title}</h3>
+      <p className="dim small" style={{ margin: 0 }}>{teaser}</p>
+      <span className="small" style={{ color: meta.accent }}>look around →</span>
+    </div>
+  )
+}
+
+function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, back }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="row">
+        <button onClick={back}>← Back to the floor plan</button>
+        <h3 style={{ color: meta.accent, margin: 0 }}>{meta.icon} {meta.title}</h3>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {meta.events.length === 0 && (
+          <p className="dim">
+            {zone === 'setups' ? `Nobody is on ${gameName} right now.`
+              : zone === 'concession' ? 'Nobody at the counter. The nacho cheese congeals in peace.'
+              : 'The side cabinets blink their attract screens at no one.'}
+          </p>
+        )}
+        {meta.events.map((ev, i) => {
+          if (ev.type === 'match') return <LiveMatch key={`${hourIdx}-${ev.setupIndex}`} m={ev} spoil={!isCurrent} />
+          if (ev.type === 'interaction') return <InteractionEvent key={`i${i}`} ev={ev} />
+          return <PlainEvent key={`p${i}`} ev={ev} />
+        })}
       </div>
     </div>
   )
