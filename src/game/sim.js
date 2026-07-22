@@ -7,8 +7,9 @@ import { postPatchDemand } from './socialmedia.js'
 import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
 import { buildStream, personalityOf } from './stream.js'
 import { econLog, weeklyRent } from './economy.js'
-import { updateFeedFromDay, postMoneyMatchAnnouncement } from './socialmedia.js'
+import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList } from './socialmedia.js'
 import { speak } from './dialogue.js'
+import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dissolveTinyTeams,
@@ -946,6 +947,29 @@ export function endDay(save) {
     if (save.stream.hype > 8) {
       const saturation = Math.max(0.05, 1 - save.stream.followers / 20000)
       save.stream.followers += Math.round(save.stream.hype * 0.06 * saturation)
+    }
+  }
+
+  // Community tier lists drop about a week after each patch (and once the
+  // launch build has had a week of games).
+  const absDay = (save.year - 1) * DAYS_PER_YEAR + save.day
+  const duePending = save.pendingTierList && absDay >= save.pendingTierList.dueAbs
+  const launchListDue = !save.tierLists?.length && !save.pendingTierList && daysSincePatch(save) >= 7
+  if ((duePending || launchListDue) && save.game.characters.length >= 2) {
+    const list = generateTierList(save)
+    if (list) {
+      if (duePending) list.version = save.pendingTierList.version
+      save.tierLists.unshift(list)
+      if (save.tierLists.length > 30) save.tierLists.pop()
+      save.pendingTierList = null
+      const topNames = list.tiers.S
+        .map((id) => save.game.characters.find((c) => c.id === id)?.name)
+        .filter(Boolean)
+      events.push({
+        type: 'arrival',
+        text: `📊 The community tier list for v${list.version} dropped${topNames.length ? ` — ${topNames.join(' and ')} crowned S tier` : ''}. Arguments immediately.`,
+      })
+      postTierList(save, list, topNames)
     }
   }
 

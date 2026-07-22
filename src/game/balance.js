@@ -7,7 +7,7 @@
 // ("loId|hiId" -> win% for the lower-sorted id), so everything downstream
 // (win probability, charPower, patch diffs) works unchanged.
 
-import { clamp, hash01 } from './util.js'
+import { clamp, hash01, uid, choice, randInt } from './util.js'
 import { comboDamage } from './design.js'
 
 const by = (char, type) => (char.moves || []).filter((m) => m.type === type)
@@ -96,6 +96,73 @@ export function matchupExplanation(a, b) {
     default: return 'stylistic edge'
   }
 }
+
+// ---------- Community tier lists ----------
+
+const TIER_ORDER = ['S', 'A', 'B', 'C', 'D']
+
+const TIER_BLURBS = [
+  'Three days of flowchart arguments later, the council has spoken.',
+  'Compiled from board votes, salt, and one suspiciously passionate manifesto.',
+  'The community has ranked the cast. The community is not sorry.',
+  'Results-based analysis, vibes-based conclusions.',
+  'As always: if your main is low, the list is wrong.',
+]
+
+function avgPower(chars, char) {
+  const others = chars.filter((c) => c.id !== char.id)
+  if (!others.length) return 50
+  return others.reduce((s, o) => s + computeMatchup(char, o), 0) / others.length
+}
+
+/**
+ * The COMMUNITY's tier list — not the objective chart. Starts from computed
+ * power, then adds what communities actually rank on: how many people play
+ * the character, who's been winning tournaments with them, and noise.
+ */
+export function generateTierList(save) {
+  const chars = save.game.characters
+  if (!chars.length) return null
+  const regs = Object.values(save.players).filter((p) => p.isRegular)
+  const mains = {}
+  for (const p of regs) if (p.mainCharId) mains[p.mainCharId] = (mains[p.mainCharId] || 0) + 1
+  const titles = {}
+  for (const m of save.charMilestones || []) {
+    if (m.text.includes('won')) titles[m.charId] = (titles[m.charId] || 0) + 1
+  }
+
+  const scored = chars.map((c) => ({
+    id: c.id,
+    perception: avgPower(chars, c)
+      + (Math.random() - 0.5) * 3            // discourse noise
+      + Math.min(mains[c.id] || 0, 4) * 0.8  // popularity reads as strength
+      + Math.min(titles[c.id] || 0, 3) * 0.7, // "it wins tournaments, it's top tier"
+  })).sort((a, b) => b.perception - a.perception)
+
+  const tiers = { S: [], A: [], B: [], C: [], D: [] }
+  for (const { id, perception } of scored) {
+    const t = perception >= 54.5 ? 'S' : perception >= 51.5 ? 'A' : perception >= 48.5 ? 'B' : perception >= 45.5 ? 'C' : 'D'
+    tiers[t].push(id)
+  }
+  // The community always crowns SOMEBODY.
+  if (!tiers.S.length && scored.length) {
+    const top = scored[0].id
+    for (const t of TIER_ORDER) tiers[t] = tiers[t].filter((id) => id !== top)
+    tiers.S.push(top)
+  }
+
+  return {
+    id: uid('tierlist'),
+    version: save.game.version,
+    day: save.day,
+    year: save.year,
+    tiers,
+    blurb: choice(TIER_BLURBS),
+    votes: randInt(15, 40) + Math.round((save.stream?.hype || 0) * 3),
+  }
+}
+
+export { TIER_ORDER }
 
 /**
  * Recompute the whole chart from the movesets. Called at save start, after

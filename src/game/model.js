@@ -156,6 +156,8 @@ export function newSave(partial = {}) {
     patchMorale: 0, // -10..10 community feeling about the game's balance/freshness
     lastPatch: { day: 1, year: 1 },
     chronicle: [], // the collective memory: {day, year, icon, text} — capped
+    tierLists: [], // community tier lists, newest first — one lands ~a week after each patch
+    pendingTierList: null, // {version, dueAbs} — absolute day the next list drops
     arcade: {
       name: 'The Arcade',
       foods: [],
@@ -254,6 +256,8 @@ export function migrateSave(save) {
   save.patchMorale ??= 0
   save.lastPatch ??= { day: save.day, year: save.year }
   save.chronicle ??= []
+  save.tierLists ??= []
+  save.pendingTierList ??= null
   for (const st of save.game.stages) st.vibe ??= 'hype'
   save.settings.nameDisplay ??= 'alias'
   save.game.playerTags ??= []

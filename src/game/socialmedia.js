@@ -107,6 +107,18 @@ export function postMoneyMatchAnnouncement(save, challengerName, targetName, day
   })
 }
 
+// Tier list day: the second topic the internet never skips.
+export function postTierList(save, list, topNames) {
+  if (!feedActive(save)) return
+  post(save, {
+    platform: 'boards',
+    title: `Official v${list.version} community tier list`,
+    text: topNames.length
+      ? `S tier: ${topNames.join(', ')}. ${choice(['Discuss (politely, for once).', 'The votes are in.', 'You already know the comments are a warzone.'])}`
+      : 'Somehow nobody is S tier this patch. Balanced game or cowardly voters?',
+  })
+}
+
 // Patch day: the one topic the internet never skips.
 export function postPatchReaction(save, patch) {
   if (!feedActive(save)) return

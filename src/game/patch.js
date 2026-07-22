@@ -163,5 +163,10 @@ export function releasePatch(save) {
 
   chronicle(save, '🛠', `Patch v${version} released — ${label}${why.length ? ` (${why[0]})` : ''}`)
   postPatchReaction(save, patch)
+  // The community needs about a week of games before the tier list drops.
+  save.pendingTierList = {
+    version,
+    dueAbs: (save.year - 1) * DAYS_PER_YEAR + save.day + 5 + Math.floor(Math.random() * 5),
+  }
   return patch
 }

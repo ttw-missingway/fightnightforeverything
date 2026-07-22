@@ -213,6 +213,34 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 .chatline { font-size: 12.5px; padding: 2px 0; line-height: 1.35; word-break: break-word; }
 .chatuser { font-weight: 700; }
 
+/* Tiermaker-style tier list */
+.tierlist { margin-top: 12px; border: 1px solid #000; background: #000; }
+.tierrow { display: flex; border-bottom: 2px solid #000; min-height: 84px; }
+.tierrow:last-child { border-bottom: none; }
+.tierlabel {
+  width: 92px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #000; font-weight: 800; font-size: 34px;
+  font-family: 'Futura', 'Avenir Next Condensed', system-ui, sans-serif;
+}
+.tiercells {
+  flex: 1; display: flex; flex-wrap: wrap; align-content: flex-start;
+  background: #1a1a1a; gap: 2px; padding: 2px;
+}
+.tiercard {
+  width: 84px; height: 80px;
+  background: linear-gradient(160deg, var(--card2), var(--bg2));
+  border: 1px solid #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 4px; gap: 2px;
+}
+.tiercard-name { font-weight: 700; font-size: 12px; line-height: 1.15; word-break: break-word; }
+.tiercard-arch { font-size: 9.5px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+@media (max-width: 640px) {
+  .tierlabel { width: 56px; font-size: 24px; }
+  .tiercard { width: 68px; height: 68px; }
+}
+
 .zonecard {
   background: var(--card);
   border: 2px solid var(--border);
