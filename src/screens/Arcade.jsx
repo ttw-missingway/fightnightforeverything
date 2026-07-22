@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatDay, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
-import { Expandable, moodFace } from '../components/ui.jsx'
+import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
 import StreamChat from '../components/StreamChat.jsx'
 import { displayName } from '../game/util.js'
 import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
@@ -289,12 +289,19 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
           )}
           <div className={m.stream ? 'stream-split' : ''}>
             <div>
-              {m.narration.slice(0, revealed).map((l, i) => <p key={i}>{l}</p>)}
+              {(m.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
+              {m.narration.slice(0, revealed).map((l, i) => (
+                <Fragment key={i}>
+                  <p>{l}</p>
+                  {(m.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
+                </Fragment>
+              ))}
               {!fullyRevealed && (
                 <button className="small" onClick={() => setRevealed(revealed + 1)}>
                   ▶ {revealed === 0 ? 'Watch the match' : 'What happens next?'}
                 </button>
               )}
+              {fullyRevealed && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
               {fullyRevealed && (
                 <p className="dim small" style={{ fontStyle: 'normal' }}>
                   win chance was {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}% · ±{m.eloDelta} elo
@@ -324,9 +331,11 @@ function InteractionEvent({ ev }) {
       <div className="narration">
         <p style={{ fontStyle: 'normal' }} className="dim">Talking about: <span className="cyan">{ev.topic}</span></p>
         {(ev.beats || []).map((b, i) => (
-          <p key={`b${i}`} style={{ fontStyle: 'normal' }}>
-            {b.includes('(−') ? '💢' : b.includes('(+') ? '✨' : '•'} {b}
-          </p>
+          typeof b === 'string'
+            ? <p key={`b${i}`} style={{ fontStyle: 'normal' }}>
+                {b.includes('(−') ? '💢' : b.includes('(+') ? '✨' : '•'} {b}
+              </p>
+            : <SpeechLine key={`b${i}`} s={b} />
         ))}
         {ev.feelings.map((f) => (
           <p key={f.id} style={{ fontStyle: 'normal' }}>
@@ -404,7 +413,14 @@ function RecapEvent({ ev }) {
         }
       >
         <div className="narration">
-          {ev.narration.map((l, i) => <p key={i}>{l}</p>)}
+          {(ev.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
+          {ev.narration.map((l, i) => (
+            <Fragment key={i}>
+              <p>{l}</p>
+              {(ev.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
+            </Fragment>
+          ))}
+          {(ev.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
           <p className="dim small" style={{ fontStyle: 'normal' }}>
             win chance {Math.round(ev.probA * 100)}%–{Math.round((1 - ev.probA) * 100)}% · ±{ev.eloDelta} elo
           </p>

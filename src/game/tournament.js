@@ -6,6 +6,7 @@ import { getMatchup, remember } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { buildStream, personalityOf, elitePersonality } from './stream.js'
+import { speak } from './dialogue.js'
 
 const pName = (save, p) => displayName(p, save)
 
@@ -95,6 +96,20 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     context,
   })
 
+  // Bracket sets end with words too — when both players are real people.
+  const postMatch = []
+  if (bothArcade) {
+    if (chance(0.55)) {
+      const wl = speak(winner.ref, 'ggWin', { t: loser.name, self: winner.name })
+      if (wl) postMatch.push({ speaker: winner.name, text: wl })
+    }
+    if (chance(0.55)) {
+      const goodSport = loser.ref.social.sportsmanship >= 6
+      const ll = speak(loser.ref, goodSport ? 'ggLossGood' : 'ggLossBad', { t: winner.name, self: loser.name })
+      if (ll) postMatch.push({ speaker: loser.name, text: ll })
+    }
+  }
+
   return {
     id: uid('m'),
     aId: a.id, bId: b.id,
@@ -103,6 +118,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     probA, winnerId: winner.id, winnerName: winner.name,
     narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
     stream,
+    postMatch,
     bye: false,
   }
 }

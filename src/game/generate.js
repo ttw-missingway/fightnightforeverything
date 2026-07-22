@@ -8,6 +8,7 @@ import {
   TECHNIQUE_NAME_PARTS,
 } from './names.js'
 import { newStage, newTechnique, setMatchup } from './model.js'
+import { deriveVoice } from './dialogue.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
@@ -125,6 +126,8 @@ export function generateCharacter(usedNames = new Set()) {
 }
 
 export function generatePlayer(save, overrides = {}) {
+  const personal = rollStatBlock(PERSONAL_KEYS)
+  const social = rollStatBlock(SOCIAL_KEYS)
   const first = choice(FIRST_NAMES)
   const last = choice(LAST_NAMES)
   const taken = new Set(Object.values(save.players).map((p) => p.alias))
@@ -148,8 +151,9 @@ export function generatePlayer(save, overrides = {}) {
     gender: choice(GENDERS),
     description: choice(APPEARANCES),
     createdBy: 'cpu',
-    personal: rollStatBlock(PERSONAL_KEYS),
-    social: rollStatBlock(SOCIAL_KEYS),
+    personal,
+    social,
+    voice: deriveVoice({ personal, social }),
     defaultMood: randInt(4, 7),
     mood: randInt(4, 7),
     catchphrase: choice(CATCHPHRASES),

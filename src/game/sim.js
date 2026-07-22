@@ -6,6 +6,7 @@ import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor, u
 import { buildStream, personalityOf } from './stream.js'
 import { econLog, weeklyRent } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement } from './socialmedia.js'
+import { speak } from './dialogue.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dissolveTinyTeams,
@@ -244,11 +245,16 @@ function maybeUnlockTechnique(save, player, events) {
  */
 function makeBeats(save, group, where, results) {
   const beats = []
+  // Speech beats carry a speaker and render as actual dialogue.
+  const say = (p, kind, ctx = {}, note = null) => {
+    const text = speak(p, kind, { self: pName(save, p), ...ctx })
+    if (text) beats.push({ speaker: pName(save, p), text, note })
+  }
 
   const glow = group.find((p) => results[p.id] === 'won' && p.mood >= 6)
   const salty = group.find((p) => results[p.id] === 'lost' && p.mood <= 5.5)
-  if (glow && chance(0.55)) beats.push(`${pName(save, glow)} is still buzzing about their win earlier.`)
-  else if (salty && chance(0.55)) beats.push(`${pName(save, salty)} is quietly salty about how their sets went today.`)
+  if (glow && chance(0.55)) say(glow, 'winGlow')
+  else if (salty && chance(0.55)) say(salty, 'saltyLoss')
 
   // Someone cracks a joke. Whether it lands depends on the target.
   if (group.length >= 2 && chance(0.55)) {
@@ -259,17 +265,17 @@ function makeBeats(save, group, where, results) {
       0.45 + joker.social.charisma * 0.04 + getRel(target, joker) * 0.003 +
       (target.mood - 5) * 0.03 - (results[target.id] === 'lost' ? 0.15 : 0),
       0.1, 0.92)
-    beats.push(`${pName(save, joker)} cracks a joke at ${pName(save, target)}'s expense.`)
+    say(joker, 'joke', { t: pName(save, target) })
     if (chance(landChance)) {
       const dm = 0.2 + target.social.sensitivity * 0.06
       target.mood = clamp(target.mood + dm, 0, 10)
       shiftRel(target, joker, 1.5)
-      beats.push(`${pName(save, target)} cackles. (+${dm.toFixed(1)} mood)`)
+      say(target, 'jokeLanded', { t: pName(save, joker) }, `(+${dm.toFixed(1)} mood)`)
     } else {
       const dm = 0.3 + target.social.sensitivity * 0.12
       target.mood = clamp(target.mood - dm, 0, 10)
       shiftRel(target, joker, -2.5)
-      beats.push(`${pName(save, target)} did not take it well. (−${dm.toFixed(1)} mood)`)
+      say(target, 'jokeBombed', { t: pName(save, joker) }, `(−${dm.toFixed(1)} mood)`)
     }
   }
 
@@ -279,14 +285,15 @@ function makeBeats(save, group, where, results) {
     const dm = 0.15 + target.social.sensitivity * 0.05
     target.mood = clamp(target.mood + dm, 0, 10)
     shiftRel(target, kind, 1.2)
-    beats.push(`${pName(save, kind)} compliments ${pName(save, target)}'s recent improvement. (+${dm.toFixed(1)} mood)`)
+    const char = save.game.characters.find((c) => c.id === target.mainCharId)
+    say(kind, 'compliment', { t: pName(save, target), c: char?.name }, `(+${dm.toFixed(1)} mood for ${pName(save, target)})`)
   }
 
   const loudmouth = group.find((p) => p.social.politeness <= 3 && p.personal.dominance >= 6)
   if (loudmouth && group.length >= 2 && chance(0.3)) {
     const target = choice(group.filter((p) => p !== loudmouth))
     shiftRel(target, loudmouth, -1.5)
-    beats.push(`${pName(save, loudmouth)} talks a little too much trash; ${pName(save, target)} files it away for later.`)
+    say(loudmouth, 'trashTalk', { t: pName(save, target) }, `(${pName(save, target)} files it away for later)`)
   }
 
   // Hygiene. Nobody says anything. Everybody notices.
@@ -299,14 +306,11 @@ function makeBeats(save, group, where, results) {
     ]))
   }
 
-  // Old war stories: defining moments get retold. Forever.
+  // Old war stories: defining moments get retold. Forever. Aloud.
   const storyteller = group.find((p) => (p.memories || []).length > 0)
   if (storyteller && group.length >= 2 && chance(0.15)) {
     const mem = choice(storyteller.memories)
-    beats.push(choice([
-      `${pName(save, storyteller)} retells the story of ${mem.text} — again.`,
-      `Somehow the conversation circles back to ${mem.text}. ${pName(save, storyteller)} lights up.`,
-    ]))
+    say(storyteller, 'memoryRetell', { mem: mem.text })
   }
 
   if (where === 'at the concession stand' && save.arcade.foods.length && group.length >= 2 && chance(0.4)) {
@@ -389,6 +393,21 @@ function runMoneyMatch(save, mm, present, events) {
     grudge: true,
     watcherCount: watchers.length,
   })
+  // The stare-down before the sticks are even plugged in.
+  const preMatch = []
+  for (const p of [a, b]) {
+    const opp = p === a ? b : a
+    const line = speak(p, 'mmPre', { t: pName(save, opp), self: pName(save, p) })
+    if (line) preMatch.push({ speaker: pName(save, p), text: line })
+  }
+  // And the words after — a money match always ends with words.
+  const postMatch = []
+  const wl = speak(winner, 'ggWin', { t: pName(save, loser), self: pName(save, winner) })
+  if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
+  const goodSport = loser.social.sportsmanship >= 6
+  const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), self: pName(save, loser) })
+  if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
+
   const ev = {
     type: 'match',
     moneyMatch: true,
@@ -402,6 +421,7 @@ function runMoneyMatch(save, mm, present, events) {
     watcherIds: watchers.map((w) => w.id),
     watcherNames: watchers.map((w) => pName(save, w)),
     narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
+    preMatch, postMatch,
   }
   // A money match is an event: it goes on stream automatically and the
   // stakes juice the broadcast.
@@ -729,6 +749,33 @@ export function simHour(save) {
         applySocialMood(w, 0.5)
       }
 
+      // Railbirds talk during the match — reacting to the actual moments.
+      const chatter = []
+      for (const w of watcherGroup.slice(0, 2)) {
+        if (!chance(0.5)) continue
+        const spots = nar.meta
+          .map((m2, i) => ({ m: m2, i }))
+          .filter((x) => (x.m.kind === 'game' && x.m.move) || x.m.kind === 'struggle')
+        if (!spots.length) continue
+        const spot = choice(spots)
+        const line = speak(w, spot.m.kind === 'struggle' ? 'watcherWince' : 'watcherHype',
+          { t: spot.m.actor, m: spot.m.move, self: pName(save, w) })
+        if (line) chatter.push({ at: spot.i, speaker: pName(save, w), text: line })
+      }
+      chatter.sort((x, y) => x.at - y.at)
+
+      // The set ends; sometimes words are exchanged.
+      const postMatch = []
+      if (chance(0.55)) {
+        const wl = speak(winner, 'ggWin', { t: pName(save, loser), self: pName(save, winner) })
+        if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
+      }
+      if (chance(0.55)) {
+        const goodSport = loser.social.sportsmanship >= 6 || (loser.social.sportsmanship >= 4 && loser.mood >= 6)
+        const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), self: pName(save, loser) })
+        if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
+      }
+
       events.push({
         type: 'match',
         setupIndex: mi + 1,
@@ -744,6 +791,8 @@ export function simHour(save) {
         narration,
         narrationMeta: nar.meta,
         setScore: nar.score,
+        chatter,
+        postMatch,
       })
 
       maybeUnlockTechnique(save, winner, events)

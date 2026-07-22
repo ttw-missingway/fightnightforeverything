@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import StreamChat from '../components/StreamChat.jsx'
+import { SpeechLine } from '../components/ui.jsx'
 
 export default function Tournament() {
   const { save, nav, mutate } = useStore()
@@ -171,6 +172,7 @@ function NowPlaying({ m, roundTitle, onFinished }) {
                 {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
               </p>
             ))}
+            {finished && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
             {finished && m.probA != null && (
               <p className="dim small" style={{ fontStyle: 'normal' }}>
                 odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
@@ -232,6 +234,7 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
               {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
             </p>
           ))}
+          {(m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
           {m.probA != null && (
             <p className="dim small" style={{ fontStyle: 'normal' }}>
               odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%

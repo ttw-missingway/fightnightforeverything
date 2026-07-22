@@ -3,6 +3,7 @@ import { Field, NumField, PillPicker } from './ui.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS, GENDERS, STAT_PRESETS } from '../game/constants.js'
 import { rollStat } from '../game/util.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
+import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHES, VOICE_QUIRKS } from '../game/dialogue.js'
 
 /**
  * Full player editor. `patch(fn)` applies fn to the live player object inside
@@ -45,6 +46,26 @@ export default function PlayerForm({ save, player, patch }) {
           <Field label='Catchphrase (they might say it when they win)'>
             <input value={player.catchphrase || ''} placeholder='"Too easy!"'
               onChange={(e) => patch((p) => { p.catchphrase = e.target.value })} />
+          </Field>
+          <Field label="Voice — how they talk">
+            <div className="row">
+              {[
+                ['energy', VOICE_ENERGIES],
+                ['humor', VOICE_HUMORS],
+                ['speech', VOICE_SPEECHES],
+                ['quirk', VOICE_QUIRKS],
+              ].map(([dim, options]) => (
+                <select key={dim} title={dim}
+                  value={(player.voice || DEFAULT_VOICE)[dim]}
+                  onChange={(e) => patch((p) => {
+                    p.voice = { ...(p.voice || DEFAULT_VOICE), [dim]: e.target.value }
+                  })}>
+                  {options.map((o) => <option key={o} value={o}>{dim === 'quirk' && o !== 'none' ? `quirk: ${o}` : o}</option>)}
+                </select>
+              ))}
+              <button className="small" title="derive voice from their stats"
+                onClick={() => patch((p) => { p.voice = deriveVoice(p) })}>🎲 From stats</button>
+            </div>
           </Field>
           <Field label="Their vibe (player tags)">
             <PillPicker options={save.game.playerTags || []} selected={player.playerTags || []}

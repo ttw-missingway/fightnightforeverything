@@ -6,6 +6,7 @@ import { PERSONAL_STATS, SOCIAL_STATS } from '../game/constants.js'
 import { relLabel, moodLabel } from '../game/social.js'
 import { displayName } from '../game/util.js'
 import { skillCap } from '../game/match.js'
+import { voiceSummary } from '../game/dialogue.js'
 
 export default function Players() {
   const { save, screen, nav, mutate } = useStore()
@@ -90,6 +91,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           {p.description && <> · {p.description}</>}
         </p>
         {p.catchphrase && <p className="cyan" style={{ margin: '2px 0' }}>“{p.catchphrase}”</p>}
+        {p.voice && <p className="dim small" style={{ margin: '2px 0' }}>🗣 {voiceSummary(p.voice)}</p>}
         {(p.playerTags || []).length > 0 && (
           <div style={{ marginBottom: 4 }}>
             {p.playerTags.map((t) => <span key={t} className="pill">{t}</span>)}

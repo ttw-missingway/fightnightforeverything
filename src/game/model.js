@@ -1,5 +1,6 @@
 import { uid, rollStat } from './util.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS } from './constants.js'
+import { deriveVoice } from './dialogue.js'
 
 export function newCharacter(partial = {}) {
   return {
@@ -66,6 +67,7 @@ export function newPlayer(partial = {}) {
     relationships: {}, // otherPlayerId -> -100..100
     h2h: {}, // otherPlayerId -> {w, l} lifetime head-to-head record
     memories: [], // {day, year, kind, text} — defining moments, capped
+    voice: null, // {energy, humor, speech, quirk} — derived from stats if null
     teamId: null,
     attractedTags: [],
     repelledTags: [],
@@ -227,6 +229,7 @@ export function migrateSave(save) {
     p.social.hygiene ??= rollStat()
     p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
     p.memories ??= []
+    p.voice ??= deriveVoice(p)
     p.catchphrase ??= ''
     p.playerTags ??= []
     p.attractedPlayerTags ??= []

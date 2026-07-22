@@ -146,6 +146,8 @@ tr.clickable:hover td { background: var(--card2); }
 
 .narration { background: var(--bg2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; }
 .narration p { margin: 5px 0; font-style: italic; }
+.narration p.speech, p.speech { font-style: normal; margin: 5px 0; }
+p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 
 .bracket { display: flex; gap: 18px; overflow-x: auto; padding-bottom: 10px; }
 .bracket .round { min-width: 235px; display: flex; flex-direction: column; justify-content: space-around; gap: 10px; }

@@ -93,6 +93,16 @@ export function Expandable({ summary, children, className = '' }) {
   )
 }
 
+// A spoken line: 💬 Name: "words" — with an optional dim consequence note.
+export function SpeechLine({ s }) {
+  return (
+    <p className="speech">
+      💬 <strong className="cyan">{s.speaker}</strong>: “{s.text}”
+      {s.note && <span className="dim small"> {s.note}</span>}
+    </p>
+  )
+}
+
 export function moodFace(mood) {
   if (mood >= 9) return '🤩'
   if (mood >= 7) return '😄'
