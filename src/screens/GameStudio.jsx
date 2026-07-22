@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import {
-  CharactersEditor, MatchupsEditor, StagesEditor, TechniquesEditor, TagsEditor,
+  CharactersEditor, MatchupReport, StagesEditor, TechniquesEditor, TagsEditor,
 } from '../components/editors.jsx'
 import { diffGame, computeReception, daysSincePatch, charPower, releasePatch } from '../game/patch.js'
 import { formatDay } from '../game/constants.js'
@@ -91,7 +91,7 @@ export default function GameStudio() {
       </div>
 
       {tab === 'characters' && <CharactersEditor save={displaySave} update={update} />}
-      {tab === 'matchups' && <MatchupsEditor save={displaySave} update={update} />}
+      {tab === 'matchups' && <MatchupReport save={displaySave} />}
       {tab === 'stages' && <StagesEditor save={displaySave} update={update} />}
       {tab === 'techniques' && <TechniquesEditor save={displaySave} update={update} />}
       {tab === 'tags' && <TagsEditor save={displaySave} update={update} />}

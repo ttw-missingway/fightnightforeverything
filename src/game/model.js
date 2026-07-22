@@ -1,6 +1,8 @@
 import { uid, rollStat } from './util.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
+import { generateMoveData, migrateMove, generateCombo } from './design.js'
+import { computeMatchups } from './balance.js'
 
 export function newCharacter(partial = {}) {
   return {
@@ -10,14 +12,23 @@ export function newCharacter(partial = {}) {
     difficulty: 5, // 1-10, how hard to learn
     popularity: 5, // 1-10, how likely players gravitate to them
     description: '',
-    moves: [], // {id, name, type}
+    moves: [], // full movelist with frame data — see design.js
+    combos: [], // {id, name, moveIds} — named routes, used in narration
     tags: [], // strings from game.tags — players are attracted/repelled by these
     ...partial,
   }
 }
 
 export function newMove(partial = {}) {
-  return { id: uid('move'), name: 'New Move', type: 'melee', ...partial }
+  const type = partial.type || 'melee'
+  return {
+    id: uid('move'),
+    name: 'New Move',
+    type,
+    slot: type === 'super' ? 'super' : 'special',
+    ...generateMoveData(type),
+    ...partial,
+  }
 }
 
 export function newStage(partial = {}) {
@@ -264,8 +275,22 @@ export function migrateSave(save) {
   for (const t of Object.values(save.teams)) {
     t.history ??= []
   }
-  for (const c of save.game.characters) {
-    c.tags ??= []
+  // Character overhaul: legacy moves gain frame data, characters gain combos,
+  // and the matchup chart is recomputed from the designs — the movesets are
+  // the source of truth for power now.
+  for (const game of [save.game, save.gameDraft].filter(Boolean)) {
+    for (const c of game.characters) {
+      c.tags ??= []
+      c.moves = (c.moves || []).map(migrateMove)
+      if (!c.combos) {
+        c.combos = []
+        for (let i = 0; i < 2; i++) {
+          const combo = generateCombo(c, c.combos.map((x) => x.name))
+          if (combo) c.combos.push(combo)
+        }
+      }
+    }
+    computeMatchups(game)
   }
   for (const t of save.game.techniques) {
     t.description ??= ''

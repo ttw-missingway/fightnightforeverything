@@ -70,6 +70,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--cyan); }
 input[type='number'] { width: 70px; }
+input.fd { width: 54px; padding: 4px 5px; font-size: 13px; }
 input[type='range'] { padding: 0; }
 textarea { width: 100%; min-height: 60px; resize: vertical; }
 

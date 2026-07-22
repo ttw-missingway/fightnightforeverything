@@ -7,16 +7,12 @@ import {
   GAME_TITLE_PARTS, ARCADE_NAME_PARTS, STAGE_IDEAS, TOURNAMENT_NAME_PARTS,
   TECHNIQUE_NAME_PARTS,
 } from './names.js'
-import { newStage, newTechnique, setMatchup } from './model.js'
+import { newStage, newTechnique } from './model.js'
 import { deriveVoice } from './dialogue.js'
 import { applyArchetypeKit, STAGE_VIBES } from './design.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
-}
-
-export function generateMoveName() {
-  return `${choice(MOVE_NAME_PARTS.prefix)} ${choice(MOVE_NAME_PARTS.suffix)}`
 }
 
 // ---------- One-click randomizers for the creation screens ----------
@@ -68,17 +64,6 @@ export function generateTechnique(save, charId = undefined) {
 
 export function generateTournamentName() {
   return `${choice(TOURNAMENT_NAME_PARTS.a)} ${choice(TOURNAMENT_NAME_PARTS.b)}`
-}
-
-// Randomize every character pair: mostly close matchups, a few lopsided ones.
-export function randomizeMatchups(game) {
-  for (let i = 0; i < game.characters.length; i++) {
-    for (let j = i + 1; j < game.characters.length; j++) {
-      const spread = chance(0.15) ? randInt(10, 20) : randInt(0, 10)
-      const sign = chance(0.5) ? 1 : -1
-      setMatchup(game, game.characters[i].id, game.characters[j].id, 50 + sign * spread)
-    }
-  }
 }
 
 // Fresh identity for the player form's 🎲 button.

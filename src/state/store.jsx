@@ -4,6 +4,7 @@ import { HOURS_PER_DAY } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo } from '../game/tournament.js'
 import { generateEvoRoster } from '../game/generate.js'
 import { migrateSave } from '../game/model.js'
+import { computeMatchups } from '../game/balance.js'
 
 const INDEX_KEY = 'fightnight:index'
 const saveKey = (id) => `fightnight:save:${id}`
@@ -76,6 +77,7 @@ export function StoreProvider({ children }) {
 
   const startSave = useCallback((draft) => {
     const next = structuredClone(draft)
+    computeMatchups(next.game) // the designed movesets decide the chart
     if (!next.evoRoster.length) next.evoRoster = generateEvoRoster(next)
     persistSave(next)
     setSave(next)
@@ -85,6 +87,7 @@ export function StoreProvider({ children }) {
   const openSave = useCallback((id) => {
     const loaded = loadSaveById(id)
     if (loaded) {
+      persistSave(loaded) // write migrations back immediately
       setSave(loaded)
       setScreen({ name: 'arcade' })
     }

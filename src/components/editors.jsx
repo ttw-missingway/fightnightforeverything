@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { Field, NumField, StringListEditor, PillPicker } from './ui.jsx'
-import { newCharacter, newMove, newStage, newTechnique, newTournamentEntry, getMatchup, setMatchup } from '../game/model.js'
+import { newCharacter, newMove, newStage, newTechnique, newTournamentEntry } from '../game/model.js'
 import {
-  generateCharacter, generateMoveName, generateGameTitle, generateArcadeName,
-  generateStage, generateTechnique, generateTournamentName, randomizeMatchups,
+  generateCharacter, generateGameTitle, generateArcadeName,
+  generateStage, generateTechnique, generateTournamentName,
   generateChannelName,
 } from '../game/generate.js'
-import { ARCHETYPE_KITS, applyArchetypeKit, generateMoveNameForType, STAGE_VIBES } from '../game/design.js'
+import {
+  ARCHETYPE_KITS, applyArchetypeKit, generateMoveNameForType, STAGE_VIBES,
+  generateMoveData, generateCombo, comboDamage, comboRoute,
+} from '../game/design.js'
+import { computeMatchup, matchupExplanation } from '../game/balance.js'
 import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES } from '../game/constants.js'
 import { FOODS, OTHER_GAMES, CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample } from '../game/util.js'
@@ -325,38 +329,17 @@ export function CharactersEditor({ save, update }) {
                 c.tags = c.tags.includes(t) ? c.tags.filter((x) => x !== t) : [...c.tags, t]
               })} />
           </Field>
-          <h4>Special Moves</h4>
-          {sel.moves.map((m) => (
-            <div className="row" key={m.id} style={{ marginBottom: 6 }}>
-              <input value={m.name} onChange={(e) => patchChar((c) => {
-                const mv = c.moves.find((x) => x.id === m.id); if (mv) mv.name = e.target.value
-              })} />
-              <button className="small" title={`random ${m.type} name`} onClick={() => patchChar((c) => {
-                const mv = c.moves.find((x) => x.id === m.id); if (mv) mv.name = generateMoveNameForType(mv.type)
-              })}>🎲</button>
-              <select value={m.type} onChange={(e) => patchChar((c) => {
-                const mv = c.moves.find((x) => x.id === m.id); if (mv) mv.type = e.target.value
-              })}>
-                {MOVE_TYPES.map((t) => <option key={t}>{t}</option>)}
-              </select>
-              <button className="small danger" onClick={() => patchChar((c) => {
-                c.moves = c.moves.filter((x) => x.id !== m.id)
-              })}>×</button>
-            </div>
-          ))}
-          <div className="row">
-            <button className="small" onClick={() => patchChar((c) => { c.moves.push(newMove()) })}>+ Add move</button>
-            <button className="small" onClick={() => patchChar((c) => {
-              c.moves.push(newMove({ name: generateMoveName(), type: choice(MOVE_TYPES) }))
-            })}>🎲 Random move</button>
-          </div>
+          <MovelistEditor char={sel} patchChar={patchChar} />
+          <CombosEditor char={sel} patchChar={patchChar} />
         </div>
       )}
     </div>
   )
 }
 
-export function MatchupsEditor({ save, update }) {
+// The chart is COMPUTED from the movesets now — the game tells you what
+// you built. Edit the characters; the numbers follow.
+export function MatchupReport({ save }) {
   const chars = save.game.characters
   const pairs = []
   for (let i = 0; i < chars.length; i++) {
@@ -364,29 +347,153 @@ export function MatchupsEditor({ save, update }) {
   }
   return (
     <div className="card">
-      <div className="row spread">
-        <h3>Matchup Chart</h3>
-        {pairs.length > 0 && (
-          <button className="small" onClick={() => update((s) => randomizeMatchups(s.game))}>
-            🎲 Randomize all
-          </button>
-        )}
-      </div>
+      <h3>Matchup Report <span className="dim small">(computed from your designs)</span></h3>
       <p className="dim small">
-        Win advantage for the left character, out of 100. 50 is an even matchup; 60 means a 60-40 advantage.
-        Matchups mostly matter at very high skill levels.
+        The game reads every character's frame data, damage, meter and setups and derives the chart —
+        zoning smothers slow approaches, pressure beats thin defense, damage decides trades. Change the
+        designs and the numbers change. Matchups mostly matter at very high skill levels.
       </p>
       {pairs.length === 0 && <p className="dim">Need at least two characters.</p>}
-      <div className="grid3">
-        {pairs.map(([a, b]) => (
-          <div className="row" key={`${a.id}|${b.id}`}>
-            <span style={{ minWidth: 150 }} className="small">{a.name} vs {b.name}</span>
-            <input type="number" min={0} max={100}
-              value={getMatchup(save.game, a.id, b.id)}
-              onChange={(e) => update((s) => setMatchup(s.game, a.id, b.id, Number(e.target.value)))} />
+      {pairs.map(([a, b]) => {
+        const mu = computeMatchup(a, b)
+        return (
+          <div key={`${a.id}|${b.id}`} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <div className="row spread">
+              <span className="small"><strong>{a.name}</strong> vs <strong>{b.name}</strong></span>
+              <span className={`small ${Math.abs(mu - 50) >= 8 ? 'red' : Math.abs(mu - 50) >= 4 ? 'gold' : 'green'}`}>
+                {mu}–{100 - mu}
+              </span>
+            </div>
+            <div className="track" style={{ height: 6, background: 'var(--bg2)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${mu}%`, height: '100%', background: 'linear-gradient(90deg, var(--cyan), var(--pink))' }} />
+            </div>
+            <span className="dim small">{matchupExplanation(a, b)}</span>
           </div>
-        ))}
+        )
+      })}
+    </div>
+  )
+}
+
+const FD_FIELDS = [
+  ['startup', 'Start'], ['active', 'Active'], ['recovery', 'Rec'], ['onBlock', 'OnBlk'],
+  ['damage', 'Dmg'], ['chip', 'Chip'], ['meterCost', 'Meter'], ['duration', 'Dur(s)'],
+]
+
+// The frame-data sheet: normals, specials, supers — every number editable.
+function MovelistEditor({ char, patchChar }) {
+  const patchMove = (id, fn) => patchChar((c) => {
+    const m = c.moves.find((x) => x.id === id)
+    if (m) fn(m)
+  })
+  const [addType, setAddType] = useState('projectile')
+  const groups = [
+    ['normal', 'Normals'],
+    ['special', 'Specials'],
+    ['super', 'Supers'],
+  ]
+  return (
+    <div>
+      <h4>Movelist</h4>
+      {groups.map(([slot, label]) => {
+        const moves = char.moves.filter((m) => (m.slot || 'special') === slot)
+        if (!moves.length) return null
+        return (
+          <div key={slot}>
+            <p className="dim small" style={{ margin: '8px 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</p>
+            <div className="table-scroll"><table>
+              <thead>
+                <tr>
+                  <th>Move</th><th>Type</th>
+                  {FD_FIELDS.map(([k, l]) => <th key={k} title={k}>{l}</th>)}
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {moves.map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      <div className="row" style={{ flexWrap: 'nowrap', gap: 4 }}>
+                        <input value={m.name} style={{ minWidth: 110 }}
+                          onChange={(e) => patchMove(m.id, (x) => { x.name = e.target.value })} />
+                        <button className="small" title="random name for this type"
+                          onClick={() => patchMove(m.id, (x) => { x.name = generateMoveNameForType(x.type) })}>🎲</button>
+                      </div>
+                    </td>
+                    <td>
+                      <select value={m.type} onChange={(e) => patchMove(m.id, (x) => {
+                        x.type = e.target.value
+                        Object.assign(x, generateMoveData(x.type)) // fresh realistic data for the new type
+                      })}>
+                        {MOVE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                      </select>
+                    </td>
+                    {FD_FIELDS.map(([k]) => (
+                      <td key={k}>
+                        <input type="number" className="fd" value={m[k] ?? 0}
+                          onChange={(e) => patchMove(m.id, (x) => { x[k] = Number(e.target.value) })} />
+                      </td>
+                    ))}
+                    <td><button className="small danger" onClick={() => patchChar((c) => {
+                      c.moves = c.moves.filter((x) => x.id !== m.id)
+                    })}>×</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+          </div>
+        )
+      })}
+      <div className="row" style={{ marginTop: 8 }}>
+        <select value={addType} onChange={(e) => setAddType(e.target.value)}>
+          {MOVE_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
+        <button className="small" onClick={() => patchChar((c) => {
+          c.moves.push(newMove({ name: generateMoveNameForType(addType), type: addType }))
+        })}>+ Add {addType}</button>
+        <span className="dim small">frame data is generated realistic-by-type; tune every number</span>
       </div>
+    </div>
+  )
+}
+
+// Named routes: pick real moves, get real (scaled) damage numbers.
+function CombosEditor({ char, patchChar }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className="row spread">
+        <h4 style={{ margin: 0 }}>Combos</h4>
+        <button className="small" onClick={() => patchChar((c) => {
+          const combo = generateCombo(c, (c.combos || []).map((x) => x.name))
+          if (combo) { c.combos = c.combos || []; c.combos.push(combo) }
+        })}>🎲 New combo</button>
+      </div>
+      <p className="dim small">Named routes built from the movelist. Damage scales per hit, like a real fighter. These show up in match commentary.</p>
+      {(char.combos || []).map((combo) => (
+        <div className="card sub" key={combo.id}>
+          <div className="row spread">
+            <div className="row">
+              <input value={combo.name} style={{ minWidth: 150 }}
+                onChange={(e) => patchChar((c) => {
+                  const x = (c.combos || []).find((y) => y.id === combo.id); if (x) x.name = e.target.value
+                })} />
+              <span className="gold small">{comboDamage(char, combo)} dmg</span>
+            </div>
+            <div className="row">
+              <button className="small" title="reroll the route" onClick={() => patchChar((c) => {
+                const x = (c.combos || []).find((y) => y.id === combo.id)
+                const fresh = generateCombo(c, [])
+                if (x && fresh) x.moveIds = fresh.moveIds
+              })}>🎲</button>
+              <button className="small danger" onClick={() => patchChar((c) => {
+                c.combos = (c.combos || []).filter((y) => y.id !== combo.id)
+              })}>×</button>
+            </div>
+          </div>
+          <p className="small dim" style={{ margin: '4px 0 0' }}>{comboRoute(char, combo) || 'route uses deleted moves'}</p>
+        </div>
+      ))}
+      {!(char.combos || []).length && <p className="dim small">No combos named yet.</p>}
     </div>
   )
 }

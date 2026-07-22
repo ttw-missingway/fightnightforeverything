@@ -129,6 +129,7 @@ export function updateElo(winner, loser, k = 32) {
 // define "jab".
 
 import { ARCHETYPE_FLAVOR, MOVE_VERBS } from './names.js'
+import { comboDamage } from './design.js'
 
 const OPENERS = [
   (a, b) => `${a.name} and ${b.name} step up. The cabinet hums.`,
@@ -143,15 +144,50 @@ const GRUDGE_OPENERS = [
   (a, b) => `${a.name} sits down without a word. ${b.name} doesn't look at them. Here we go.`,
 ]
 
-// One beat of offense from pName: usually archetype fundamentals, sometimes
-// a named special as the highlight. Returns {text, move} so chat can react
-// to the specific move.
+// The move's actual design showing through the commentary: frame data,
+// damage, durations — the numbers the user typed become the story.
+function dataClause(m, oppName) {
+  const options = []
+  if (m.startup != null && m.startup <= 5 && ['light', 'melee'].includes(m.type)) {
+    options.push(` — ${m.startup} frames of startup, faster than thought`)
+  }
+  if ((m.onBlock ?? -5) >= 2) options.push(` — plus ${m.onBlock} on block, so the pressure never ends`)
+  if ((m.damage ?? 0) >= 120) options.push(` — ${m.damage} damage and the health bar blinks`)
+  if (m.type === 'install' && m.duration) options.push(` — ${m.duration} seconds as a different character`)
+  if ((m.type === 'set up' || m.type === 'trap') && m.duration) {
+    options.push(` — ${m.duration} full seconds of screen ${oppName} has to respect`)
+  }
+  if (m.type === 'super' && (m.meterCost ?? 0) >= 100) options.push(' — the whole bar, cashed out at once')
+  if (m.type === 'projectile' && (m.chip ?? 0) >= 10) options.push(` — ${m.chip} chip a throw, and it adds up`)
+  return options.length && chance(0.55) ? choice(options) : ''
+}
+
+// One beat of offense from pName: a named combo cash-out, a special with its
+// real numbers, or archetype fundamentals. Returns {text, move} so chat can
+// react to the specific thing that happened.
 function beatFor(pName, char, oppName) {
-  if (char && char.moves.length && chance(0.45)) {
-    const move = choice(char.moves)
+  // Named combos are the crown jewels of a designed character.
+  if (char && (char.combos || []).length && chance(0.22)) {
+    const combo = choice(char.combos)
+    const dmg = comboDamage(char, combo)
+    if (dmg > 0) {
+      return {
+        text: choice([
+          `${pName} confirms into the ${combo.name} — ${dmg} damage, the crowd counting every hit`,
+          `${pName} lands the full ${combo.name}. ${dmg} damage off one touch`,
+          `one clean opening and ${pName} runs the ${combo.name} for ${dmg}`,
+        ]),
+        move: combo.name,
+      }
+    }
+  }
+  if (char && char.moves.length && chance(0.5)) {
+    // Specials and supers make better television than jabs.
+    const flashy = char.moves.filter((m) => m.slot !== 'normal')
+    const move = choice(flashy.length && chance(0.75) ? flashy : char.moves)
     const verbs = MOVE_VERBS[move.type] || MOVE_VERBS['melee']
     return {
-      text: `${pName} ${choice(verbs).replaceAll('{m}', move.name).replaceAll('{o}', oppName)}`,
+      text: `${pName} ${choice(verbs).replaceAll('{m}', move.name).replaceAll('{o}', oppName)}${dataClause(move, oppName)}`,
       move: move.name,
     }
   }
@@ -272,9 +308,9 @@ export function narrateMatch({
     const beat = beatFor(gWinner.name, gWinner.char, gLoser.name)
     const score = g === 'W' ? `${w}–${l}` : `${l}–${w}`
     let clause
-    if (gi === 0) clause = choice(['and takes the opener', 'to bank game one', '— first game to them'])
+    if (gi === 0) clause = choice(['and takes the opener', 'to bank game one'])
     else if (w === l) clause = `to even the set at ${score}`
-    else clause = choice([`to go up ${score}`, `— ${score} now`])
+    else clause = choice([`to go up ${score}`, `to make it ${score}`])
     push(`${beat.text}, ${clause}.`, { kind: 'game', actor: gWinner.name, move: beat.move })
   })
 

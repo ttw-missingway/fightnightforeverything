@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { newSave } from '../game/model.js'
 import {
-  BasicsEditor, TagsEditor, CharactersEditor, MatchupsEditor,
+  BasicsEditor, TagsEditor, CharactersEditor, MatchupReport,
   StagesEditor, TechniquesEditor, ArcadeEditor, ScheduleEditor,
 } from '../components/editors.jsx'
 import RosterEditor from '../components/RosterEditor.jsx'
@@ -51,7 +51,7 @@ export default function Setup() {
       {step === 'basics' && <BasicsEditor save={draft} update={update} />}
       {step === 'tags' && <TagsEditor save={draft} update={update} />}
       {step === 'characters' && <CharactersEditor save={draft} update={update} />}
-      {step === 'matchups' && <MatchupsEditor save={draft} update={update} />}
+      {step === 'matchups' && <MatchupReport save={draft} />}
       {step === 'stages' && <StagesEditor save={draft} update={update} />}
       {step === 'techniques' && <TechniquesEditor save={draft} update={update} />}
       {step === 'arcade' && <ArcadeEditor save={draft} update={update} />}

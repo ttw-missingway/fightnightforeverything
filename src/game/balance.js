@@ -1,0 +1,117 @@
+// The balance engine: reads each character's actual design — frame data,
+// damage, meter, setups, combos — and derives ratings, then COMPUTES the
+// matchup chart. The user doesn't set matchup percentages anymore; the
+// game tells them what they built.
+//
+// Writes game.matchups in the same storage format model.js uses
+// ("loId|hiId" -> win% for the lower-sorted id), so everything downstream
+// (win probability, charPower, patch diffs) works unchanged.
+
+import { clamp, hash01 } from './util.js'
+import { comboDamage } from './design.js'
+
+const by = (char, type) => (char.moves || []).filter((m) => m.type === type)
+
+/**
+ * Sub-ratings 0..100, each read from the movelist:
+ *  speed    — how fast their fastest normal comes out
+ *  offense  — raw damage: best combo (scaled) or best single hit
+ *  pressure — plus-on-block tools and setup/trap screen time
+ *  zoning   — projectile quality and trap coverage
+ *  defense  — anti-airs, counters, fast supers, quick-recovery buttons
+ *  mobility — movement tools and general pace
+ *  meter    — super damage per bar and install access
+ */
+export function ratings(char) {
+  const mv = char.moves || []
+  const normals = mv.filter((m) => m.slot === 'normal' || ['light', 'melee', 'heavy'].includes(m.type))
+
+  const fastest = Math.min(...normals.map((m) => m.startup ?? 8), 13)
+  const speed = clamp(100 - (fastest - 3) * 10, 0, 100)
+
+  const bestHit = Math.max(...mv.map((m) => m.damage ?? 0), 0)
+  const bestCombo = Math.max(...(char.combos || []).map((c) => comboDamage(char, c)), 0)
+  const offense = clamp(Math.max(bestHit, bestCombo * 0.85) / 4, 0, 100)
+
+  const plusMoves = mv.filter((m) => (m.onBlock ?? -5) >= 1).length
+  const setupTime = ['set up', 'trap', 'install'].flatMap((t) => by(char, t))
+    .reduce((s, m) => s + (m.duration || 0), 0)
+  const pressure = clamp(plusMoves * 16 + setupTime * 3.5, 0, 100)
+
+  const zoning = clamp(
+    by(char, 'projectile').reduce((s, m) => s + 34 - (m.startup ?? 14) / 2 - (m.recovery ?? 26) / 4 + (m.chip ?? 0), 0) +
+    by(char, 'trap').length * 14, 0, 100)
+
+  const fastSuper = by(char, 'super').some((m) => (m.startup ?? 12) <= 7)
+  const safeButton = normals.some((m) => (m.recovery ?? 15) <= 8)
+  const defense = clamp(
+    by(char, 'anti-air').reduce((s, m) => s + 30 - (m.startup ?? 6) * 2, 0) +
+    by(char, 'counter').length * 20 + (fastSuper ? 22 : 0) + (safeButton ? 14 : 0), 0, 100)
+
+  const mobility = clamp(
+    by(char, 'movement').reduce((s, m) => s + 44 - (m.startup ?? 5) * 2 - (m.recovery ?? 10), 0) + speed / 4, 0, 100)
+
+  const meter = clamp(
+    by(char, 'super').reduce((s, m) => s + (m.damage ?? 0) / Math.max(m.meterCost ?? 100, 25), 0) * 11 +
+    by(char, 'install').reduce((s, m) => s + 8 + (m.duration || 0), 0), 0, 100)
+
+  return { speed, offense, pressure, zoning, defense, mobility, meter }
+}
+
+// The rock-paper-scissors of fighting games, in factor form.
+function factors(ra, rb) {
+  return [
+    { key: 'keepout', edge: (ra.zoning - rb.mobility) * 0.06 - (rb.zoning - ra.mobility) * 0.06 },
+    { key: 'pressure', edge: (ra.pressure - rb.defense) * 0.06 - (rb.pressure - ra.defense) * 0.06 },
+    { key: 'damage', edge: (ra.offense - rb.offense) * 0.05 },
+    { key: 'speed', edge: (ra.speed - rb.speed) * 0.04 },
+    { key: 'meter', edge: (ra.meter - rb.meter) * 0.03 },
+  ]
+}
+
+export function computeMatchup(a, b) {
+  const ra = ratings(a)
+  const rb = ratings(b)
+  let edge = factors(ra, rb).reduce((s, f) => s + f.edge, 0)
+  // Irreducible matchup jank: some pairs are just weird, consistently.
+  edge += (hash01(`${a.id}|${b.id}:mu`) - 0.5) * 4
+  return clamp(Math.round(50 + edge), 25, 75)
+}
+
+// Why the number is what it is — the dominant factor, in plain speech.
+export function matchupExplanation(a, b) {
+  const ra = ratings(a)
+  const rb = ratings(b)
+  const fs = factors(ra, rb)
+  const top = fs.reduce((best, f) => (Math.abs(f.edge) > Math.abs(best.edge) ? f : best))
+  if (Math.abs(top.edge) < 1) return 'a genuinely even fight'
+  const winner = top.edge > 0 ? a : b
+  const loser = top.edge > 0 ? b : a
+  switch (top.key) {
+    case 'keepout': return `${winner.name}'s screen control smothers ${loser.name}'s approach`
+    case 'pressure': return `${winner.name}'s pressure runs through ${loser.name}'s defensive kit`
+    case 'damage': return `${winner.name} wins two touches to three`
+    case 'speed': return `${winner.name} is simply faster where it counts`
+    case 'meter': return `${winner.name}'s meter cashouts decide the close rounds`
+    default: return 'stylistic edge'
+  }
+}
+
+/**
+ * Recompute the whole chart from the movesets. Called at save start, after
+ * migration, and on every patch release — this table IS character power.
+ */
+export function computeMatchups(game) {
+  const chars = game.characters
+  const table = {}
+  for (let i = 0; i < chars.length; i++) {
+    for (let j = i + 1; j < chars.length; j++) {
+      const a = chars[i]
+      const b = chars[j]
+      const [lo, hi] = a.id < b.id ? [a, b] : [b, a]
+      table[`${lo.id}|${hi.id}`] = computeMatchup(lo, hi)
+    }
+  }
+  game.matchups = table
+  return table
+}

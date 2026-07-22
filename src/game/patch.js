@@ -6,6 +6,7 @@ import { uid, clamp } from './util.js'
 import { getMatchup, chronicle } from './model.js'
 import { DAYS_PER_YEAR } from './constants.js'
 import { postPatchReaction } from './socialmedia.js'
+import { computeMatchups } from './balance.js'
 
 // A character's power level: average matchup win% against the rest of the cast.
 export function charPower(game, charId) {
@@ -28,6 +29,10 @@ export function bumpVersion(version) {
  * signals reception scoring needs.
  */
 export function diffGame(oldGame, draft) {
+  // Matchups are computed FROM the designs — refresh both sides so power
+  // deltas reflect the actual frame-data changes.
+  computeMatchups(oldGame)
+  computeMatchups(draft)
   const notes = []
   const oldChars = new Map(oldGame.characters.map((c) => [c.id, c]))
   const newChars = new Map(draft.characters.map((c) => [c.id, c]))
@@ -122,6 +127,7 @@ export function releasePatch(save) {
   const version = bumpVersion(save.game.version)
   save.gameDraft.version = version
   save.game = save.gameDraft
+  computeMatchups(save.game) // the new designs are now the live truth
   save.gameDraft = null
   save.lastPatch = { day: save.day, year: save.year }
 
