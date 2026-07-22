@@ -1,5 +1,5 @@
 import { clamp, hash01, chance, choice } from './util.js'
-import { newTeam } from './model.js'
+import { newTeam, remember } from './model.js'
 import { TEAM_WORDS } from './names.js'
 
 export function getRel(a, b) {
@@ -57,6 +57,11 @@ export function socialDelta(a, b, context = {}) {
     if ((a.attractedPlayerTags || []).includes(t)) delta += 1.2
     if ((a.repelledPlayerTags || []).includes(t)) delta -= 1.5
   }
+
+  // Hygiene. The arcade is a small room in summer. People notice.
+  const hyg = b.social.hygiene ?? 5
+  if (hyg <= 3) delta -= (4 - hyg) * 0.5
+  else if (hyg >= 9) delta += 0.2
 
   if (context.justLostTo) {
     // b beat a recently; b's sportsmanship decides how it lands.
@@ -117,6 +122,8 @@ export function tryFoundTeam(save, founder, cofounder, day, year, events) {
   cofounder.teamId = team.id
   founder.respect += 3
   teamLog(save, team, `Founded by ${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName}`)
+  remember(save, founder, 'team', `founding ${name}`)
+  remember(save, cofounder, 'team', `founding ${name}`)
   events.push({
     type: 'team',
     text: `${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName} founded a new team: ${name} [${acronym}]!`,

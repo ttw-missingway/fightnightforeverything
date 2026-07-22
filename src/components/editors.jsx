@@ -9,12 +9,38 @@ import {
 import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES } from '../game/constants.js'
 import { FOODS, OTHER_GAMES, CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample } from '../game/util.js'
+import { trySpend, weeklyRent, PRICES } from '../game/economy.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
-export function BasicsEditor({ save, update }) {
+export function BasicsEditor({ save, update, live = false }) {
   return (
     <div className="grid2">
+      {live && save.economy && (
+        <div className="card" style={{ gridColumn: '1 / -1' }}>
+          <div className="row spread">
+            <h3>💰 The Books</h3>
+            <span className={save.economy.money < 0 ? 'red' : 'green'} style={{ fontSize: 18, fontWeight: 700 }}>
+              ${Math.round(save.economy.money)}
+            </span>
+          </div>
+          <p className="dim small">
+            Income: door quarters, concession sales, stream ad revenue. Weekly rent: ${weeklyRent(save)}
+            {' '}(scales with setups and side cabinets). Mid-save additions cost money — the arcade you
+            opened with was free.
+          </p>
+          {save.economy.log.slice(0, 12).map((e, i) => (
+            <div className="row spread" key={i} style={{ borderBottom: '1px solid var(--border)', padding: '2px 0' }}>
+              <span className="small">{e.label}</span>
+              <span className={`small ${e.amount >= 0 ? 'green' : 'red'}`}>
+                {e.amount >= 0 ? '+' : '−'}${Math.abs(e.amount).toFixed(0)}
+                <span className="dim"> · {formatDay(e.day, e.year)}</span>
+              </span>
+            </div>
+          ))}
+          {save.economy.log.length === 0 && <p className="dim small">No transactions yet.</p>}
+        </div>
+      )}
       <div className="card">
         <h3>Save & Game</h3>
         <Field label="Save name">
@@ -38,8 +64,18 @@ export function BasicsEditor({ save, update }) {
             <button className="small" title="random name" onClick={() => update((s) => { s.stream.channelName = generateChannelName() })}>🎲</button>
           </div>
         </Field>
-        <NumField label="Number of setups (cabinets for the main game)" value={save.settings.setups} min={1} max={20}
-          onChange={(v) => update((s) => { s.settings.setups = v })} />
+        <NumField label={`Number of setups (cabinets for the main game)${live ? ` — $${PRICES.setup} each to add` : ''}`}
+          value={save.settings.setups} min={1} max={20}
+          onChange={(v) => update((s) => {
+            const cur = s.settings.setups
+            if (live && v > cur) {
+              let n = cur
+              while (n < v && trySpend(s, PRICES.setup, 'new setup cabinet')) n++
+              s.settings.setups = n
+            } else {
+              s.settings.setups = v
+            }
+          })} />
         <Field label="Refer to players by">
           <select
             value={save.settings.nameDisplay || 'alias'}
@@ -356,33 +392,51 @@ export function TechniquesEditor({ save, update }) {
   )
 }
 
-export function ArcadeEditor({ save, update }) {
+export function ArcadeEditor({ save, update, live = false }) {
+  const price = (key) => (key === 'foods' ? PRICES.food : PRICES.sideGame)
+  const label = (key, item) => key === 'foods' ? `stocked ${item}` : `bought ${item} cabinet`
+
+  // Mid-save, additions cost money; the setup wizard configures for free.
+  const addItems = (key, items) => update((s) => {
+    for (const item of items) {
+      if (s.arcade[key].includes(item)) continue
+      if (live && !trySpend(s, price(key), label(key, item))) break
+      s.arcade[key].push(item)
+    }
+  })
+
   const quickAdd = (list, key) => (
     <div className="row" style={{ marginTop: 4 }}>
       <span className="dim small">quick add:</span>
       {list.filter((x) => !save.arcade[key].includes(x)).slice(0, 6).map((x) => (
-        <span key={x} className="pill clickable" onClick={() => update((s) => { s.arcade[key].push(x) })}>{x}</span>
+        <span key={x} className="pill clickable" onClick={() => addItems(key, [x])}>{x}</span>
       ))}
-      <button className="small" onClick={() => update((s) => {
-        const fresh = list.filter((x) => !s.arcade[key].includes(x))
-        s.arcade[key].push(...sample(fresh, Math.min(3, fresh.length)))
-      })}>🎲 Add random</button>
+      <button className="small" onClick={() => {
+        const fresh = list.filter((x) => !save.arcade[key].includes(x))
+        addItems(key, sample(fresh, Math.min(3, fresh.length)))
+      }}>🎲 Add random</button>
     </div>
   )
   return (
     <div className="grid2">
       <div className="card">
-        <h3>Concession Stand</h3>
-        <p className="dim small">Players who find their favorite snacks show up more often.</p>
+        <h3>Concession Stand {live && <span className="dim small">(${PRICES.food} per item)</span>}</h3>
+        <p className="dim small">Players who find their favorite snacks show up more often — and buy them.</p>
         <StringListEditor items={save.arcade.foods} placeholder="add food…"
-          onChange={(items) => update((s) => { s.arcade.foods = items })} />
+          onChange={(items) => {
+            if (items.length > save.arcade.foods.length) addItems('foods', items.filter((x) => !save.arcade.foods.includes(x)))
+            else update((s) => { s.arcade.foods = items })
+          }} />
         {quickAdd(FOODS, 'foods')}
       </div>
       <div className="card">
-        <h3>Other Games in the Arcade</h3>
-        <p className="dim small">Side cabinets where players hang out and socialize between sets.</p>
+        <h3>Other Games in the Arcade {live && <span className="dim small">(${PRICES.sideGame} per cabinet)</span>}</h3>
+        <p className="dim small">Side cabinets where players hang out and socialize between sets. Rent scales with floor space.</p>
         <StringListEditor items={save.arcade.otherGames} placeholder="add game…"
-          onChange={(items) => update((s) => { s.arcade.otherGames = items })} />
+          onChange={(items) => {
+            if (items.length > save.arcade.otherGames.length) addItems('otherGames', items.filter((x) => !save.arcade.otherGames.includes(x)))
+            else update((s) => { s.arcade.otherGames = items })
+          }} />
         {quickAdd(OTHER_GAMES, 'otherGames')}
       </div>
     </div>

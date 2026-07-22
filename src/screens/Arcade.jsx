@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatDay, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf } from '../game/constants.js'
-import { whatHappensToday } from '../game/sim.js'
+import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace } from '../components/ui.jsx'
 import StreamChat from '../components/StreamChat.jsx'
@@ -39,7 +39,13 @@ export default function Arcade() {
               <span className="pink">📡 {save.stream.channelName}</span>
               <span className="dim"> · {save.stream.followers} followers · {hypeLabel(save.stream.hype)}</span>
               {save.stream.peakViewers > 0 && <span className="dim"> · peak {save.stream.peakViewers} viewers</span>}
+              {save.economy && (
+                <span className={save.economy.money < 0 ? 'red' : 'green'}>
+                  {' '}· 💰 ${Math.round(save.economy.money)}
+                </span>
+              )}
             </div>
+            <MoneyMatchBanner save={save} />
             {dip && (
               <div className="row" style={{ marginTop: 8 }}>
                 {HOUR_LABELS.map((h, i) => (
@@ -64,6 +70,22 @@ export default function Arcade() {
       </div>
 
       {dip ? <LiveDay save={save} nav={nav} /> : <RecapView save={save} report={report} nav={nav} />}
+    </div>
+  )
+}
+
+function MoneyMatchBanner({ save }) {
+  const mm = scheduledMoneyMatch(save)
+  if (!mm) return null
+  const a = save.players[mm.aId]
+  const b = save.players[mm.bId]
+  if (!a || !b) return null
+  const daysAway = (mm.year - save.year) * DAYS_PER_YEAR + mm.dayOfYear - save.day
+  return (
+    <div className="small" style={{ marginTop: 4, color: 'var(--gold)' }}>
+      💸 MONEY MATCH: {displayName(a, save)} vs {displayName(b, save)} — {
+        daysAway <= 0 ? 'TONIGHT at 7 PM' : daysAway === 1 ? 'tomorrow' : `in ${daysAway} days`
+      }
     </div>
   )
 }
@@ -245,9 +267,12 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
   const fullyRevealed = revealed >= m.narration.length
 
   return (
-    <div className="event match clickable" onClick={() => setOpen(!open)}>
+    <div className={`event match clickable ${m.moneyMatch ? 'moneymatch' : ''}`} onClick={() => setOpen(!open)}>
       <span>
-        🕹 <strong>Setup {m.setupIndex}:</strong> {m.aName} ({m.charAName}) vs {m.bName} ({m.charBName})
+        {m.moneyMatch
+          ? <strong className="gold">💸 MONEY MATCH:</strong>
+          : <><span>🕹 </span><strong>Setup {m.setupIndex}:</strong></>}{' '}
+        {m.aName} ({m.charAName}) vs {m.bName} ({m.charBName})
         {' '}
         {fullyRevealed
           ? <span className="gold">— {m.winnerName} wins</span>
@@ -316,7 +341,8 @@ function InteractionEvent({ ev }) {
 
 function PlainEvent({ ev }) {
   const icons = {
-    arrival: '🚪', team: '🛡', innovation: '💡', technique: '📈', main: '🎯', mentorship: '🎓', idle: '🥤', minigame: '🏅',
+    arrival: '🚪', team: '🛡', innovation: '💡', technique: '📈', main: '🎯', mentorship: '🎓',
+    idle: '🥤', minigame: '🏅', moneymatch_announce: '💸', economy: '🧾',
   }
   return <div className={`event ${ev.type}`}>{icons[ev.type] || '•'} {ev.text}</div>
 }
@@ -365,11 +391,15 @@ function RecapEvent({ ev }) {
   if (ev.type === 'match') {
     return (
       <Expandable
-        className="match"
+        className={`match ${ev.moneyMatch ? 'moneymatch' : ''}`}
         summary={
           <span>
-            🕹 <strong>Setup {ev.setupIndex}:</strong> {ev.aName} ({ev.charAName}) vs {ev.bName} ({ev.charBName})
-            {' — '}<span className="gold">{ev.winnerName} wins</span>
+            {ev.moneyMatch
+              ? <strong className="gold">💸 MONEY MATCH:</strong>
+              : <><span>🕹 </span><strong>Setup {ev.setupIndex}:</strong></>}{' '}
+            {ev.aName} ({ev.charAName}) vs {ev.bName} ({ev.charBName})
+            {' — '}<span className="gold">{ev.winnerName} wins {ev.setScore || ''}</span>
+            {ev.stream && <span className="pink small"> · 📡 {ev.stream.viewers} viewers</span>}
           </span>
         }
       >

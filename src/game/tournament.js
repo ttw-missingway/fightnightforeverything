@@ -2,7 +2,8 @@ import { uid, chance, rand, choice, displayName, clamp } from './util.js'
 import { formatDay } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
-import { getMatchup } from './model.js'
+import { getMatchup, remember } from './model.js'
+import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { buildStream, personalityOf, elitePersonality } from './stream.js'
 
@@ -18,8 +19,15 @@ function eliteEntrant(elite) {
   return { kind: 'elite', id: elite.id, name: `${elite.alias} [${elite.region}]`, charId: elite.mainCharId, ref: elite }
 }
 
-function entrantPerformance(save, e) {
-  if (e.kind === 'arcade') return playerPerf(save, e.ref, e.charId)
+function entrantPerformance(save, e, context = 'tournament') {
+  if (e.kind === 'arcade') {
+    let perf = playerPerf(save, e.ref, e.charId)
+    // Big-stage nerves: shaky composure bleeds performance under the lights,
+    // and EVO is the brightest light there is. Varies set to set.
+    const composure = e.ref.personal.composure ?? 5
+    perf -= (10 - composure) * (context === 'evo' ? 0.7 : 0.35) * (0.5 + rand() * 0.5)
+    return perf
+  }
   return e.ref.skill * 0.78 + (e.ref.elo - 1200) / 40 + rand() * 6
 }
 
@@ -38,8 +46,8 @@ function entrantPersonality(e) {
 }
 
 function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' } = {}) {
-  const perfA = entrantPerformance(save, a)
-  const perfB = entrantPerformance(save, b)
+  const perfA = entrantPerformance(save, a, context)
+  const perfB = entrantPerformance(save, b, context)
   // Matchup chart only really bites at high-level play.
   const weight = matchupWeight(entrantSkill(a), entrantSkill(b))
   const matchupShift = a.charId && b.charId
@@ -248,7 +256,11 @@ export function runSinglesTournament(save, scheduleEntry) {
   // on the resume; a 64-man major is legacy. (EVO pays out far more still.)
   for (const { entrant, place } of placements) {
     const p = entrant.ref
-    if (place === 1) { p.glory += size; p.respect += Math.ceil(size * 0.75); p.tournamentWins += 1; p.mood = clamp(p.mood + 2, 0, 10) }
+    if (place === 1) {
+      p.glory += size; p.respect += Math.ceil(size * 0.75); p.tournamentWins += 1; p.mood = clamp(p.mood + 2, 0, 10)
+      // Weekly wins blur together; the big ones stick forever.
+      if (size >= 16 || chance(0.3)) remember(save, p, 'tournament', `winning ${name} (Year ${save.year})`)
+    }
     else if (place === 2) { p.glory += Math.ceil(size / 2); p.respect += Math.ceil(size / 3) }
     else if (place <= 4) { p.glory += Math.ceil(size / 4); p.respect += 2 }
   }
@@ -275,6 +287,7 @@ export function runSinglesTournament(save, scheduleEntry) {
     entrantCount: entrants.length,
   }
   decorateStreamStats(save, record)
+  updateFeedFromTournament(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   return { ok: true, record }
@@ -390,6 +403,7 @@ export function runTeamTournament(save, scheduleEntry) {
     entrantCount: entrants.length,
   }
   decorateStreamStats(save, record)
+  updateFeedFromTournament(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   return { ok: true, record }
@@ -417,8 +431,8 @@ export function runEvo(save) {
     const glory = place === 1 ? 100 : place === 2 ? 60 : place <= 4 ? 40 : place <= 8 ? 25 : place <= 16 ? 12 : 5
     p.glory += glory
     p.respect += Math.round(glory / 3)
-    if (place === 1) { p.tournamentWins += 1; p.mood = 10 }
-    else if (place <= 8) p.mood = clamp(p.mood + 2, 0, 10)
+    if (place === 1) { p.tournamentWins += 1; p.mood = 10; remember(save, p, 'evo', `WINNING EVO Year ${save.year}`) }
+    else if (place <= 8) { p.mood = clamp(p.mood + 2, 0, 10); remember(save, p, 'evo', `the top-${place <= 4 ? 4 : 8} run at EVO Year ${save.year}`) }
   }
   if (champion.kind === 'elite') {
     champion.ref.titles = (champion.ref.titles || 0) + 1
@@ -467,6 +481,7 @@ export function runEvo(save) {
     entrantCount: entrants.length,
   }
   decorateStreamStats(save, record)
+  updateFeedFromTournament(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   return { ok: true, record }

@@ -1,8 +1,11 @@
-import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01 } from './util.js'
+import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
-import { newInnovation } from './model.js'
-import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor } from './match.js'
+import { newInnovation, remember } from './model.js'
+import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
+import { buildStream, personalityOf } from './stream.js'
+import { econLog, weeklyRent } from './economy.js'
+import { updateFeedFromDay, postMoneyMatchAnnouncement } from './socialmedia.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dissolveTinyTeams,
@@ -286,6 +289,26 @@ function makeBeats(save, group, where, results) {
     beats.push(`${pName(save, loudmouth)} talks a little too much trash; ${pName(save, target)} files it away for later.`)
   }
 
+  // Hygiene. Nobody says anything. Everybody notices.
+  const ripe = group.find((p) => (p.social.hygiene ?? 5) <= 2)
+  if (ripe && group.length >= 2 && chance(0.25)) {
+    beats.push(choice([
+      `${pName(save, ripe)} joins the circle. The circle widens slightly.`,
+      `Someone cracks the door for "air flow" shortly after ${pName(save, ripe)} sits down.`,
+      `${pName(save, ripe)} is here. The concession stand's nacho smell is losing the battle.`,
+    ]))
+  }
+
+  // Old war stories: defining moments get retold. Forever.
+  const storyteller = group.find((p) => (p.memories || []).length > 0)
+  if (storyteller && group.length >= 2 && chance(0.15)) {
+    const mem = choice(storyteller.memories)
+    beats.push(choice([
+      `${pName(save, storyteller)} retells the story of ${mem.text} — again.`,
+      `Somehow the conversation circles back to ${mem.text}. ${pName(save, storyteller)} lights up.`,
+    ]))
+  }
+
   if (where === 'at the concession stand' && save.arcade.foods.length && group.length >= 2 && chance(0.4)) {
     const food = choice(save.arcade.foods)
     const fans = group.filter((p) => p.foods.includes(food))
@@ -299,10 +322,130 @@ function makeBeats(save, group, where, results) {
   return beats.slice(0, 4)
 }
 
+// ---------- Money matches ----------
+// No wallets, no ledgers — pure in-world stakes. Two people with history
+// call their shot, the arcade circles the date, and everybody shows up.
+
+export function scheduledMoneyMatch(save) {
+  return (save.moneyMatches || []).find((m) => m.status === 'scheduled')
+}
+
+function moneyMatchToday(save) {
+  const mm = scheduledMoneyMatch(save)
+  return mm && mm.year === save.year && mm.dayOfYear === save.day ? mm : null
+}
+
+function maybeScheduleMoneyMatch(save, events) {
+  if (!save.moneyMatches || scheduledMoneyMatch(save)) return
+  if (!chance(0.07)) return
+  const regs = Object.values(save.players).filter((p) => p.isRegular && p.mainCharId)
+  const pairs = []
+  for (const a of regs) {
+    for (const b of regs) {
+      if (a.id >= b.id) continue
+      const h = a.h2h?.[b.id]
+      const games = h ? h.w + h.l : 0
+      const badBlood = getRel(a, b) < -30 && getRel(b, a) < -30
+      const heatedRivalry = games >= 8 && Math.abs(a.elo - b.elo) < 150 &&
+        (getRel(a, b) < 0 || getRel(b, a) < 0)
+      if (badBlood || heatedRivalry) pairs.push([a, b])
+    }
+  }
+  if (!pairs.length) return
+  const [x, y] = choice(pairs)
+  // The bigger personality does the calling out.
+  const challenger = (x.social.persona + x.personal.dominance) >= (y.social.persona + y.personal.dominance) ? x : y
+  const target = challenger === x ? y : x
+  const days = randInt(2, 4)
+  let dayOfYear = save.day + days
+  let year = save.year
+  if (dayOfYear > DAYS_PER_YEAR) { dayOfYear -= DAYS_PER_YEAR; year += 1 }
+  save.moneyMatches.push({
+    id: uid('mm'), aId: challenger.id, bId: target.id, dayOfYear, year, status: 'scheduled', winnerId: null,
+  })
+  events.push({
+    type: 'moneymatch_announce',
+    text: `💸 ${pName(save, challenger)} calls out ${pName(save, target)} — MONEY MATCH in ${days} days! The whole arcade is buzzing.`,
+  })
+  postMoneyMatchAnnouncement(save, pName(save, challenger), pName(save, target), days)
+}
+
+function runMoneyMatch(save, mm, present, events) {
+  const a = save.players[mm.aId]
+  const b = save.players[mm.bId]
+  if (!a || !b || !a.mainCharId || !b.mainCharId) { mm.status = 'done'; return }
+  const watchers = present.filter((p) => p.id !== a.id && p.id !== b.id)
+  const probA = winProbability(save, a, a.mainCharId, b, b.mainCharId)
+  const result = resolveMatch(save, a, b)
+  const winner = result.winner
+  const loser = result.loser
+  const charA = save.game.characters.find((c) => c.id === a.mainCharId)
+  const charB = save.game.characters.find((c) => c.id === b.mainCharId)
+  const nar = narrateMatch({
+    aName: pName(save, a), bName: pName(save, b),
+    charA, charB, probA, winnerIsA: result.aWins, long: true,
+    winnerPhrase: winner.catchphrase,
+    seriesNote: seriesNoteFor(a, b, pName(save, a), pName(save, b)),
+    grudge: true,
+    watcherCount: watchers.length,
+  })
+  const ev = {
+    type: 'match',
+    moneyMatch: true,
+    setupIndex: 1,
+    aId: a.id, bId: b.id,
+    aName: pName(save, a), bName: pName(save, b),
+    charAName: charA?.name || 'Random', charBName: charB?.name || 'Random',
+    probA,
+    winnerId: winner.id, winnerName: pName(save, winner),
+    eloDelta: result.eloDelta,
+    watcherIds: watchers.map((w) => w.id),
+    watcherNames: watchers.map((w) => pName(save, w)),
+    narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
+  }
+  // A money match is an event: it goes on stream automatically and the
+  // stakes juice the broadcast.
+  ev.stream = buildStream(save, {
+    level: ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200,
+    personality: Math.min(1, (personalityOf(a) + personalityOf(b)) / 2 + 0.25),
+    probA, aWins: result.aWins, narration: nar.lines, meta: nar.meta,
+    aName: ev.aName, bName: ev.bName, winnerName: ev.winnerName,
+    context: 'daily',
+  })
+  // Stakes: pride, glory, and the story everyone will tell.
+  winner.respect += 6
+  winner.glory += 3
+  winner.mood = clamp(winner.mood + 1.5, 0, 10)
+  loser.mood = clamp(loser.mood - 1.5, 0, 10)
+  remember(save, winner, 'moneymatch', `winning the money match against ${pName(save, loser)}`)
+  remember(save, loser, 'moneymatch', `losing the money match to ${pName(save, winner)}`)
+  if (chance(0.3)) {
+    shiftRel(winner, loser, 12)
+    shiftRel(loser, winner, 12)
+    events.push({ type: 'moneymatch_announce', text: `🤝 The handshake after says it all — ${ev.aName} and ${ev.bName} settled something today.` })
+  } else {
+    shiftRel(loser, winner, -4)
+  }
+  for (const w of watchers) {
+    gainSkill(save, w, w.mainCharId, 0.03 + w.personal.analysis * 0.018)
+    applySocialMood(w, 0.8)
+  }
+  mm.status = 'done'
+  mm.winnerId = winner.id
+  events.push(ev)
+}
+
 function pickTopic(save, where) {
   // Concession-stand talk is about people; floor talk is about games.
   const atConcession = where === 'at the concession stand'
   const pool = atConcession ? GOSSIP_TOPICS : TOPICS
+  // An upcoming money match dominates conversation everywhere.
+  const mm = scheduledMoneyMatch(save)
+  if (mm && chance(0.35)) {
+    const a = save.players[mm.aId]
+    const b = save.players[mm.bId]
+    if (a && b) return `the upcoming ${pName(save, a)} vs ${pName(save, b)} money match`
+  }
   // Sometimes the gossip is about an actual person.
   if (atConcession && chance(0.25)) {
     const regulars = Object.values(save.players).filter((p) => p.isRegular)
@@ -431,10 +574,35 @@ export function startDay(save) {
     }
   }
 
+  // A money match whose date slipped past (tournament day, etc.) happens today.
+  const pending = scheduledMoneyMatch(save)
+  if (pending && (pending.year < save.year || (pending.year === save.year && pending.dayOfYear < save.day))) {
+    pending.dayOfYear = save.day
+    pending.year = save.year
+  }
+  const mmToday = moneyMatchToday(save)
+  if (mmToday) {
+    // Nobody misses their own money match — or the chance to watch one.
+    for (const id of [mmToday.aId, mmToday.bId]) {
+      const p = save.players[id]
+      if (p && !attendees.includes(p)) { attendees.push(p); p.daysAttended += 1 }
+    }
+    const an = save.players[mmToday.aId]
+    const bn = save.players[mmToday.bId]
+    if (an && bn) {
+      events.push({ type: 'moneymatch_announce', text: `💸 It's money match day. ${pName(save, an)} vs ${pName(save, bn)} at 7 PM. The room already feels different.` })
+    }
+  }
+
   // How long each attendee sticks around (spark = stays longer).
   const staysUntil = {}
   for (const p of attendees) {
     staysUntil[p.id] = clamp(2 + Math.round(p.personal.spark * 0.45 + rand() * 2 - 1), 1, HOURS_PER_DAY)
+  }
+  if (mmToday) {
+    // The principals (and their audience) stay through the 7 PM showdown.
+    if (staysUntil[mmToday.aId] != null || save.players[mmToday.aId]) staysUntil[mmToday.aId] = HOURS_PER_DAY
+    if (staysUntil[mmToday.bId] != null || save.players[mmToday.bId]) staysUntil[mmToday.bId] = HOURS_PER_DAY
   }
 
   save.hour = 0
@@ -465,6 +633,23 @@ export function simHour(save) {
   const present = shuffle(attendees.filter((p) => (dip.staysUntil[p.id] || 0) > hourIdx))
 
   dip.gamesToday ??= {}
+
+  // 7 PM: money match time. The whole arcade stops to watch — no other
+  // matches happen this hour.
+  const mm = moneyMatchToday(save)
+  if (mm && mm.status === 'scheduled' && hourIdx === 3 && present.length > 0) {
+    runMoneyMatch(save, mm, present, events)
+    dip.hours.push({
+      label: HOUR_LABELS[hourIdx],
+      presentIds: present.map((p) => p.id),
+      presentNames: present.map((p) => pName(save, p)),
+      streamedSetup: 1, // the money match owns the stream this hour
+      events,
+    })
+    save.hour = hourIdx + 1
+    return
+  }
+
   if (present.length > 0) {
     // Only some players are itching to play this hour — and fatigue builds
     // with every game played today. Stamina is how long the tank lasts.
@@ -527,6 +712,11 @@ export function simHour(save) {
       dip.results[loser.id] = 'lost'
       dip.gamesToday[a.id] = (dip.gamesToday[a.id] || 0) + 1
       dip.gamesToday[b.id] = (dip.gamesToday[b.id] || 0) + 1
+      // Shock results become part of both players' personal legends.
+      if (upsetSeverityOf(probA, result.aWins) === 'severe' && chance(0.5)) {
+        remember(save, winner, 'upset', `the upset win over ${pName(save, loser)}`)
+        remember(save, loser, 'upset', `that loss to ${pName(save, winner)}`)
+      }
       const d = socialDelta(loser, winner, { justLostTo: true })
       shiftRel(loser, winner, d)
       shiftRel(winner, loser, socialDelta(winner, loser) * 0.6)
@@ -622,6 +812,22 @@ export function endDay(save) {
     checkFallingOut(save, p, events)
   }
   dissolveTinyTeams(save, events)
+  maybeScheduleMoneyMatch(save, events)
+
+  // The books: door quarters, concession sales, weekly rent.
+  if (save.economy) {
+    const totalGames = Object.values(dip.gamesToday || {}).reduce((s, n) => s + n, 0) / 2
+    let income = attendees.length * 1.5 + totalGames * 0.4
+    if (save.arcade.foods.length) income += attendees.length * 1.2
+    if (income > 0) econLog(save, income, 'daily takings')
+    if (weekdayOf(dip.day) === 6) {
+      const rent = weeklyRent(save)
+      econLog(save, -rent, 'weekly rent')
+      if (save.economy.money < 0) {
+        events.push({ type: 'economy', text: `💸 Rent cleared the account — you're $${Math.abs(Math.round(save.economy.money))} in the red. The landlord "checked in."` })
+      }
+    }
+  }
 
   // Active mentorships pay out when both parties attended.
   const attendeeIds = new Set(attendees.map((p) => p.id))
@@ -674,6 +880,7 @@ export function endDay(save) {
     newcomers: dip.newcomers,
     events: [...dip.openingEvents, ...dip.hours.flatMap((h) => h.events), ...events],
   }
+  updateFeedFromDay(save, save.lastDayReport.events)
   save.dayInProgress = null
   save.hour = 0
   advanceDay(save)

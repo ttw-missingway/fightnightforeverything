@@ -157,6 +157,17 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
             </p>
           )}
 
+          {(p.memories || []).length > 0 && (
+            <>
+              <h3>Defining Moments</h3>
+              {[...p.memories].reverse().map((m, i) => (
+                <p key={i} className="small" style={{ margin: '3px 0' }}>
+                  <span className="gold">★</span> {m.text} <span className="dim">— Year {m.year}</span>
+                </p>
+              ))}
+            </>
+          )}
+
           <h3>Relationships</h3>
           {rels.length === 0 && <p className="dim">Hasn't met anyone yet.</p>}
           {rels.map(({ other, v }) => (

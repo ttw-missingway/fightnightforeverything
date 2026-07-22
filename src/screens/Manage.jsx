@@ -30,8 +30,8 @@ export default function Manage() {
           <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
-      {tab === 'basics' && <BasicsEditor save={save} update={mutate} />}
-      {tab === 'arcade' && <ArcadeEditor save={save} update={mutate} />}
+      {tab === 'basics' && <BasicsEditor save={save} update={mutate} live />}
+      {tab === 'arcade' && <ArcadeEditor save={save} update={mutate} live />}
       {tab === 'schedule' && <ScheduleEditor save={save} update={mutate} />}
       {tab === 'characters' && <CharactersEditor save={save} update={mutate} />}
       {tab === 'matchups' && <MatchupsEditor save={save} update={mutate} />}

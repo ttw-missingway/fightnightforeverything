@@ -8,6 +8,7 @@
 import { clamp, rand, randInt, choice, chance } from './util.js'
 import { CHAT_NAME_PARTS, CHAT_LINES } from './names.js'
 import { upsetSeverityOf } from './match.js'
+import { econLog } from './economy.js'
 
 // How famous an arcade player is, 0..1. Respect and glory are the resume.
 export function personalityOf(player) {
@@ -140,6 +141,14 @@ export function buildStream(save, {
     : (quality - 42) / 16
   if (gain > 0) gain *= 1 - st.hype / 120
   st.hype = clamp(st.hype + gain, 0, 100)
+
+  // Ad revenue: pennies per viewer, capped — this is a community arcade
+  // channel, not a media empire.
+  if (save.economy && viewers > 0) {
+    const revenue = Math.min(20, Math.round(viewers) / 100)
+    if (revenue >= 1) econLog(save, revenue, 'stream ad revenue')
+    else save.economy.money = Math.round((save.economy.money + revenue) * 100) / 100
+  }
 
   return { viewers, comments, quality, gain: Math.round(gain * 10) / 10 }
 }

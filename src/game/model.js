@@ -65,6 +65,7 @@ export function newPlayer(partial = {}) {
     knownInnovations: [], // innovation ids (sim-created techniques)
     relationships: {}, // otherPlayerId -> -100..100
     h2h: {}, // otherPlayerId -> {w, l} lifetime head-to-head record
+    memories: [], // {day, year, kind, text} — defining moments, capped
     teamId: null,
     attractedTags: [],
     repelledTags: [],
@@ -148,6 +149,12 @@ export function newSave(partial = {}) {
       totalStreams: 0,
       peakViewers: 0,
     },
+    economy: {
+      money: 500, // starting float
+      log: [], // {day, year, amount, label} — newest first, capped
+    },
+    socialFeed: [], // fake posts about the scene — newest first, capped
+    moneyMatches: [], // {id, aId, bId, dayOfYear, year, status, winnerId}
     players: {}, // id -> player
     teams: {}, // id -> team
     mentorships: [], // {mentorId, studentId, startedDay, startedYear}
@@ -191,19 +198,35 @@ export function setMatchup(game, aId, bId, winPctForA) {
   game.matchups[`${lo}|${hi}`] = aId === lo ? winPctForA : 100 - winPctForA
 }
 
+/**
+ * A defining moment a player will keep bringing up. Text should read as a
+ * noun phrase ("the 3–0 upset over GodFist", "winning Sunday Showdown").
+ */
+export function remember(save, player, kind, text) {
+  if (!player.memories) player.memories = []
+  player.memories.push({ day: save.day, year: save.year, kind, text })
+  if (player.memories.length > 12) player.memories.shift()
+}
+
 // Fill in fields added after a save was created, so old saves keep working.
 export function migrateSave(save) {
   save.hour ??= 0
   save.dayInProgress ??= null
   save.charMilestones ??= []
   save.stream ??= { channelName: 'ArcadeTV', followers: 0, hype: 0, totalStreams: 0, peakViewers: 0 }
+  save.economy ??= { money: 500, log: [] }
+  save.socialFeed ??= []
+  save.moneyMatches ??= []
   save.settings.nameDisplay ??= 'alias'
   save.game.playerTags ??= []
   for (const p of Object.values(save.players)) {
     p.settledMain ??= !!p.mainCharId // pre-exploration players keep their mains
     p.exploredChars ??= p.mainCharId ? [p.mainCharId] : []
-    p.personal.stamina ??= rollStat() // stat added later; varied, not uniform
+    p.personal.stamina ??= rollStat() // stats added later; varied, not uniform
+    p.personal.composure ??= rollStat()
+    p.social.hygiene ??= rollStat()
     p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
+    p.memories ??= []
     p.catchphrase ??= ''
     p.playerTags ??= []
     p.attractedPlayerTags ??= []
