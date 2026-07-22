@@ -1,16 +1,41 @@
+import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { ordinal } from './Tournament.jsx'
 import { displayName } from '../game/util.js'
+import { formatDay } from '../game/constants.js'
 
 export default function HallOfFame() {
   const { save, nav } = useStore()
+  const [tab, setTab] = useState('records')
   const records = [...save.hallOfFame].reverse()
   const players = Object.values(save.players)
   const mostGlorious = [...players].sort((a, b) => b.glory - a.glory).slice(0, 5).filter((p) => p.glory > 0)
   const evoLegends = [...save.evoRoster].sort((a, b) => (b.titles || 0) - (a.titles || 0)).filter((e) => e.titles > 0)
 
+  if (tab === 'chronicle') {
+    return (
+      <div>
+        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} />
+        <h1 style={{ fontSize: 30 }}>📜 The Arcade Chronicle</h1>
+        <p className="dim">The moments everyone remembers — told and retold until they're legend.</p>
+        {(save.chronicle || []).length === 0 && (
+          <div className="card"><p className="dim">Nothing legendary has happened yet. Give it time — or force the issue.</p></div>
+        )}
+        <div className="card">
+          {(save.chronicle || []).map((c, i) => (
+            <div className="row spread" key={i} style={{ borderBottom: '1px solid var(--border)', padding: '6px 0' }}>
+              <span>{c.icon} {c.text}</span>
+              <span className="dim small" style={{ whiteSpace: 'nowrap' }}>{formatDay(c.day, c.year)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
+      <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} />
       <h1 style={{ fontSize: 30 }}>🏛 Hall of Fame</h1>
 
       <div className="grid2">
@@ -63,6 +88,17 @@ export default function HallOfFame() {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function HofTabs({ tab, setTab, count }) {
+  return (
+    <div className="tabs">
+      <button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>🏛 Hall of Fame</button>
+      <button className={tab === 'chronicle' ? 'active' : ''} onClick={() => setTab('chronicle')}>
+        📜 Arcade Chronicle ({count})
+      </button>
     </div>
   )
 }

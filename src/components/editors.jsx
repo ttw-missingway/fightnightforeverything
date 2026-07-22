@@ -6,6 +6,7 @@ import {
   generateStage, generateTechnique, generateTournamentName, randomizeMatchups,
   generateChannelName,
 } from '../game/generate.js'
+import { ARCHETYPE_KITS, applyArchetypeKit, generateMoveNameForType, STAGE_VIBES } from '../game/design.js'
 import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES } from '../game/constants.js'
 import { FOODS, OTHER_GAMES, CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample } from '../game/util.js'
@@ -13,34 +14,89 @@ import { trySpend, weeklyRent, PRICES } from '../game/economy.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
+// The arcade's books, shown wherever money matters.
+export function EconomyCard({ save }) {
+  if (!save.economy) return null
+  return (
+    <div className="card">
+      <div className="row spread">
+        <h3>💰 The Books</h3>
+        <span className={save.economy.money < 0 ? 'red' : 'green'} style={{ fontSize: 18, fontWeight: 700 }}>
+          ${Math.round(save.economy.money)}
+        </span>
+      </div>
+      <p className="dim small">
+        Income: door quarters, concession sales, stream ad revenue. Weekly rent: ${weeklyRent(save)}
+        {' '}(scales with setups and side cabinets). Additions cost money — the arcade you
+        opened with was free.
+      </p>
+      {save.economy.log.slice(0, 12).map((e, i) => (
+        <div className="row spread" key={i} style={{ borderBottom: '1px solid var(--border)', padding: '2px 0' }}>
+          <span className="small">{e.label}</span>
+          <span className={`small ${e.amount >= 0 ? 'green' : 'red'}`}>
+            {e.amount >= 0 ? '+' : '−'}${Math.abs(e.amount).toFixed(0)}
+            <span className="dim"> · {formatDay(e.day, e.year)}</span>
+          </span>
+        </div>
+      ))}
+      {save.economy.log.length === 0 && <p className="dim small">No transactions yet.</p>}
+    </div>
+  )
+}
+
+// Mid-save settings that DON'T touch the economy or the game itself.
+// Consequential mode locks the world-defining ones.
+export function SettingsEditor({ save, update }) {
+  const locked = save.settings.mode !== 'sandbox'
+  return (
+    <div className="grid2">
+      <div className="card">
+        <h3>Settings</h3>
+        <Field label="Save name">
+          <input value={save.saveName} onChange={(e) => update((s) => { s.saveName = e.target.value })} />
+        </Field>
+        <Field label="Refer to players by">
+          <select value={save.settings.nameDisplay || 'alias'}
+            onChange={(e) => update((s) => { s.settings.nameDisplay = e.target.value })}>
+            <option value="alias">Alias / gamer tag</option>
+            <option value="fullname">First + last name</option>
+          </select>
+        </Field>
+        <Field label="Stream channel name">
+          <div className="row">
+            <input value={save.stream?.channelName || ''} onChange={(e) => update((s) => { s.stream.channelName = e.target.value })} />
+            <button className="small" title="random name" onClick={() => update((s) => { s.stream.channelName = generateChannelName() })}>🎲</button>
+          </div>
+        </Field>
+      </div>
+      <div className="card">
+        <h3>World Rules {locked && <span className="pill" style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>🔒 consequential</span>}</h3>
+        {locked && (
+          <p className="dim small">
+            You chose a consequential arcade — the world's rules were locked at creation.
+            (New saves can pick sandbox mode instead.)
+          </p>
+        )}
+        <Field label="Allow computer-generated players?">
+          <select disabled={locked}
+            value={save.settings.allowGeneratedPlayers ? 'yes' : 'no'}
+            onChange={(e) => update((s) => { s.settings.allowGeneratedPlayers = e.target.value === 'yes' })}>
+            <option value="yes">Yes — new faces wander in over time</option>
+            <option value="no">No — only my created players</option>
+          </select>
+        </Field>
+        <Field label="Max generated players">
+          <input type="number" disabled={locked} min={0} max={60} value={save.settings.maxGeneratedPlayers}
+            onChange={(e) => update((s) => { s.settings.maxGeneratedPlayers = Number(e.target.value) })} />
+        </Field>
+      </div>
+    </div>
+  )
+}
+
 export function BasicsEditor({ save, update, live = false }) {
   return (
     <div className="grid2">
-      {live && save.economy && (
-        <div className="card" style={{ gridColumn: '1 / -1' }}>
-          <div className="row spread">
-            <h3>💰 The Books</h3>
-            <span className={save.economy.money < 0 ? 'red' : 'green'} style={{ fontSize: 18, fontWeight: 700 }}>
-              ${Math.round(save.economy.money)}
-            </span>
-          </div>
-          <p className="dim small">
-            Income: door quarters, concession sales, stream ad revenue. Weekly rent: ${weeklyRent(save)}
-            {' '}(scales with setups and side cabinets). Mid-save additions cost money — the arcade you
-            opened with was free.
-          </p>
-          {save.economy.log.slice(0, 12).map((e, i) => (
-            <div className="row spread" key={i} style={{ borderBottom: '1px solid var(--border)', padding: '2px 0' }}>
-              <span className="small">{e.label}</span>
-              <span className={`small ${e.amount >= 0 ? 'green' : 'red'}`}>
-                {e.amount >= 0 ? '+' : '−'}${Math.abs(e.amount).toFixed(0)}
-                <span className="dim"> · {formatDay(e.day, e.year)}</span>
-              </span>
-            </div>
-          ))}
-          {save.economy.log.length === 0 && <p className="dim small">No transactions yet.</p>}
-        </div>
-      )}
       <div className="card">
         <h3>Save & Game</h3>
         <Field label="Save name">
@@ -101,7 +157,44 @@ export function BasicsEditor({ save, update, live = false }) {
           <NumField label="Max generated players" value={save.settings.maxGeneratedPlayers} min={0} max={60}
             onChange={(v) => update((s) => { s.settings.maxGeneratedPlayers = v })} />
         )}
+        <h3>Commitment</h3>
+        <Field label="How locked-in is this world?">
+          <select value={save.settings.mode || 'consequential'}
+            onChange={(e) => update((s) => { s.settings.mode = e.target.value })}>
+            <option value="consequential">Consequential — settings lock, purchases cost, patches have fallout</option>
+            <option value="sandbox">Sandbox — adjust everything freely, no consequences</option>
+          </select>
+        </Field>
+        <p className="dim small">
+          Consequential: world rules freeze at creation, mid-save additions cost money, and every game
+          patch triggers a community reaction that matters. Sandbox: tune anything anytime, for free.
+        </p>
       </div>
+    </div>
+  )
+}
+
+// The Manage screen's arcade-management tab: everything with a price tag.
+export function ArcadeManagement({ save, update }) {
+  const live = save.settings.mode !== 'sandbox'
+  return (
+    <div>
+      <EconomyCard save={save} />
+      <div className="card">
+        <NumField label={`Setups (cabinets for the main game)${live ? ` — $${PRICES.setup} each to add` : ''}`}
+          value={save.settings.setups} min={1} max={20}
+          onChange={(v) => update((s) => {
+            const cur = s.settings.setups
+            if (live && v > cur) {
+              let n = cur
+              while (n < v && trySpend(s, PRICES.setup, 'new setup cabinet')) n++
+              s.settings.setups = n
+            } else {
+              s.settings.setups = v
+            }
+          })} />
+      </div>
+      <ArcadeEditor save={save} update={update} live={live} />
     </div>
   )
 }
@@ -200,9 +293,21 @@ export function CharactersEditor({ save, update }) {
             </div>
           </Field>
           <Field label="Archetype">
-            <select value={sel.archetype} onChange={(e) => patchChar((c) => { c.archetype = e.target.value })}>
-              {ARCHETYPES.map((a) => <option key={a}>{a}</option>)}
-            </select>
+            <div className="row">
+              <select value={sel.archetype} onChange={(e) => patchChar((c) => { c.archetype = e.target.value })}>
+                {ARCHETYPES.map((a) => <option key={a}>{a}</option>)}
+              </select>
+              <button className="small" title="fill stats, moves and tags from the archetype template"
+                onClick={() => update((s) => {
+                  const c = s.game.characters.find((x) => x.id === sel.id)
+                  if (c) applyArchetypeKit(c, c.archetype, s.game.tags)
+                })}>
+                📦 Apply {sel.archetype} kit
+              </button>
+            </div>
+            {ARCHETYPE_KITS[sel.archetype] && (
+              <p className="dim small" style={{ margin: '4px 0 0' }}>{ARCHETYPE_KITS[sel.archetype].blurb}</p>
+            )}
           </Field>
           <div className="row">
             <NumField label="Difficulty (1-10)" value={sel.difficulty} min={1} max={10}
@@ -226,6 +331,9 @@ export function CharactersEditor({ save, update }) {
               <input value={m.name} onChange={(e) => patchChar((c) => {
                 const mv = c.moves.find((x) => x.id === m.id); if (mv) mv.name = e.target.value
               })} />
+              <button className="small" title={`random ${m.type} name`} onClick={() => patchChar((c) => {
+                const mv = c.moves.find((x) => x.id === m.id); if (mv) mv.name = generateMoveNameForType(mv.type)
+              })}>🎲</button>
               <select value={m.type} onChange={(e) => patchChar((c) => {
                 const mv = c.moves.find((x) => x.id === m.id); if (mv) mv.type = e.target.value
               })}>
@@ -299,9 +407,16 @@ export function StagesEditor({ save, update }) {
       {save.game.stages.map((st) => (
         <div className="card sub" key={st.id}>
           <div className="row spread">
-            <input value={st.name} onChange={(e) => update((s) => {
-              const x = s.game.stages.find((y) => y.id === st.id); if (x) x.name = e.target.value
-            })} />
+            <div className="row">
+              <input value={st.name} onChange={(e) => update((s) => {
+                const x = s.game.stages.find((y) => y.id === st.id); if (x) x.name = e.target.value
+              })} />
+              <select value={st.vibe || 'hype'} title="stage vibe" onChange={(e) => update((s) => {
+                const x = s.game.stages.find((y) => y.id === st.id); if (x) x.vibe = e.target.value
+              })}>
+                {STAGE_VIBES.map((v) => <option key={v}>{v}</option>)}
+              </select>
+            </div>
             <button className="small danger" onClick={() => update((s) => {
               s.game.stages = s.game.stages.filter((y) => y.id !== st.id)
             })}>×</button>

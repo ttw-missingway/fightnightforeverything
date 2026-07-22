@@ -50,6 +50,12 @@ export function gainSkill(save, player, charId, baseAmount) {
         charId, day: save.day, year: save.year,
         text: `${displayName(player, save)} achieved complete mastery of ${char.name} — every innovation, skill 100`,
       })
+      if (save.chronicle) {
+        save.chronicle.unshift({
+          day: save.day, year: save.year, icon: '🌕',
+          text: `${displayName(player, save)} achieved complete mastery of ${char.name} — skill 100, every innovation known`,
+        })
+      }
     }
   }
   return next - cur
@@ -194,6 +200,7 @@ export function upsetSeverityOf(probA, winnerIsA) {
 export function narrateMatch({
   aName, bName, charA, charB, probA, winnerIsA, long = false,
   winnerPhrase = '', seriesNote = null, grudge = false, watcherCount = 0,
+  stageName = null,
 }) {
   const A = { name: aName, char: charA }
   const B = { name: bName, char: charB }
@@ -219,7 +226,15 @@ export function narrateMatch({
     if (!lines.includes(text)) { lines.push(text); meta.push(m) }
   }
 
-  push((grudge ? choice(GRUDGE_OPENERS) : choice(OPENERS))(A, B), { kind: 'opener', actor: null, move: null })
+  if (stageName && !grudge && chance(0.35)) {
+    push(choice([
+      `${aName} vs ${bName} — cursor lands on ${stageName}.`,
+      `Stage select: ${stageName}. ${aName} and ${bName} nod. It's on.`,
+      `They take it to ${stageName}, because some fights deserve a backdrop.`,
+    ]), { kind: 'opener', actor: null, move: null })
+  } else {
+    push((grudge ? choice(GRUDGE_OPENERS) : choice(OPENERS))(A, B), { kind: 'opener', actor: null, move: null })
+  }
   if (seriesNote) push(seriesNote, { kind: 'series', actor: null, move: null })
   if (watcherCount >= 3 && chance(0.6)) {
     push(choice([

@@ -39,7 +39,11 @@ export function matchQuality({ level, personality, probA, upset }) {
  */
 export function viewersFor(save, quality, context) {
   const { hype, followers } = save.stream
-  const qmult = 0.3 + quality / 80
+  let qmult = 0.3 + quality / 80
+  // A community souring on (or loving) the current patch watches accordingly.
+  if (context !== 'evo' && save.settings?.mode !== 'sandbox') {
+    qmult *= 1 + (save.patchMorale || 0) / 50
+  }
   let v
   if (context === 'evo') {
     v = 500 + followers * 0.15 + hype * 8 + rand() * 150
@@ -120,12 +124,27 @@ export function buildStream(save, {
   level, personality, probA, aWins, narration, meta = [], aName, bName, winnerName, context,
 }) {
   const upsetSeverity = upsetSeverityOf(probA, aWins)
-  const quality = matchQuality({ level, personality, probA, upset: upsetSeverity !== 'none' })
+  // Hidden variance: some sets just deliver, some just don't. The pre-match
+  // read is never a guarantee — that's the risk in picking.
+  const quality = clamp(
+    matchQuality({ level, personality, probA, upset: upsetSeverity !== 'none' }) + randInt(-8, 8),
+    0, 100)
   const viewers = viewersFor(save, quality, context)
   const comments = generateComments({ viewers, narration, meta, aName, bName, winnerName, probA, upsetSeverity, context })
 
   const st = save.stream
   st.totalStreams += 1
+  // Viewer-count firsts go in the collective memory.
+  if (save.chronicle) {
+    for (const threshold of [10, 100, 1000]) {
+      if (st.peakViewers < threshold && viewers >= threshold) {
+        save.chronicle.unshift({
+          day: save.day, year: save.year, icon: '📡',
+          text: `${st.channelName} broke ${threshold} live viewers for the first time`,
+        })
+      }
+    }
+  }
   st.peakViewers = Math.max(st.peakViewers, viewers)
   // Even a zero-viewer stream of a great match seeds a few followers — the
   // clips get around. Growth is capped per stream and saturates as the

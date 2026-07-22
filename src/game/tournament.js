@@ -2,7 +2,7 @@ import { uid, chance, rand, choice, displayName, clamp } from './util.js'
 import { formatDay } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
-import { getMatchup, remember } from './model.js'
+import { getMatchup, remember, chronicle } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { buildStream, personalityOf, elitePersonality } from './stream.js'
@@ -268,17 +268,35 @@ export function runSinglesTournament(save, scheduleEntry) {
   const entrants = field.map((p) => arcadeEntrant(save, p))
   const { rounds, placements, champion } = runBracket(save, entrants)
 
-  // Glory scales with the size of the field: a weekly 8-man is a nice line
-  // on the resume; a 64-man major is legacy. (EVO pays out far more still.)
+  // Baseline glory scales with field size AND how rare the event is — a
+  // 64-man yearly major is legacy, a weekly 8-man is a good Tuesday. On top
+  // of that, impact: how many people actually watched the finals, and
+  // whether the win made history.
+  const cadence = scheduleEntry?.cadence || 'yearly'
+  const cadenceMult = cadence === 'yearly' ? 2 : cadence === 'monthly' ? 1.2 : 0.6
+  const finalsViewers = rounds[rounds.length - 1]?.[0]?.stream?.viewers || 0
+  const impact = Math.round(Math.min(25, finalsViewers / 40) * cadenceMult)
+  const baseGlory = Math.max(2, Math.round(size * cadenceMult))
   for (const { entrant, place } of placements) {
     const p = entrant.ref
     if (place === 1) {
-      p.glory += size; p.respect += Math.ceil(size * 0.75); p.tournamentWins += 1; p.mood = clamp(p.mood + 2, 0, 10)
+      p.glory += baseGlory + impact
+      p.respect += Math.ceil(baseGlory * 0.75)
+      p.tournamentWins += 1
+      p.mood = clamp(p.mood + 2, 0, 10)
       // Weekly wins blur together; the big ones stick forever.
-      if (size >= 16 || chance(0.3)) remember(save, p, 'tournament', `winning ${name} (Year ${save.year})`)
+      if (size >= 16 || cadence !== 'weekly' || chance(0.3)) {
+        remember(save, p, 'tournament', `winning ${name} (Year ${save.year})`)
+      }
+      if (p.tournamentWins === 1) {
+        p.glory += 5
+        chronicle(save, '🏆', `${entrant.name} won their first-ever title at ${name}`)
+      } else if (size >= 16 || cadence === 'yearly') {
+        chronicle(save, '🏆', `${entrant.name} won ${name} (${size} entrants${finalsViewers ? `, ${finalsViewers} watching the finals` : ''})`)
+      }
     }
-    else if (place === 2) { p.glory += Math.ceil(size / 2); p.respect += Math.ceil(size / 3) }
-    else if (place <= 4) { p.glory += Math.ceil(size / 4); p.respect += 2 }
+    else if (place === 2) { p.glory += Math.ceil(baseGlory / 2) + Math.ceil(impact / 2); p.respect += Math.ceil(baseGlory / 3) }
+    else if (place <= 4) { p.glory += Math.ceil(baseGlory / 4); p.respect += 2 }
   }
   if (champion.charId && save.charMilestones) {
     const c = save.game.characters.find((x) => x.id === champion.charId)
@@ -399,10 +417,13 @@ export function runTeamTournament(save, scheduleEntry) {
   }
 
   const champion = current[0]
-  for (const p of champion.squad) { p.glory += 8; p.respect += 5; p.mood = clamp(p.mood + 1.5, 0, 10) }
+  const teamCadence = scheduleEntry?.cadence || 'yearly'
+  const teamGlory = Math.round(8 * (teamCadence === 'yearly' ? 2 : teamCadence === 'monthly' ? 1.2 : 0.6))
+  for (const p of champion.squad) { p.glory += teamGlory; p.respect += 5; p.mood = clamp(p.mood + 1.5, 0, 10) }
   // Winning together bonds a team.
   for (const a of champion.squad) for (const b of champion.squad) if (a !== b) shiftRel(a, b, 4)
   teamLog(save, champion.team, `🏆 Won ${scheduleEntry?.name || 'a team battle'} (${entrants.length} teams)`)
+  chronicle(save, '🛡', `${champion.name} won ${scheduleEntry?.name || 'the team battle'} as a crew`)
 
   const record = {
     id: uid('t'),
@@ -453,6 +474,10 @@ export function runEvo(save) {
   if (champion.kind === 'elite') {
     champion.ref.titles = (champion.ref.titles || 0) + 1
   }
+  const bestArcade = arcadePlacements[0]
+  chronicle(save, '🌏', champion.kind === 'arcade'
+    ? `${champion.name} WON EVO Year ${save.year}. From this arcade. Nothing will ever top this.`
+    : `EVO Year ${save.year}: ${champion.name} took the crown${bestArcade ? `; ${bestArcade.entrant.name} carried the arcade to ${bestArcade.place === 1 ? 'victory' : `top ${bestArcade.place <= 4 ? 4 : bestArcade.place <= 8 ? 8 : 17}`}` : ''}`)
   if (champion.charId && save.charMilestones) {
     const c = save.game.characters.find((x) => x.id === champion.charId)
     if (c) {

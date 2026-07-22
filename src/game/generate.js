@@ -1,6 +1,6 @@
 import { choice, sample, randInt, rollStat, uid, chance } from './util.js'
-import { newPlayer, newCharacter, newMove } from './model.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, MOVE_TYPES, GENDERS } from './constants.js'
+import { newPlayer, newCharacter } from './model.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
   ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES, CATCHPHRASES,
@@ -9,6 +9,7 @@ import {
 } from './names.js'
 import { newStage, newTechnique, setMatchup } from './model.js'
 import { deriveVoice } from './dialogue.js'
+import { applyArchetypeKit, STAGE_VIBES } from './design.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
@@ -37,7 +38,7 @@ export function generateStage(existing = []) {
   const used = new Set(existing.map((s) => s.name))
   const fresh = STAGE_IDEAS.filter(([n]) => !used.has(n))
   const [name, description] = fresh.length ? choice(fresh) : choice(STAGE_IDEAS)
-  return newStage({ name, description })
+  return newStage({ name, description, vibe: choice(STAGE_VIBES) })
 }
 
 const TECH_DESCRIPTIONS = [
@@ -114,15 +115,12 @@ export function randomPreferences(save) {
 export function generateCharacter(usedNames = new Set()) {
   const available = CHARACTER_NAMES.filter((n) => !usedNames.has(n))
   const name = available.length ? choice(available) : `${choice(MOVE_NAME_PARTS.prefix)} ${choice(CHARACTER_NAMES)}`
-  const moves = Array.from({ length: randInt(3, 5) }, () =>
-    newMove({ name: generateMoveName(), type: choice(MOVE_TYPES) }))
-  return newCharacter({
-    name,
-    archetype: choice(ARCHETYPES),
-    difficulty: randInt(2, 9),
-    popularity: randInt(2, 9),
-    moves,
-  })
+  const char = newCharacter({ name })
+  // Generated fighters come out of an archetype kit: coherent moveset,
+  // fitting stats, a fantasy — not random noise.
+  applyArchetypeKit(char, choice(ARCHETYPES), [])
+  char.description = '' // let the kit blurb show in the editor instead
+  return char
 }
 
 export function generatePlayer(save, overrides = {}) {

@@ -1,9 +1,11 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
-import { newInnovation, remember } from './model.js'
+import { newInnovation, remember, chronicle } from './model.js'
+import { daysSincePatch } from './patch.js'
+import { postPatchDemand } from './socialmedia.js'
 import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
-import { buildStream, personalityOf, matchQuality } from './stream.js'
+import { buildStream, personalityOf } from './stream.js'
 import { econLog, weeklyRent } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement } from './socialmedia.js'
 import { speak } from './dialogue.js'
@@ -140,6 +142,8 @@ function maybeSwitchMain(save, player, events) {
 
 function attendChance(save, player) {
   let p = 0.2 + player.personal.spark * 0.055 + (player.mood - 5) * 0.02
+  // A hated (or beloved) patch changes how much anyone wants to play.
+  if (save.settings.mode !== 'sandbox') p += (save.patchMorale || 0) * 0.004
   for (const f of player.foods) if (save.arcade.foods.includes(f)) p += 0.03
   for (const g of player.otherGames) if (save.arcade.otherGames.includes(g)) p += 0.03
   const main = save.game.characters.find((c) => c.id === player.mainCharId)
@@ -183,6 +187,9 @@ function maybeInnovate(save, player, events) {
   save.innovations.push(innov)
   player.knownInnovations.push(innov.id)
   player.respect += 5
+  if (save.innovations.length === 1) {
+    chronicle(save, '💡', `${pName(save, player)} discovered the scene's first original tech: "${innov.name}"`)
+  }
   const leap = gainSkill(save, player, player.mainCharId, innov.xp)
   const char = save.game.characters.find((c) => c.id === innov.charId)
   if (char && save.charMilestones) {
@@ -439,6 +446,7 @@ function runMoneyMatch(save, mm, present, events) {
   loser.mood = clamp(loser.mood - 1.5, 0, 10)
   remember(save, winner, 'moneymatch', `winning the money match against ${pName(save, loser)}`)
   remember(save, loser, 'moneymatch', `losing the money match to ${pName(save, winner)}`)
+  chronicle(save, '💸', `${pName(save, winner)} beat ${pName(save, loser)} ${nar.score} in the money match everyone still talks about`)
   if (chance(0.3)) {
     shiftRel(winner, loser, 12)
     shiftRel(loser, winner, 12)
@@ -716,6 +724,7 @@ export function simHour(save) {
       const charA = save.game.characters.find((c) => c.id === a.mainCharId)
       const charB = save.game.characters.find((c) => c.id === b.mainCharId)
       const grudge = getRel(a, b) < -40 || getRel(b, a) < -40
+      const stage = save.game.stages.length ? choice(save.game.stages) : null
       const nar = narrateMatch({
         aName: pName(save, a), bName: pName(save, b),
         charA, charB, probA, winnerIsA: result.aWins,
@@ -723,6 +732,7 @@ export function simHour(save) {
         seriesNote: seriesNoteFor(a, b, pName(save, a), pName(save, b)),
         grudge,
         watcherCount: watcherGroup.length,
+        stageName: stage?.name,
       })
       const narration = nar.lines
       // Post-match social: loser's read on the winner is shaped by winner's sportsmanship.
@@ -776,21 +786,31 @@ export function simHour(save) {
         if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
       }
 
-      // How promising this match looks as a broadcast, judged BEFORE the
-      // result — so the streaming choice is informed, not psychic.
-      const preQuality = matchQuality({
-        level: ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200,
-        personality: (personalityOf(a) + personalityOf(b)) / 2,
-        probA,
-        upset: false,
-      })
+      // What makes this match look promising as a broadcast — observations,
+      // not verdicts. A tagged match can still flop; an untagged one can
+      // still deliver. The risk is the game.
+      const skillAvg = ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 2
+      const fameA = personalityOf(a)
+      const fameB = personalityOf(b)
+      const series = a.h2h?.[b.id]
+      const seriesGames = series ? series.w + series.l : 0
+      const streamTags = []
+      if (skillAvg >= 50) streamTags.push('a high-level matchup')
+      if (grudge) streamTags.push('a heated rivalry')
+      else if (seriesGames >= 8) streamTags.push('a long-running series')
+      if (Math.abs(probA - 0.5) <= 0.12) streamTags.push('could be razor close')
+      if (fameA >= 0.35 && fameB >= 0.35) streamTags.push('two big personalities')
+      else if (Math.max(fameA, fameB) >= 0.45) streamTags.push('a crowd favorite on the sticks')
+      if (a.wins + a.losses < 15 || b.wins + b.losses < 15) streamTags.push('an unknown quantity')
+
       events.push({
         type: 'match',
         setupIndex: mi + 1,
         aId: a.id, bId: b.id,
         aName: pName(save, a), bName: pName(save, b),
         charAName: charA?.name || 'Random', charBName: charB?.name || 'Random',
-        streamHint: preQuality >= 50 ? 'hot' : preQuality >= 35 ? 'solid' : 'cold',
+        stageName: stage?.name,
+        streamTags: shuffle(streamTags).slice(0, 2),
         probA,
         winnerId: winner.id,
         winnerName: pName(save, winner),
@@ -926,6 +946,17 @@ export function endDay(save) {
     if (save.stream.hype > 8) {
       const saturation = Math.max(0.05, 1 - save.stream.followers / 20000)
       save.stream.followers += Math.round(save.stream.hype * 0.06 * saturation)
+    }
+  }
+
+  // Patch pressure: morale drifts back to neutral, but a fossilized meta
+  // curdles it — and the internet starts asking questions.
+  save.patchMorale = (save.patchMorale || 0) * 0.92
+  if (save.settings.mode !== 'sandbox') {
+    const staleDays = daysSincePatch(save)
+    if (staleDays > 150) {
+      save.patchMorale = Math.max(save.patchMorale - 0.08, -6)
+      if (chance(0.05)) postPatchDemand(save, staleDays)
     }
   }
 

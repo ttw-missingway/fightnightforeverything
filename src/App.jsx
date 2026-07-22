@@ -8,6 +8,7 @@ import Tournament from './screens/Tournament.jsx'
 import HallOfFame from './screens/HallOfFame.jsx'
 import Codex from './screens/Codex.jsx'
 import Feed from './screens/Feed.jsx'
+import GameStudio from './screens/GameStudio.jsx'
 import Manage from './screens/Manage.jsx'
 import { formatDay } from './game/constants.js'
 
@@ -26,6 +27,7 @@ export default function App() {
     ['halloffame', '🏛 Hall of Fame'],
     ['codex', '📖 Codex'],
     ['feed', '📱 Feed'],
+    ['studio', '🛠 Studio'],
     ['manage', '⚙ Manage'],
   ]
 
@@ -52,6 +54,7 @@ export default function App() {
       {screen.name === 'halloffame' && <HallOfFame />}
       {screen.name === 'codex' && <Codex />}
       {screen.name === 'feed' && <Feed />}
+      {screen.name === 'studio' && <GameStudio />}
       {screen.name === 'manage' && <Manage />}
     </div>
   )

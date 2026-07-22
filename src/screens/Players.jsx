@@ -8,12 +8,38 @@ import { displayName } from '../game/util.js'
 import { skillCap } from '../game/match.js'
 import { voiceSummary } from '../game/dialogue.js'
 
+const SORTS = {
+  name: (p) => (p.alias || p.firstName).toLowerCase(),
+  elo: (p) => p.elo,
+  wins: (p) => p.wins,
+  glory: (p) => p.glory,
+  respect: (p) => p.respect,
+  mood: (p) => p.mood,
+}
+
 export default function Players() {
   const { save, screen, nav, mutate } = useStore()
   const [editing, setEditing] = useState(false)
+  const [sortKey, setSortKey] = useState('elo')
+  const [sortAsc, setSortAsc] = useState(false)
   const selId = screen.playerId || null
-  const players = Object.values(save.players).sort((a, b) => b.elo - a.elo)
+  const players = Object.values(save.players).sort((a, b) => {
+    const ka = SORTS[sortKey](a)
+    const kb = SORTS[sortKey](b)
+    const cmp = typeof ka === 'string' ? ka.localeCompare(kb) : ka - kb
+    return sortAsc ? cmp : -cmp
+  })
   const sel = save.players[selId]
+
+  const sortBy = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc)
+    else { setSortKey(key); setSortAsc(key === 'name') }
+  }
+  const Th = ({ k, children }) => (
+    <th style={{ cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => sortBy(k)}>
+      {children}{sortKey === k ? (sortAsc ? ' ▲' : ' ▼') : ''}
+    </th>
+  )
 
   if (sel) {
     return (
@@ -28,10 +54,20 @@ export default function Players() {
 
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>Leaderboard</h2>
+      <h2 style={{ marginTop: 0 }}>Leaderboard <span className="dim small">(click a column to sort)</span></h2>
       <div className="table-scroll"><table>
         <thead>
-          <tr><th>#</th><th>Player</th><th>Main</th><th>Elo</th><th>W–L</th><th>Glory</th><th>Respect</th><th>Mood</th><th>Status</th></tr>
+          <tr>
+            <th>#</th>
+            <Th k="name">Player</Th>
+            <th>Main</th>
+            <Th k="elo">Elo</Th>
+            <Th k="wins">W–L</Th>
+            <Th k="glory">Glory</Th>
+            <Th k="respect">Respect</Th>
+            <Th k="mood">Mood</Th>
+            <th>Status</th>
+          </tr>
         </thead>
         <tbody>
           {players.map((p, i) => {

@@ -107,6 +107,50 @@ export function postMoneyMatchAnnouncement(save, challengerName, targetName, day
   })
 }
 
+// Patch day: the one topic the internet never skips.
+export function postPatchReaction(save, patch) {
+  if (!feedActive(save)) return
+  const good = patch.score >= 5
+  const bad = patch.score <= -5
+  post(save, {
+    platform: 'boards',
+    title: `Patch v${patch.version} notes — discussion thread`,
+    text: patch.notes.slice(0, 3).join(' · ') + (patch.notes.length > 3 ? ` · +${patch.notes.length - 3} more` : ''),
+  })
+  post(save, {
+    platform: 'chirper',
+    text: good
+      ? choice([
+        `patch v${patch.version} is actually GOOD?? devs cooked`,
+        `v${patch.version} dropped and the arcade is eating well tonight`,
+      ])
+      : bad
+        ? choice([
+          `v${patch.version}… who asked for this`,
+          `read the v${patch.version} notes twice hoping they'd change. they did not`,
+          `${patch.why[0] || 'this patch'} — v${patch.version} is rough`,
+        ])
+        : choice([
+          `v${patch.version} is fine I guess. mid patch, decent game`,
+          `v${patch.version}: some stuff changed. the grind continues`,
+        ]),
+  })
+}
+
+// The community starts asking when the game goes stale.
+export function postPatchDemand(save, days) {
+  if (!feedActive(save)) return
+  post(save, {
+    platform: chance(0.5) ? 'chirper' : 'boards',
+    title: chance(0.5) ? 'Is this game still being updated?' : null,
+    text: choice([
+      `${days} days since the last patch. the meta is FOSSILIZED`,
+      `day ${days} of asking for a balance patch`,
+      `love this game but it hasn't been touched in ${days} days and it shows`,
+    ]),
+  })
+}
+
 // Tournament wrapped — the recap threads write themselves.
 export function updateFeedFromTournament(save, record) {
   if (!feedActive(save)) return

@@ -21,7 +21,7 @@ export function newMove(partial = {}) {
 }
 
 export function newStage(partial = {}) {
-  return { id: uid('stage'), name: 'New Stage', description: '', ...partial }
+  return { id: uid('stage'), name: 'New Stage', description: '', vibe: 'hype', ...partial }
 }
 
 export function newTechnique(partial = {}) {
@@ -128,9 +128,11 @@ export function newSave(partial = {}) {
       maxGeneratedPlayers: 12,
       setups: 4,
       nameDisplay: 'alias', // 'alias' | 'fullname'
+      mode: 'consequential', // 'consequential' (locked-in, costs, patch fallout) | 'sandbox' (adjust freely)
     },
     game: {
       name: 'Untitled Fighter',
+      version: '1.0',
       characters: [],
       stages: [],
       techniques: [],
@@ -138,6 +140,11 @@ export function newSave(partial = {}) {
       playerTags: [], // player vibe tags (plain strings)
       matchups: {}, // "charIdA|charIdB" -> win % for the lower-sorted id (50 = even)
     },
+    gameDraft: null, // in-progress patch: a clone of game being edited in the Studio
+    patches: [], // released patches: {id, version, day, year, notes, score, reception}
+    patchMorale: 0, // -10..10 community feeling about the game's balance/freshness
+    lastPatch: { day: 1, year: 1 },
+    chronicle: [], // the collective memory: {day, year, icon, text} — capped
     arcade: {
       name: 'The Arcade',
       foods: [],
@@ -210,6 +217,16 @@ export function remember(save, player, kind, text) {
   if (player.memories.length > 12) player.memories.shift()
 }
 
+/**
+ * The collective memory: a moment EVERYONE will remember. Shows up in the
+ * Arcade Chronicle, newest first.
+ */
+export function chronicle(save, icon, text) {
+  if (!save.chronicle) save.chronicle = []
+  save.chronicle.unshift({ day: save.day, year: save.year, icon, text })
+  if (save.chronicle.length > 250) save.chronicle.pop()
+}
+
 // Fill in fields added after a save was created, so old saves keep working.
 export function migrateSave(save) {
   save.hour ??= 0
@@ -219,6 +236,14 @@ export function migrateSave(save) {
   save.economy ??= { money: 500, log: [] }
   save.socialFeed ??= []
   save.moneyMatches ??= []
+  save.settings.mode ??= 'consequential'
+  save.game.version ??= '1.0'
+  save.gameDraft ??= null
+  save.patches ??= []
+  save.patchMorale ??= 0
+  save.lastPatch ??= { day: save.day, year: save.year }
+  save.chronicle ??= []
+  for (const st of save.game.stages) st.vibe ??= 'hype'
   save.settings.nameDisplay ??= 'alias'
   save.game.playerTags ??= []
   for (const p of Object.values(save.players)) {
