@@ -277,6 +277,11 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
         {fullyRevealed
           ? <span className="gold">— {m.winnerName} wins</span>
           : <span className="dim small">— in progress…</span>}
+        {canStream && revealed === 0 && m.streamHint && (
+          <span className="small" style={{ color: m.streamHint === 'hot' ? 'var(--gold)' : m.streamHint === 'solid' ? 'var(--cyan)' : 'var(--dim)' }}>
+            {' '}· {m.streamHint === 'hot' ? '🔥 headliner material' : m.streamHint === 'solid' ? '👍 decent draw' : '🥱 low draw'}
+          </span>
+        )}
         {m.stream && <span className="pink small"> · 📡 {m.stream.viewers} viewers</span>}
         {m.watcherNames?.length > 0 && <span className="dim small"> · {m.watcherNames.length} railbirds</span>}
       </span>

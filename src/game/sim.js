@@ -3,7 +3,7 @@ import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_D
 import { generatePlayer, driftEvoRoster } from './generate.js'
 import { newInnovation, remember } from './model.js'
 import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
-import { buildStream, personalityOf } from './stream.js'
+import { buildStream, personalityOf, matchQuality } from './stream.js'
 import { econLog, weeklyRent } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement } from './socialmedia.js'
 import { speak } from './dialogue.js'
@@ -776,12 +776,21 @@ export function simHour(save) {
         if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
       }
 
+      // How promising this match looks as a broadcast, judged BEFORE the
+      // result — so the streaming choice is informed, not psychic.
+      const preQuality = matchQuality({
+        level: ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200,
+        personality: (personalityOf(a) + personalityOf(b)) / 2,
+        probA,
+        upset: false,
+      })
       events.push({
         type: 'match',
         setupIndex: mi + 1,
         aId: a.id, bId: b.id,
         aName: pName(save, a), bName: pName(save, b),
         charAName: charA?.name || 'Random', charBName: charB?.name || 'Random',
+        streamHint: preQuality >= 50 ? 'hot' : preQuality >= 35 ? 'solid' : 'cold',
         probA,
         winnerId: winner.id,
         winnerName: pName(save, winner),
@@ -914,7 +923,7 @@ export function endDay(save) {
     save.stream.hype = clamp(save.stream.hype - 0.08, 0, 100)
     // Word of mouth: a channel with real hype picks up followers organically
     // even on days nothing was streamed. Saturates like stream growth does.
-    if (save.stream.hype > 12) {
+    if (save.stream.hype > 8) {
       const saturation = Math.max(0.05, 1 - save.stream.followers / 20000)
       save.stream.followers += Math.round(save.stream.hype * 0.06 * saturation)
     }

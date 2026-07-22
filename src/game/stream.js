@@ -12,7 +12,7 @@ import { econLog } from './economy.js'
 
 // How famous an arcade player is, 0..1. Respect and glory are the resume.
 export function personalityOf(player) {
-  return clamp((player.respect + player.glory * 1.2) / 150, 0, 1)
+  return clamp((player.respect + player.glory * 1.2) / 100, 0, 1)
 }
 
 export function elitePersonality(elite) {
@@ -132,13 +132,13 @@ export function buildStream(save, {
   // channel approaches local-celebrity size, so it can't compound forever.
   const saturation = Math.max(0.05, 1 - st.followers / 20000)
   st.followers += Math.round(Math.min(viewers * 0.05, 25) * saturation)
-    + (quality > 60 ? 2 : quality > 45 ? 1 : 0)
+    + (quality > 55 ? 2 : quality > 35 ? 1 : 0)
   // Hand-picked daily streams move the needle most — that's the curation
   // game. Tournament coverage grinds slowly; EVO is always a boost. Growth
   // has diminishing returns as the channel gets big.
   let gain = context === 'evo' ? 3 + quality / 50
-    : context === 'tournament' ? (quality - 50) / 55
-    : (quality - 42) / 16
+    : context === 'tournament' ? (quality - 45) / 55
+    : (quality - 32) / 14
   if (gain > 0) gain *= 1 - st.hype / 120
   st.hype = clamp(st.hype + gain, 0, 100)
 
