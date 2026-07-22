@@ -7,7 +7,7 @@
 //     startup, active, recovery, onBlock, damage, chip, meterCost, duration }
 // duration (seconds) only matters for set up / trap / install.
 
-import { uid, choice, sample, randInt, chance, clamp } from './util.js'
+import { uid, choice, sample, randInt, chance } from './util.js'
 
 // Realistic generation ranges per move type: [startup, active, recovery,
 // onBlock, damage, chip, meterCost, duration]
