@@ -77,6 +77,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     shiftRel(loser.ref, winner.ref, socialDelta(loser.ref, winner.ref, { justLostTo: true }))
     recordH2H(winner.ref, loser.ref)
   }
+  save.patchGames = (save.patchGames || 0) + 1 // tournament sets are balance data too
 
   const charA = save.game.characters.find((c) => c.id === a.charId)
   const charB = save.game.characters.find((c) => c.id === b.charId)

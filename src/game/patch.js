@@ -28,11 +28,22 @@ export function bumpVersion(version) {
  * Human-readable diff between the live game and the draft, plus the raw
  * signals reception scoring needs.
  */
-export function diffGame(oldGame, draft) {
+/**
+ * observer(game, a, b) -> matchup value. Defaults to the truth; the Studio
+ * forecast passes observed (noisy) data instead, so a forecast made on a
+ * fresh build can miss an overpowered character — or invent one.
+ */
+export function diffGame(oldGame, draft, observer = null) {
   // Matchups are computed FROM the designs — refresh both sides so power
   // deltas reflect the actual frame-data changes.
   computeMatchups(oldGame)
   computeMatchups(draft)
+  const powerOf = (game, char) => {
+    const others = game.characters.filter((c) => c.id !== char.id)
+    if (!others.length) return 50
+    if (!observer) return charPower(game, char.id)
+    return others.reduce((s, o) => s + observer(game, char, o), 0) / others.length
+  }
   const notes = []
   const oldChars = new Map(oldGame.characters.map((c) => [c.id, c]))
   const newChars = new Map(draft.characters.map((c) => [c.id, c]))
@@ -67,14 +78,18 @@ export function diffGame(oldGame, draft) {
   const techAdds = draft.techniques.filter((t) => !oldTechs.has(t.id))
   for (const t of techAdds) notes.push(`New technique to discover: ${t.name}`)
 
-  // Balance-health read on the DRAFT.
-  const overpowered = draft.characters.filter((c) => charPower(draft, c.id) > 58)
+  // Balance-health read on the DRAFT — through the observer's eyes, which
+  // may be squinting at thin data.
+  const overpowered = draft.characters.filter((c) => powerOf(draft, c) > 58)
   let flatPairs = 0
   let totalPairs = 0
   for (let i = 0; i < draft.characters.length; i++) {
     for (let j = i + 1; j < draft.characters.length; j++) {
       totalPairs++
-      if (Math.abs(getMatchup(draft, draft.characters[i].id, draft.characters[j].id) - 50) <= 2) flatPairs++
+      const mu = observer
+        ? observer(draft, draft.characters[i], draft.characters[j])
+        : getMatchup(draft, draft.characters[i].id, draft.characters[j].id)
+      if (Math.abs(mu - 50) <= 2) flatPairs++
     }
   }
   const boring = totalPairs >= 6 && flatPairs / totalPairs > 0.85
@@ -85,7 +100,7 @@ export function diffGame(oldGame, draft) {
     overpowered, boring,
     // OP characters the patch actually fixed.
     fixedOp: oldGame.characters.filter((c) => newChars.has(c.id) &&
-      charPower(oldGame, c.id) > 58 && charPower(draft, c.id) <= 56),
+      powerOf(oldGame, c) > 58 && powerOf(draft, newChars.get(c.id)) <= 56),
   }
 }
 
@@ -130,6 +145,7 @@ export function releasePatch(save) {
   computeMatchups(save.game) // the new designs are now the live truth
   save.gameDraft = null
   save.lastPatch = { day: save.day, year: save.year }
+  save.patchGames = 0 // fresh build, no data — the reports start blurry again
 
   const patch = {
     id: uid('patch'),

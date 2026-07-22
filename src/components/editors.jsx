@@ -338,36 +338,54 @@ export function CharactersEditor({ save, update }) {
 }
 
 // The chart is COMPUTED from the movesets now — the game tells you what
-// you built. Edit the characters; the numbers follow.
-export function MatchupReport({ save }) {
+// you built. In the wizard it's pure design theory; in a live save it's
+// OBSERVED data that starts blurry after each patch and sharpens as sets
+// get played (pass `observe`, `confidence`, `games`).
+export function MatchupReport({ save, observe = null, confidence = 1, games = 0 }) {
   const chars = save.game.characters
   const pairs = []
   for (let i = 0; i < chars.length; i++) {
     for (let j = i + 1; j < chars.length; j++) pairs.push([chars[i], chars[j]])
   }
+  const pct = Math.round(confidence * 100)
   return (
     <div className="card">
-      <h3>Matchup Report <span className="dim small">(computed from your designs)</span></h3>
+      <h3>Matchup Report <span className="dim small">{observe ? '(observed from play)' : '(projected from your designs)'}</span></h3>
+      {observe && (
+        <div className="card sub" style={{ marginBottom: 8 }}>
+          <span className="small">
+            📈 Data confidence: <strong className={pct >= 70 ? 'green' : pct >= 35 ? 'gold' : 'red'}>{pct}%</strong>
+            <span className="dim"> · {games} sets on this build</span>
+          </span>
+          {pct < 70 && (
+            <p className="dim small" style={{ margin: '4px 0 0' }}>
+              Early numbers lie. Patch off thin data and you may nerf a phantom — or miss the real problem.
+            </p>
+          )}
+        </div>
+      )}
       <p className="dim small">
         The game reads every character's frame data, damage, meter and setups and derives the chart —
-        zoning smothers slow approaches, pressure beats thin defense, damage decides trades. Change the
-        designs and the numbers change. Matchups mostly matter at very high skill levels.
+        zoning smothers slow approaches, pressure beats thin defense, damage decides trades.
+        Matchups mostly matter at very high skill levels.
       </p>
       {pairs.length === 0 && <p className="dim">Need at least two characters.</p>}
       {pairs.map(([a, b]) => {
-        const mu = computeMatchup(a, b)
+        const mu = observe ? observe(save.game, a, b) : computeMatchup(a, b)
         return (
           <div key={`${a.id}|${b.id}`} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
             <div className="row spread">
               <span className="small"><strong>{a.name}</strong> vs <strong>{b.name}</strong></span>
               <span className={`small ${Math.abs(mu - 50) >= 8 ? 'red' : Math.abs(mu - 50) >= 4 ? 'gold' : 'green'}`}>
-                {mu}–{100 - mu}
+                {mu}–{100 - mu}{observe && confidence < 1 && <span className="dim"> ±{Math.round((1 - confidence) * 4.5)}</span>}
               </span>
             </div>
             <div className="track" style={{ height: 6, background: 'var(--bg2)', borderRadius: 3, overflow: 'hidden' }}>
               <div style={{ width: `${mu}%`, height: '100%', background: 'linear-gradient(90deg, var(--cyan), var(--pink))' }} />
             </div>
-            <span className="dim small">{matchupExplanation(a, b)}</span>
+            <span className="dim small">
+              {observe && confidence < 0.25 ? 'too early to say why — the data is still arguing with itself' : matchupExplanation(a, b)}
+            </span>
           </div>
         )
       })}

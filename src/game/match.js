@@ -398,6 +398,7 @@ export function resolveMatch(save, a, b) {
   recordCharResult(winner, winner.mainCharId, true)
   recordCharResult(loser, loser.mainCharId, false)
   recordH2H(winner, loser)
+  save.patchGames = (save.patchGames || 0) + 1 // every set is balance data
 
   // Temperance dampens mood swings from game results.
   const swing = (10 - loser.personal.temperance) * 0.25

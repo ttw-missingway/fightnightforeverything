@@ -97,6 +97,34 @@ export function matchupExplanation(a, b) {
   }
 }
 
+// ---------- Observed balance data ----------
+// Right after a patch, nobody KNOWS anything — the reports run on thin data
+// and can be flat wrong. Every set played on the current build sharpens the
+// numbers. The truth (computeMatchup) always drives actual fights; these
+// observed values are what the dashboards show.
+
+export function balanceConfidence(save) {
+  return clamp((save.patchGames || 0) / 300, 0, 1)
+}
+
+/**
+ * The matchup number the DATA currently suggests: truth plus an error that
+ * is stable within a patch (seeded by pair + version) and shrinks as sets
+ * are played. At zero data the error can be ±9 points.
+ */
+export function observedMatchup(save, game, a, b) {
+  const truth = computeMatchup(a, b)
+  const conf = balanceConfidence(save)
+  const noise = (hash01(`${a.id}|${b.id}|${game.version}:obs`) - 0.5) * 2 // -1..1
+  return clamp(Math.round(truth + noise * (1 - conf) * 9), 25, 75)
+}
+
+export function observedPower(save, game, char) {
+  const others = game.characters.filter((c) => c.id !== char.id)
+  if (!others.length) return 50
+  return others.reduce((s, o) => s + observedMatchup(save, game, char, o), 0) / others.length
+}
+
 // ---------- Community tier lists ----------
 
 const TIER_ORDER = ['S', 'A', 'B', 'C', 'D']

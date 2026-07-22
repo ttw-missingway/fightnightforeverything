@@ -3,7 +3,8 @@ import { useStore } from '../state/store.jsx'
 import {
   CharactersEditor, MatchupReport, StagesEditor, TechniquesEditor, TagsEditor,
 } from '../components/editors.jsx'
-import { diffGame, computeReception, daysSincePatch, charPower, releasePatch } from '../game/patch.js'
+import { diffGame, computeReception, daysSincePatch, releasePatch } from '../game/patch.js'
+import { balanceConfidence, observedMatchup, observedPower } from '../game/balance.js'
 import { formatDay } from '../game/constants.js'
 
 const TABS = [
@@ -33,10 +34,13 @@ export default function GameStudio() {
     fn({ ...s, game: s.gameDraft })
   })
 
-  const diff = draft ? diffGame(save.game, draft) : null
+  // The forecast sees what the DATA sees — thin data, blurry forecast.
+  const observe = (game, a, b) => observedMatchup(save, game, a, b)
+  const diff = draft ? diffGame(save.game, draft, observe) : null
   const days = daysSincePatch(save)
   const preview = diff ? computeReception(diff, days) : null
   const sandbox = save.settings.mode === 'sandbox'
+  const confidence = balanceConfidence(save)
 
   return (
     <div>
@@ -78,6 +82,9 @@ export default function GameStudio() {
                 </span>
                 {preview.why.length > 0 && <span className="dim"> — {preview.why.join('; ')}</span>}
                 {sandbox && <span className="dim"> (sandbox: reaction is cosmetic)</span>}
+                {confidence < 0.6 && (
+                  <span className="red"> · forecast built on {Math.round(confidence * 100)}% data — it can be wrong</span>
+                )}
               </p>
             )}
           </div>
@@ -91,11 +98,11 @@ export default function GameStudio() {
       </div>
 
       {tab === 'characters' && <CharactersEditor save={displaySave} update={update} />}
-      {tab === 'matchups' && <MatchupReport save={displaySave} />}
+      {tab === 'matchups' && <MatchupReport save={displaySave} observe={observe} confidence={confidence} games={save.patchGames || 0} />}
       {tab === 'stages' && <StagesEditor save={displaySave} update={update} />}
       {tab === 'techniques' && <TechniquesEditor save={displaySave} update={update} />}
       {tab === 'tags' && <TagsEditor save={displaySave} update={update} />}
-      {tab === 'balance' && <BalanceReport game={displaySave.game} />}
+      {tab === 'balance' && <BalanceReport save={save} game={displaySave.game} confidence={confidence} />}
       {tab === 'history' && <PatchHistory save={save} />}
     </div>
   )
@@ -106,22 +113,49 @@ function bumpPreview(version) {
   return `${maj}.${min + 1}`
 }
 
-// Designer feedback: where every character sits on the power curve.
-function BalanceReport({ game }) {
+// The confidence meter: how much the current build's data can be trusted.
+export function ConfidenceMeter({ confidence, games }) {
+  const pct = Math.round(confidence * 100)
+  return (
+    <div className="card sub" style={{ marginBottom: 10 }}>
+      <div className="row spread">
+        <span className="small">
+          📈 Balance data: <strong className={pct >= 70 ? 'green' : pct >= 35 ? 'gold' : 'red'}>{pct}% confident</strong>
+          <span className="dim"> · {games} sets played on this build</span>
+        </span>
+      </div>
+      <div className="track" style={{ height: 6, background: 'var(--bg2)', borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: pct >= 70 ? 'var(--green)' : pct >= 35 ? 'var(--gold)' : 'var(--red)' }} />
+      </div>
+      <p className="dim small" style={{ margin: '6px 0 0' }}>
+        {pct >= 70
+          ? 'The numbers have settled. Balance from these with confidence.'
+          : pct >= 35
+            ? 'The picture is forming, but individual reads can still be a few points off.'
+            : 'Fresh build, thin data — these reads can be flat wrong. Patch now to appease the impatient, or wait for the meta to reveal itself.'}
+      </p>
+    </div>
+  )
+}
+
+// Designer feedback: where every character sits on the power curve —
+// as the DATA sees it, which early in a patch is an educated guess.
+function BalanceReport({ save, game, confidence }) {
+  const margin = Math.round((1 - confidence) * 4.5)
   const rows = game.characters
-    .map((c) => ({ c, power: charPower(game, c.id) }))
+    .map((c) => ({ c, power: observedPower(save, game, c) }))
     .sort((x, y) => y.power - x.power)
   return (
     <div className="card">
-      <h3>Power Curve</h3>
+      <h3>Power Curve <span className="dim small">(observed)</span></h3>
+      <ConfidenceMeter confidence={confidence} games={save.patchGames || 0} />
       <p className="dim small">
-        Average matchup win% across the cast. Above 58 reads as broken — players will riot.
-        A chart that's ALL 50s reads as flavorless — players will yawn. Character variety with
-        nobody oppressive is the sweet spot.
+        Average matchup win% across the cast, per current data. Above 58 reads as broken — players
+        will riot. A chart that's ALL 50s reads as flavorless — players will yawn.
       </p>
       {rows.length === 0 && <p className="dim">No characters yet.</p>}
       {rows.map(({ c, power }) => (
-        <div className="statbar" key={c.id} title={`${c.name}: ${power.toFixed(1)} avg matchup`}>
+        <div className="statbar" key={c.id} title={`${c.name}: ${power.toFixed(1)} avg matchup${margin ? ` (±${margin})` : ''}`}>
           <span className="label">{c.name}</span>
           <div className="track">
             <div className="fill" style={{
@@ -129,7 +163,9 @@ function BalanceReport({ game }) {
               background: power > 58 ? 'var(--red)' : power < 44 ? 'var(--dim)' : 'linear-gradient(90deg, var(--cyan), var(--green))',
             }} />
           </div>
-          <span className="val" style={power > 58 ? { color: 'var(--red)' } : {}}>{power.toFixed(1)}</span>
+          <span className="val" style={{ width: 'auto', minWidth: 34, ...(power > 58 ? { color: 'var(--red)' } : {}) }}>
+            {power.toFixed(1)}{margin > 0 && <span className="dim small"> ±{margin}</span>}
+          </span>
         </div>
       ))}
     </div>

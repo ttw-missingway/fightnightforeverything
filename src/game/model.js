@@ -155,6 +155,7 @@ export function newSave(partial = {}) {
     patches: [], // released patches: {id, version, day, year, notes, score, reception}
     patchMorale: 0, // -10..10 community feeling about the game's balance/freshness
     lastPatch: { day: 1, year: 1 },
+    patchGames: 0, // sets played on the current build — balance data accrues from these
     chronicle: [], // the collective memory: {day, year, icon, text} — capped
     tierLists: [], // community tier lists, newest first — one lands ~a week after each patch
     pendingTierList: null, // {version, dueAbs} — absolute day the next list drops
@@ -258,6 +259,8 @@ export function migrateSave(save) {
   save.chronicle ??= []
   save.tierLists ??= []
   save.pendingTierList ??= null
+  // Existing saves get data credit for time already played on their build.
+  save.patchGames ??= Math.min(300, ((save.year - 1) * 336 + save.day - ((save.lastPatch.year - 1) * 336 + save.lastPatch.day)) * 10)
   for (const st of save.game.stages) st.vibe ??= 'hype'
   save.settings.nameDisplay ??= 'alias'
   save.game.playerTags ??= []
