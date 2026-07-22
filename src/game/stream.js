@@ -7,6 +7,7 @@
 
 import { clamp, rand, randInt, choice, chance } from './util.js'
 import { CHAT_NAME_PARTS, CHAT_LINES } from './names.js'
+import { upsetSeverityOf } from './match.js'
 
 // How famous an arcade player is, 0..1. Respect and glory are the resume.
 export function personalityOf(player) {
@@ -28,17 +29,23 @@ export function matchQuality({ level, personality, probA, upset }) {
   return Math.round(clamp(q, 0, 100))
 }
 
+/**
+ * Viewers grow organically out of the follower base: followers come first
+ * (from good streams and word of mouth), live viewers are a slice of them.
+ * Tournaments concentrate your existing community, not conjure a new one —
+ * a channel nobody follows gets a handful of curious walk-ins at best.
+ * EVO is the one exception: it's the world's broadcast, not yours.
+ */
 export function viewersFor(save, quality, context) {
-  const hype = save.stream.hype
+  const { hype, followers } = save.stream
+  const qmult = 0.3 + quality / 80
   let v
   if (context === 'evo') {
-    v = (600 + hype * 25) * (0.75 + quality / 200) + rand() * 200
+    v = 500 + followers * 0.15 + hype * 8 + rand() * 150
   } else if (context === 'tournament') {
-    v = (8 + hype * 6) * (0.25 + quality / 70) + rand() * 4
+    v = (2 + followers * 0.035 + hype * 0.8) * qmult + rand() * 2
   } else {
-    // A brand-new channel streams into the void: zero viewers until the
-    // arcade builds some hype.
-    v = hype * 2.5 * (0.25 + quality / 70) + (hype > 3 ? rand() * 3 : 0)
+    v = followers * (0.012 + hype * 0.00025) * qmult + (hype > 10 ? rand() * 3 : 0)
   }
   return Math.max(0, Math.round(v))
 }
@@ -49,33 +56,54 @@ function chatName() {
 
 /**
  * Pre-bakes chat so it can play back alongside the narration reveal.
- * Each comment has `at`: the narration line index it reacts to.
+ * Each comment has `at`: the narration line index it reacts to. When line
+ * metadata is available, chat reacts to what actually happened on that line
+ * — the specific move, the game win, the actor — and upset reactions are
+ * graded by how shocking the result really was.
  */
-export function generateComments({ viewers, narration, aName, bName, winnerName, probA, upset, context }) {
+export function generateComments({ viewers, narration, meta = [], aName, bName, winnerName, probA, upsetSeverity = 'none', context }) {
   if (viewers <= 0 || !narration.length) return []
   const total = clamp(Math.round(viewers / 3), 1, 34)
   const users = Array.from({ length: clamp(Math.ceil(total / 3), 1, 12) }, chatName)
   const lastIdx = narration.length - 1
   const close = Math.abs(probA - 0.5) < 0.15
+  const smallStream = viewers < 12
   const comments = []
   const seenTexts = new Set()
+
+  const reactTo = (at, onFinish) => {
+    const m = meta[at] || {}
+    // React to the specific thing that just happened on this line.
+    if (m.kind === 'game' && m.move && chance(0.5)) {
+      return choice(CHAT_LINES.moveReact).replaceAll('{m}', m.move)
+    }
+    if (m.kind === 'game' && m.actor && chance(0.35)) {
+      return choice(CHAT_LINES.gameWin).replace('{p}', m.actor)
+    }
+    if (m.kind === 'struggle' && m.actor && chance(0.4)) {
+      return choice([`${m.actor} is crumbling`, `somebody help ${m.actor}`, `${m.actor} needs a timeout`])
+    }
+    if (onFinish) {
+      if (upsetSeverity === 'severe' && chance(0.55)) return choice(CHAT_LINES.upsetSevere)
+      if (upsetSeverity === 'mild' && chance(0.5)) return choice(CHAT_LINES.upsetMild)
+      if (chance(0.6)) return choice(CHAT_LINES.winnerBurst).replace('{w}', winnerName)
+    }
+    if (context === 'evo' && chance(0.3)) return choice(CHAT_LINES.evo)
+    if (smallStream && chance(0.25)) return choice(CHAT_LINES.newViewer)
+    if (close && chance(0.35)) return choice(CHAT_LINES.close)
+    if (chance(0.3)) return choice(CHAT_LINES.playerRef).replace('{p}', chance(0.5) ? aName : bName)
+    return choice(CHAT_LINES.hype)
+  }
+
   for (let i = 0; i < total; i++) {
     // Weight comments toward the end of the match; ~35% land on the finish.
     const onFinish = i >= total * 0.65
     const at = onFinish ? lastIdx : randInt(0, Math.max(0, lastIdx - 1))
-    const pick = () => {
-      if (onFinish && upset && chance(0.5)) return choice(CHAT_LINES.upset)
-      if (onFinish && chance(0.6)) return choice(CHAT_LINES.winnerBurst).replace('{w}', winnerName)
-      if (context === 'evo' && chance(0.3)) return choice(CHAT_LINES.evo)
-      if (close && chance(0.35)) return choice(CHAT_LINES.close)
-      if (chance(0.3)) return choice(CHAT_LINES.playerRef).replace('{p}', chance(0.5) ? aName : bName)
-      return choice(CHAT_LINES.hype)
-    }
     // Chat repeats itself in real life too, but not THIS much: two re-rolls
     // against exact duplicates keeps it varied.
-    let text = pick()
-    if (seenTexts.has(text)) text = pick()
-    if (seenTexts.has(text)) text = pick()
+    let text = reactTo(at, onFinish)
+    if (seenTexts.has(text)) text = reactTo(at, onFinish)
+    if (seenTexts.has(text)) text = reactTo(at, onFinish)
     seenTexts.add(text)
     comments.push({ at, user: choice(users), text })
   }
@@ -88,17 +116,22 @@ export function generateComments({ viewers, narration, aName, bName, winnerName,
  * growth (hype, followers, peak). Attach the returned object to the match.
  */
 export function buildStream(save, {
-  level, personality, probA, aWins, narration, aName, bName, winnerName, context,
+  level, personality, probA, aWins, narration, meta = [], aName, bName, winnerName, context,
 }) {
-  const upset = (aWins && probA < 0.4) || (!aWins && probA > 0.6)
-  const quality = matchQuality({ level, personality, probA, upset })
+  const upsetSeverity = upsetSeverityOf(probA, aWins)
+  const quality = matchQuality({ level, personality, probA, upset: upsetSeverity !== 'none' })
   const viewers = viewersFor(save, quality, context)
-  const comments = generateComments({ viewers, narration, aName, bName, winnerName, probA, upset, context })
+  const comments = generateComments({ viewers, narration, meta, aName, bName, winnerName, probA, upsetSeverity, context })
 
   const st = save.stream
   st.totalStreams += 1
   st.peakViewers = Math.max(st.peakViewers, viewers)
-  st.followers += Math.max(0, Math.round(viewers * (0.015 + quality / 2000)))
+  // Even a zero-viewer stream of a great match seeds a few followers — the
+  // clips get around. Growth is capped per stream and saturates as the
+  // channel approaches local-celebrity size, so it can't compound forever.
+  const saturation = Math.max(0.05, 1 - st.followers / 20000)
+  st.followers += Math.round(Math.min(viewers * 0.05, 25) * saturation)
+    + (quality > 60 ? 2 : quality > 45 ? 1 : 0)
   // Hand-picked daily streams move the needle most — that's the curation
   // game. Tournament coverage grinds slowly; EVO is always a boost. Growth
   // has diminishing returns as the channel gets big.
@@ -121,6 +154,7 @@ export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily')
     probA: matchEvent.probA,
     aWins: matchEvent.winnerId === a.id,
     narration: matchEvent.narration,
+    meta: matchEvent.narrationMeta || [],
     aName: matchEvent.aName,
     bName: matchEvent.bName,
     winnerName: matchEvent.winnerName,

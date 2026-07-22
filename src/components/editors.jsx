@@ -129,7 +129,7 @@ export function CharactersEditor({ save, update }) {
             })}>🎲 Generate</button>
           </div>
         </div>
-        <table>
+        <div className="table-scroll"><table>
           <tbody>
             {chars.map((c) => (
               <tr key={c.id} className="clickable" onClick={() => setSelId(c.id)}>
@@ -139,7 +139,7 @@ export function CharactersEditor({ save, update }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         {chars.length === 0 && <p className="dim">No characters yet — a fighting game needs a cast!</p>}
       </div>
 

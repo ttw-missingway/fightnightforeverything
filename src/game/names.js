@@ -209,28 +209,48 @@ export const CHAT_NAME_PARTS = {
 export const CHAT_LINES = {
   hype: [
     'LETS GOOOO', 'CLIP IT. CLIP IT NOW', 'no way lol', 'this arcade always delivers',
-    'chat is this real', 'W stream', 'I was here', '🔥🔥🔥', 'somebody call the police',
+    'chat is this real', 'W stream', 'I was here', '🔥🔥🔥',
     'the FOOTSIES', 'my popoff radar is going crazy', 'this is why I follow this channel',
+    'good pace this set', 'both playing smart honestly',
   ],
   close: [
     'either one of them takes this, seriously', 'my HEART', 'I cannot watch',
     'both of them are locked in', 'last hit vibes already', 'this set is a movie',
+    'whoever loses this is gonna be sick about it',
   ],
   playerRef: [
     '{p} is cracked', '{p} has them fully downloaded', '{p} woke up and chose violence',
     'how does {p} keep getting away with this', '{p} is different today',
+    '{p} looking comfortable', 'been watching {p} improve for weeks now',
+  ],
+  moveReact: [
+    'that {m} looked ILLEGAL', 'the {m}!! again!!', 'how do you even block {m}',
+    '{m} is such a stylish call', 'clip the {m} please', 'they had the {m} loaded the whole time',
+  ],
+  gameWin: [
+    '{p} takes it', 'okay, we have a set on our hands', 'answer back time',
+    'adjustments incoming, watch', 'momentum check',
   ],
   winnerBurst: [
     '{w} TOO CLEAN', 'ggs', '{w} run it back', 'never a doubt ({w} fan since today)',
-    '{w} clears', 'and THAT is the tournament arc',
+    '{w} clears', 'good set honestly', 'that closeout was cold',
   ],
-  upset: [
+  upsetSevere: [
     'HUGE UPSET', 'BRACKET DEMON SPOTTED', 'they were NOT supposed to win that',
-    'somebody check the odds on that one', 'David and Goliath rerun',
+    'somebody check the odds on that one', 'I need a minute. what did I just watch',
+  ],
+  upsetMild: [
+    "didn't see that coming honestly", 'huh. respect though', 'quiet little upset there',
+    'odds said otherwise but ok', 'underdog stuff, love to see it',
   ],
   evo: [
     'the whole world is watching rn', 'EVO MOMENT???', 'crowd is SHAKING',
     'imagine being there live', 'this is the biggest stage in the game',
+  ],
+  newViewer: [
+    'found this stream from a clip lol', 'what game is this? looks sick',
+    'how long has this arcade been streaming?', 'cozy stream tbh', '!uptime',
+    'small stream but the games are good??', 'algorithm brought me here, staying for this',
   ],
 }
 

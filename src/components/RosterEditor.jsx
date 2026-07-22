@@ -29,7 +29,7 @@ export default function RosterEditor({ save, update }) {
             })}>🎲 Generate one</button>
           </div>
         </div>
-        <table>
+        <div className="table-scroll"><table>
           <thead><tr><th>Name</th><th>Alias</th><th>Origin</th><th /></tr></thead>
           <tbody>
             {players.map((p) => (
@@ -47,7 +47,7 @@ export default function RosterEditor({ save, update }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         {players.length === 0 && (
           <p className="dim">
             No players yet. Create some, or let generated players wander in once the save starts.

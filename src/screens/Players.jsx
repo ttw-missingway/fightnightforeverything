@@ -28,7 +28,7 @@ export default function Players() {
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>Leaderboard</h2>
-      <table>
+      <div className="table-scroll"><table>
         <thead>
           <tr><th>#</th><th>Player</th><th>Main</th><th>Elo</th><th>W–L</th><th>Glory</th><th>Respect</th><th>Mood</th><th>Status</th></tr>
         </thead>
@@ -54,7 +54,7 @@ export default function Players() {
             )
           })}
         </tbody>
-      </table>
+      </table></div>
       {players.length === 0 && <p className="dim">No players exist yet.</p>}
     </div>
   )

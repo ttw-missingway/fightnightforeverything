@@ -1,4 +1,4 @@
-import { uid } from './util.js'
+import { uid, rollStat } from './util.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS } from './constants.js'
 
 export function newCharacter(partial = {}) {
@@ -64,6 +64,7 @@ export function newPlayer(partial = {}) {
     knownTechniques: [], // technique ids (user-authored techniques)
     knownInnovations: [], // innovation ids (sim-created techniques)
     relationships: {}, // otherPlayerId -> -100..100
+    h2h: {}, // otherPlayerId -> {w, l} lifetime head-to-head record
     teamId: null,
     attractedTags: [],
     repelledTags: [],
@@ -201,6 +202,8 @@ export function migrateSave(save) {
   for (const p of Object.values(save.players)) {
     p.settledMain ??= !!p.mainCharId // pre-exploration players keep their mains
     p.exploredChars ??= p.mainCharId ? [p.mainCharId] : []
+    p.personal.stamina ??= rollStat() // stat added later; varied, not uniform
+    p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
     p.catchphrase ??= ''
     p.playerTags ??= []
     p.attractedPlayerTags ??= []

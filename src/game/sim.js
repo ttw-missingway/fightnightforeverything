@@ -1,8 +1,8 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01 } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
 import { newInnovation } from './model.js'
-import { resolveMatch, narrateMatch, winProbability, gainSkill } from './match.js'
+import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor } from './match.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dissolveTinyTeams,
@@ -299,11 +299,34 @@ function makeBeats(save, group, where, results) {
   return beats.slice(0, 4)
 }
 
+function pickTopic(save, where) {
+  // Concession-stand talk is about people; floor talk is about games.
+  const atConcession = where === 'at the concession stand'
+  const pool = atConcession ? GOSSIP_TOPICS : TOPICS
+  // Sometimes the gossip is about an actual person.
+  if (atConcession && chance(0.25)) {
+    const regulars = Object.values(save.players).filter((p) => p.isRegular)
+    if (regulars.length) {
+      const top = [...regulars].sort((x, y) => y.elo - x.elo)[0]
+      return choice([
+        `whether ${pName(save, top)} can actually be beaten`,
+        `what ${pName(save, choice(regulars))} said after their last set`,
+        `how good ${pName(save, choice(regulars))} is getting lately`,
+      ])
+    }
+  }
+  return choice(pool)
+}
+
 function runInteraction(save, group, where, events, results = {}) {
-  const topic = choice(TOPICS)
+  const topic = pickTopic(save, where)
   const feelings = []
   const outcomes = []
   const beats = makeBeats(save, group, where, results)
+  // The concession stand is where people decompress: warm food, low stakes.
+  if (where === 'at the concession stand') {
+    for (const p of group) p.mood = clamp(p.mood + 0.1, 0, 10)
+  }
   for (const a of group) {
     let totalDelta = 0
     for (const b of group) {
@@ -423,6 +446,7 @@ export function startDay(save) {
     newcomers,
     staysUntil,
     results: {}, // playerId -> 'won' | 'lost' (latest result today, feeds social beats)
+    gamesToday: {}, // playerId -> games played today (fatigue)
     openingEvents: events,
     hours: [], // one entry per simulated hour: {label, events, streamedSetup}
   }
@@ -440,10 +464,15 @@ export function simHour(save) {
   const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
   const present = shuffle(attendees.filter((p) => (dip.staysUntil[p.id] || 0) > hourIdx))
 
+  dip.gamesToday ??= {}
   if (present.length > 0) {
-    // Only some players are itching to play this hour; the rest hang out.
-    const wantsToPlay = present.filter((p) =>
-      chance(0.28 + p.personal.spark * 0.02 + p.personal.dominance * 0.015))
+    // Only some players are itching to play this hour — and fatigue builds
+    // with every game played today. Stamina is how long the tank lasts.
+    const wantsToPlay = present.filter((p) => {
+      const played = dip.gamesToday[p.id] || 0
+      const fatigue = played * Math.max(0.02, 0.16 - p.personal.stamina * 0.013)
+      return chance(clamp(0.3 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue, 0.02, 0.9))
+    })
     const matches = []
     const pool = [...wantsToPlay]
     const setupsCount = Math.max(1, save.settings.setups)
@@ -481,16 +510,23 @@ export function simHour(save) {
       const result = resolveMatch(save, a, b)
       const charA = save.game.characters.find((c) => c.id === a.mainCharId)
       const charB = save.game.characters.find((c) => c.id === b.mainCharId)
-      const narration = narrateMatch({
+      const grudge = getRel(a, b) < -40 || getRel(b, a) < -40
+      const nar = narrateMatch({
         aName: pName(save, a), bName: pName(save, b),
         charA, charB, probA, winnerIsA: result.aWins,
         winnerPhrase: result.winner.catchphrase,
+        seriesNote: seriesNoteFor(a, b, pName(save, a), pName(save, b)),
+        grudge,
+        watcherCount: watcherGroup.length,
       })
+      const narration = nar.lines
       // Post-match social: loser's read on the winner is shaped by winner's sportsmanship.
       const loser = result.loser
       const winner = result.winner
       dip.results[winner.id] = 'won'
       dip.results[loser.id] = 'lost'
+      dip.gamesToday[a.id] = (dip.gamesToday[a.id] || 0) + 1
+      dip.gamesToday[b.id] = (dip.gamesToday[b.id] || 0) + 1
       const d = socialDelta(loser, winner, { justLostTo: true })
       shiftRel(loser, winner, d)
       shiftRel(winner, loser, socialDelta(winner, loser) * 0.6)
@@ -516,6 +552,8 @@ export function simHour(save) {
         watcherIds: watcherGroup.map((w) => w.id),
         watcherNames: watcherGroup.map((w) => pName(save, w)),
         narration,
+        narrationMeta: nar.meta,
+        setScore: nar.score,
       })
 
       maybeUnlockTechnique(save, winner, events)
@@ -534,6 +572,20 @@ export function simHour(save) {
         ? `playing ${choice(save.arcade.otherGames)}`
         : 'at the concession stand'
       runInteraction(save, g, where, events, dip.results)
+      // Side cabinets have their own stakes: high-score battles.
+      if (where.startsWith('playing') && g.length >= 2 && chance(0.3)) {
+        const game = where.replace('playing ', '')
+        const [x, y] = shuffle(g)
+        const winner = chance(0.5 + (x.otherGames.includes(game) ? 0.2 : 0) - (y.otherGames.includes(game) ? 0.2 : 0)) ? x : y
+        const runnerUp = winner === x ? y : x
+        winner.mood = clamp(winner.mood + 0.4, 0, 10)
+        winner.respect += 0.3
+        runnerUp.mood = clamp(runnerUp.mood + 0.1, 0, 10) // still fun
+        events.push({
+          type: 'minigame',
+          text: `${pName(save, winner)} sets a new high score on ${game} — ${pName(save, runnerUp)} demands one more credit.`,
+        })
+      }
     }
     if (socPool.length === 1) {
       events.push({
@@ -603,7 +655,15 @@ export function endDay(save) {
     p.mood = clamp(p.mood + (p.defaultMood - p.mood) * 0.25, 0, 10)
     p.respect = Math.round(p.respect * 10) / 10
   }
-  if (save.stream) save.stream.hype = clamp(save.stream.hype - 0.08, 0, 100)
+  if (save.stream) {
+    save.stream.hype = clamp(save.stream.hype - 0.08, 0, 100)
+    // Word of mouth: a channel with real hype picks up followers organically
+    // even on days nothing was streamed. Saturates like stream growth does.
+    if (save.stream.hype > 12) {
+      const saturation = Math.max(0.05, 1 - save.stream.followers / 20000)
+      save.stream.followers += Math.round(save.stream.hype * 0.06 * saturation)
+    }
+  }
 
   save.lastDayReport = {
     day: dip.day,

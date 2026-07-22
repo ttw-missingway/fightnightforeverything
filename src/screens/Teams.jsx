@@ -60,7 +60,7 @@ function TeamCard({ team: t, save, nav }) {
       </div>
 
       {tab === 'members' && (
-        <table>
+        <div className="table-scroll"><table>
           <tbody>
             {members.map((p, i) => {
               const founder = p.id === t.founderId
@@ -79,7 +79,7 @@ function TeamCard({ team: t, save, nav }) {
               )
             })}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       {tab === 'history' && (

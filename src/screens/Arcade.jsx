@@ -9,7 +9,7 @@ import { displayName } from '../game/util.js'
 import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
 
 export default function Arcade() {
-  const { save, screen, advance, nav } = useStore()
+  const { save, screen, advance, skipDay, nav } = useStore()
   const dip = save.dayInProgress
   const report = save.lastDayReport
   const today = whatHappensToday(save)
@@ -52,7 +52,12 @@ export default function Arcade() {
             )}
           </div>
           <div className="col" style={{ alignItems: 'flex-end' }}>
-            <button className="primary" onClick={advance}>{buttonLabel}</button>
+            <div className="row">
+              <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
+                ⏩ Skip to recap
+              </button>
+              <button className="primary" onClick={advance}>{buttonLabel}</button>
+            </div>
             <span className="dim small">{daysToEvo === 0 ? 'EVO today!' : `${daysToEvo} days until EVO`}</span>
           </div>
         </div>
@@ -252,9 +257,9 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
       </span>
       {open && (
         <div className="narration" onClick={(e) => e.stopPropagation()}>
-          {canStream && (
+          {canStream && revealed === 0 && (
             <button className="small primary" style={{ marginBottom: 8 }} onClick={onStream}>
-              📡 Put this match on stream
+              📡 Put this match on stream <span className="small">(before watching — no take-backs)</span>
             </button>
           )}
           <div className={m.stream ? 'stream-split' : ''}>
@@ -311,7 +316,7 @@ function InteractionEvent({ ev }) {
 
 function PlainEvent({ ev }) {
   const icons = {
-    arrival: '🚪', team: '🛡', innovation: '💡', technique: '📈', main: '🎯', mentorship: '🎓', idle: '🥤',
+    arrival: '🚪', team: '🛡', innovation: '💡', technique: '📈', main: '🎯', mentorship: '🎓', idle: '🥤', minigame: '🏅',
   }
   return <div className={`event ${ev.type}`}>{icons[ev.type] || '•'} {ev.text}</div>
 }
@@ -327,7 +332,7 @@ function RecapView({ save, report, nav }) {
     )
   }
   return (
-    <div className="grid2" style={{ gridTemplateColumns: '2fr 1fr' }}>
+    <div className="grid-main">
       <div className="card">
         <h3>📋 Daily Recap — {report.dateLabel}</h3>
         {report.events.length === 0 && <p className="dim">A quiet day. Nobody came in.</p>}

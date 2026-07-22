@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Field, NumField, PillPicker } from './ui.jsx'
-import { PERSONAL_STATS, SOCIAL_STATS, GENDERS } from '../game/constants.js'
+import { PERSONAL_STATS, SOCIAL_STATS, GENDERS, STAT_PRESETS } from '../game/constants.js'
 import { rollStat } from '../game/util.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
 
@@ -136,6 +136,18 @@ export default function PlayerForm({ save, player, patch }) {
             <button className={`small ${statMode === 'direct' ? 'active' : ''}`} onClick={() => setStatMode('direct')}>Edit directly</button>
             <button className={`small ${statMode === 'roll' ? 'active' : ''}`} onClick={() => setStatMode('roll')}>🎲 Roll & allocate</button>
           </div>
+        </div>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <span className="dim small">preset:</span>
+          {Object.keys(STAT_PRESETS).map((name) => (
+            <span key={name} className="pill clickable" title="apply this stat spread"
+              onClick={() => patch((p) => {
+                p.personal = { ...STAT_PRESETS[name].personal }
+                p.social = { ...STAT_PRESETS[name].social }
+              })}>
+              {name}
+            </span>
+          ))}
         </div>
         {statMode === 'direct' ? <DirectStats player={player} patch={patch} /> : <RollAllocate player={player} patch={patch} />}
       </div>

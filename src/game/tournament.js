@@ -1,9 +1,9 @@
 import { uid, chance, rand, choice, displayName, clamp } from './util.js'
 import { formatDay } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
-import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult } from './match.js'
+import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
 import { getMatchup } from './model.js'
-import { shiftRel, socialDelta, teamLog } from './social.js'
+import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { buildStream, personalityOf, elitePersonality } from './stream.js'
 
 const pName = (save, p) => displayName(p, save)
@@ -63,21 +63,26 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     gainSkill(save, loser.ref, loser.ref.mainCharId, 0.15 + loser.ref.personal.determination * 0.06)
     recordCharResult(loser.ref, loser.charId, false)
   }
-  if (winner.kind === 'arcade' && loser.kind === 'arcade') {
+  const bothArcade = winner.kind === 'arcade' && loser.kind === 'arcade'
+  if (bothArcade) {
     shiftRel(loser.ref, winner.ref, socialDelta(loser.ref, winner.ref, { justLostTo: true }))
+    recordH2H(winner.ref, loser.ref)
   }
 
   const charA = save.game.characters.find((c) => c.id === a.charId)
   const charB = save.game.characters.find((c) => c.id === b.charId)
-  const narration = narrateMatch({
+  const nar = narrateMatch({
     aName: a.name, bName: b.name, charA, charB, probA, winnerIsA: aWins, long,
     winnerPhrase: winner.kind === 'arcade' ? winner.ref.catchphrase : '',
+    seriesNote: bothArcade ? seriesNoteFor(a.ref, b.ref, a.name, b.name) : null,
+    grudge: bothArcade && (getRel(a.ref, b.ref) < -40 || getRel(b.ref, a.ref) < -40),
+    watcherCount: context === 'evo' ? 10 : 4, // tournaments always draw a rail
   })
   // Every tournament match goes out on the arcade's stream channel.
   const stream = buildStream(save, {
     level: (entrantSkill(a) + entrantSkill(b)) / 200,
     personality: (entrantPersonality(a) + entrantPersonality(b)) / 2,
-    probA, aWins, narration,
+    probA, aWins, narration: nar.lines, meta: nar.meta,
     aName: a.name, bName: b.name, winnerName: winner.name,
     context,
   })
@@ -87,7 +92,8 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     aId: a.id, bId: b.id,
     aName: a.name, bName: b.name,
     aChar: entrantCharName(save, a), bChar: entrantCharName(save, b),
-    probA, winnerId: winner.id, winnerName: winner.name, narration,
+    probA, winnerId: winner.id, winnerName: winner.name,
+    narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
     stream,
     bye: false,
   }

@@ -126,31 +126,41 @@ import { ARCHETYPE_FLAVOR, MOVE_VERBS } from './names.js'
 
 const OPENERS = [
   (a, b) => `${a.name} and ${b.name} step up. The cabinet hums.`,
-  (a, b) => `Round one — ${a.name} vs ${b.name}. A small crowd leans in.`,
   (a, b) => `${a.name} cracks their knuckles as ${b.name} picks their character.`,
   (a, b) => `Quarters up. ${a.name} versus ${b.name} — winner keeps the stick warm.`,
+  (a, b) => `${a.name} and ${b.name} run the customary button check, then it's on.`,
 ]
 
-function archetypeLine(char, pName, oppName) {
-  const pool = (char && ARCHETYPE_FLAVOR[char.archetype]) || ARCHETYPE_FLAVOR['All-Rounder']
-  return `${pName} ${choice(pool).replaceAll('{o}', oppName)}.`
-}
-
-function specialLine(char, pName, oppName) {
-  if (!char || !char.moves.length) return null
-  const move = choice(char.moves)
-  const verbs = MOVE_VERBS[move.type] || MOVE_VERBS['melee']
-  return `${pName} ${choice(verbs).replaceAll('{m}', move.name).replaceAll('{o}', oppName)}.`
-}
+const GRUDGE_OPENERS = [
+  (a, b) => `There's history here — ${a.name} and ${b.name} skip the fist bump entirely.`,
+  (a, b) => `The room goes quiet. ${a.name} vs ${b.name} is personal and everyone knows it.`,
+  (a, b) => `${a.name} sits down without a word. ${b.name} doesn't look at them. Here we go.`,
+]
 
 // One beat of offense from pName: usually archetype fundamentals, sometimes
-// a named special as the highlight.
-function midLine(pName, char, oppName) {
+// a named special as the highlight. Returns {text, move} so chat can react
+// to the specific move.
+function beatFor(pName, char, oppName) {
   if (char && char.moves.length && chance(0.45)) {
-    const line = specialLine(char, pName, oppName)
-    if (line) return line
+    const move = choice(char.moves)
+    const verbs = MOVE_VERBS[move.type] || MOVE_VERBS['melee']
+    return {
+      text: `${pName} ${choice(verbs).replaceAll('{m}', move.name).replaceAll('{o}', oppName)}`,
+      move: move.name,
+    }
   }
-  return archetypeLine(char, pName, oppName)
+  const pool = (char && ARCHETYPE_FLAVOR[char.archetype]) || ARCHETYPE_FLAVOR['All-Rounder']
+  return { text: `${pName} ${choice(pool).replaceAll('{o}', oppName)}`, move: null }
+}
+
+// "X leads the lifetime series 7–3" — computed from a's head-to-head record.
+export function seriesNoteFor(a, b, aName, bName) {
+  const h = a.h2h?.[b.id]
+  if (!h || h.w + h.l < 5) return null
+  if (h.w === h.l) return `The lifetime series is dead even at ${h.w}–${h.l}.`
+  return h.w > h.l
+    ? `${aName} leads the lifetime series ${h.w}–${h.l}.`
+    : `${bName} leads the lifetime series ${h.l}–${h.w}.`
 }
 
 function strugLine(pName, oppName) {
@@ -165,54 +175,149 @@ function strugLine(pName, oppName) {
 }
 
 /**
- * Generates flavor lines for a match. If one side is heavily favored the
- * narration reflects a stomp; close matches read as nail-biters.
- * aName/bName are display names; charA/charB are character objects (or null).
+ * Narrates the match as a SET — first to 2 (casual) or first to 3
+ * (tournament) — with a running score, so the story has a real arc: games
+ * are won and lost on the way to a result that matches the odds.
+ *
+ * Returns { lines, meta, score }. meta[i] describes line i for stream chat:
+ * { kind: 'opener'|'series'|'crowd'|'game'|'struggle'|'closer'|'phrase',
+ *   actor: displayName|null, move: moveName|null }
+ * upsetSeverityOf(probA, winnerIsA) grades how shocking the result is.
  */
-export function narrateMatch({ aName, bName, charA, charB, probA, winnerIsA, long = false, winnerPhrase = '' }) {
+export function upsetSeverityOf(probA, winnerIsA) {
+  const winnerProb = winnerIsA ? probA : 1 - probA
+  if (winnerProb < 0.22) return 'severe'
+  if (winnerProb < 0.4) return 'mild'
+  return 'none'
+}
+
+export function narrateMatch({
+  aName, bName, charA, charB, probA, winnerIsA, long = false,
+  winnerPhrase = '', seriesNote = null, grudge = false, watcherCount = 0,
+}) {
   const A = { name: aName, char: charA }
   const B = { name: bName, char: charB }
   const winner = winnerIsA ? A : B
   const loser = winnerIsA ? B : A
   const winnerProb = winnerIsA ? probA : 1 - probA
+  const closeness = 1 - Math.abs(probA - 0.5) * 2
+  const severity = upsetSeverityOf(probA, winnerIsA)
+  const target = long ? 3 : 2
+
+  // How many games the loser scrapes together, tied to how close this was.
+  let loserGames = 0
+  for (let i = 0; i < target - 1; i++) if (chance(0.12 + closeness * 0.55)) loserGames++
+  if (severity !== 'none' && loserGames === 0 && chance(0.6)) loserGames = 1 // upsets are rarely sweeps
+
+  // Game sequence from the set-winner's perspective; the clincher is last.
+  const seq = [...Array(target - 1).fill('W'), ...Array(loserGames).fill('L')]
+  const games = [...seqShuffled(seq), 'W']
+
   const lines = []
-  lines.push(choice(OPENERS)(A, B))
-
-  const beats = long ? 4 : 2
-  const pushFresh = (make) => {
-    // Re-roll once if a beat repeats a line we already used.
-    let line = make()
-    if (lines.includes(line)) line = make()
-    if (!lines.includes(line)) lines.push(line)
+  const meta = []
+  const push = (text, m = { kind: 'game', actor: null, move: null }) => {
+    if (!lines.includes(text)) { lines.push(text); meta.push(m) }
   }
-  for (let i = 0; i < beats; i++) {
-    if (winnerProb > 0.78) {
-      // A stomp: winner dominates almost every beat.
-      pushFresh(() => chance(0.85) ? midLine(winner.name, winner.char, loser.name) : strugLine(loser.name, winner.name))
-    } else if (winnerProb < 0.35) {
-      // Upset! The eventual winner struggles early.
-      if (i < beats - 1) pushFresh(() => midLine(loser.name, loser.char, winner.name))
-      else lines.push(`Wait — ${winner.name} adapts out of nowhere!`)
-    } else {
-      pushFresh(() => chance(0.5) ? midLine(A.name, A.char, B.name) : midLine(B.name, B.char, A.name))
+
+  push((grudge ? choice(GRUDGE_OPENERS) : choice(OPENERS))(A, B), { kind: 'opener', actor: null, move: null })
+  if (seriesNote) push(seriesNote, { kind: 'series', actor: null, move: null })
+  if (watcherCount >= 3 && chance(0.6)) {
+    push(choice([
+      'The railbirds crowd in — this one has juice.',
+      'Chairs scrape closer. Everybody wants to see this.',
+      `Somebody calls "next" and gets waved off. Nobody is interrupting this.`,
+    ]), { kind: 'crowd', actor: null, move: null })
+  }
+
+  let w = 0
+  let l = 0
+  games.forEach((g, gi) => {
+    const isFinal = gi === games.length - 1
+    const gWinner = g === 'W' ? winner : loser
+    const gLoser = g === 'W' ? loser : winner
+    if (g === 'W') w++
+    else l++
+
+    if (isFinal) {
+      // The clincher gets tension instead of a score clause; the closer
+      // announces the result.
+      if (games.length > 1 && l === target - 1) {
+        push(`Final game. Match point both ways. The whole arcade holds its breath.`, { kind: 'crowd', actor: null, move: null })
+      }
+      // A stomped final game sometimes shows the loser breaking down instead.
+      if (winnerProb > 0.78 && loserGames === 0 && chance(0.5)) {
+        push(strugLine(gLoser.name, gWinner.name), { kind: 'struggle', actor: gLoser.name, move: null })
+      } else {
+        const beat = beatFor(gWinner.name, gWinner.char, gLoser.name)
+        push(`${beat.text}.`, { kind: 'game', actor: gWinner.name, move: beat.move })
+      }
+      return
     }
-  }
 
-  if (winnerProb > 0.78) {
-    lines.push(`${winner.name} closes it out clean. Total control from start to finish.`)
-  } else if (winnerProb < 0.35) {
-    lines.push(`${winner.name} steals it! ${loser.name} stares at the screen in disbelief. Massive upset.`)
+    const beat = beatFor(gWinner.name, gWinner.char, gLoser.name)
+    const score = g === 'W' ? `${w}–${l}` : `${l}–${w}`
+    let clause
+    if (gi === 0) clause = choice(['and takes the opener', 'to bank game one', '— first game to them'])
+    else if (w === l) clause = `to even the set at ${score}`
+    else clause = choice([`to go up ${score}`, `— ${score} now`])
+    push(`${beat.text}, ${clause}.`, { kind: 'game', actor: gWinner.name, move: beat.move })
+  })
+
+  // The closer, graded by how the set actually went.
+  const score = `${target}–${loserGames}`
+  let closer
+  if (severity === 'severe') {
+    closer = choice([
+      `${winner.name} takes the set ${score}. The arcade ERUPTS — nobody had this on their card.`,
+      `It's over — ${winner.name} wins ${score}. ${loser.name} stares at the screen, controller still in hand.`,
+    ])
+  } else if (severity === 'mild') {
+    closer = choice([
+      `${winner.name} closes it out ${score}. A quiet upset — the room saw it coming a game too late.`,
+      `${winner.name} takes the set ${score}, and ${loser.name} is already asking for the runback.`,
+    ])
+  } else if (loserGames === target - 1) {
+    closer = choice([
+      `Last hit trades — ${winner.name} escapes with the set, ${score}!`,
+      `${winner.name} clutches the decider. ${score}. What a set.`,
+    ])
+  } else if (loserGames === 0 && winnerProb > 0.7) {
+    closer = choice([
+      `A clean ${score} sweep. ${winner.name} never looked worried.`,
+      `${winner.name} sweeps it ${score}. Total control from the character select screen.`,
+    ])
   } else {
-    lines.push(choice([
-      `Last hit trades — ${winner.name} takes it by a pixel of health!`,
-      `${winner.name} clutches out the final round. Great set.`,
-      `Down to the wire, but ${winner.name} finds the finisher.`,
-    ]))
+    closer = choice([
+      `${winner.name} takes the set ${score}.`,
+      `That's the set — ${winner.name} wins ${score}.`,
+    ])
   }
+  push(closer, { kind: 'closer', actor: winner.name, move: null })
+
   if (winnerPhrase && chance(0.4)) {
-    lines.push(`${winner.name} stands up: "${winnerPhrase}"`)
+    push(`${winner.name} stands up: "${winnerPhrase}"`, { kind: 'phrase', actor: winner.name, move: null })
   }
-  return lines
+  return { lines, meta, score }
+}
+
+function seqShuffled(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+// Lifetime head-to-head between two players — feeds "leads the series 7–3"
+// narration.
+export function recordH2H(winner, loser) {
+  winner.h2h ??= {}
+  loser.h2h ??= {}
+  const wh = winner.h2h[loser.id] || (winner.h2h[loser.id] = { w: 0, l: 0 })
+  const lh = loser.h2h[winner.id] || (loser.h2h[winner.id] = { w: 0, l: 0 })
+  wh.w += 1
+  lh.l += 1
 }
 
 // Lifetime record per character — players gravitate toward characters they
@@ -241,6 +346,7 @@ export function resolveMatch(save, a, b) {
   loser.losses += 1
   recordCharResult(winner, winner.mainCharId, true)
   recordCharResult(loser, loser.mainCharId, false)
+  recordH2H(winner, loser)
 
   // Temperance dampens mood swings from game results.
   const swing = (10 - loser.personal.temperance) * 0.25

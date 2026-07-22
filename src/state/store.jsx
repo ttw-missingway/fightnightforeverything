@@ -135,9 +135,40 @@ export function StoreProvider({ children }) {
     setScreen(outcome.type === 'tournament' ? { name: 'tournament' } : { name: 'arcade', notice: outcome.notice })
   }, [setSave])
 
+  // Skip straight to the daily recap: finish (or run) the whole day at once.
+  // Tournament days still divert to the tournament screen.
+  const skipDay = useCallback(() => {
+    const prev = saveRef.current
+    if (!prev) return
+    const next = structuredClone(prev)
+    let outcome = { type: 'recap' }
+    if (!next.dayInProgress) {
+      const today = whatHappensToday(next)
+      if (today === 'evo' || today) {
+        const res = today === 'evo'
+          ? runEvo(next)
+          : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+        if (res.ok) {
+          advanceDay(next)
+          persistSave(next)
+          setSave(next)
+          setScreen({ name: 'tournament' })
+          return
+        }
+        outcome.notice = res.reason
+      }
+      startDay(next)
+    }
+    while (next.hour < HOURS_PER_DAY) simHour(next)
+    endDay(next)
+    persistSave(next)
+    setSave(next)
+    setScreen({ name: 'arcade', notice: outcome.notice })
+  }, [setSave])
+
   const value = useMemo(() => ({
-    save, screen, nav, mutate, startSave, openSave, closeSave, advance,
-  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance])
+    save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay,
+  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay])
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>
 }

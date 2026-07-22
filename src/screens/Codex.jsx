@@ -41,7 +41,7 @@ function TechniqueIndex({ save }) {
         <p className="dim small">Built into {save.game.name} — unlocked through play.</p>
         {save.game.techniques.length === 0 && <p className="dim">None defined.</p>}
         {save.game.techniques.length > 0 && (
-          <table>
+          <div className="table-scroll"><table>
             <thead><tr><th>Technique</th><th>Character</th><th>Difficulty</th><th>XP</th><th>Known by</th></tr></thead>
             <tbody>
               {save.game.techniques.map((t) => (
@@ -57,7 +57,7 @@ function TechniqueIndex({ save }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 
@@ -66,7 +66,7 @@ function TechniqueIndex({ save }) {
         <p className="dim small">Tech invented by the community itself. Knowing every innovation for a character is the only path to skill 100.</p>
         {save.innovations.length === 0 && <p className="dim">Nothing has been discovered yet. High-innovation players will get there.</p>}
         {save.innovations.length > 0 && (
-          <table>
+          <div className="table-scroll"><table>
             <thead><tr><th>Innovation</th><th>Character</th><th>Discovered by</th><th>When</th><th>Known by</th></tr></thead>
             <tbody>
               {[...save.innovations].reverse().map((i) => {
@@ -82,7 +82,7 @@ function TechniqueIndex({ save }) {
                 )
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>
