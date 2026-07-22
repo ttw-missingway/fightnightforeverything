@@ -1,6 +1,7 @@
 import { clamp, hash01, chance, choice } from './util.js'
 import { newTeam, remember } from './model.js'
 import { TEAM_WORDS } from './names.js'
+import { DAYS_PER_YEAR } from './constants.js'
 
 export function getRel(a, b) {
   return a.relationships[b.id] || 0
@@ -136,6 +137,7 @@ export function tryJoinTeam(save, team, player, inviter, events) {
   if (!chance(teamRecruitChance(team))) return false
   team.memberIds.push(player.id)
   player.teamId = team.id
+  team.lastGrowth = (save.year - 1) * DAYS_PER_YEAR + save.day
   teamLog(save, team, `${player.alias || player.firstName} joined, recruited by ${inviter.alias || inviter.firstName}`)
   events.push({
     type: 'team',
@@ -182,4 +184,81 @@ export function dissolveTinyTeams(save, events) {
       delete save.teams[team.id]
     }
   }
+}
+
+function disbandTeam(save, team, events, reason) {
+  for (const id of team.memberIds) {
+    const p = save.players[id]
+    if (p) { p.teamId = null; p.mood = clamp(p.mood - 0.5, 0, 10) }
+  }
+  events.push({ type: 'team', text: `${team.name} [${team.acronym}] ${reason}` })
+  delete save.teams[team.id]
+}
+
+/**
+ * Once-per-day team ecosystem pass, so rosters actually MOVE:
+ *  - understrength teams actively recruit free agents (not just whoever
+ *    happens to be in their chat circle)
+ *  - crews stuck below four for weeks fizzle out
+ *  - even happy members drift away sometimes — restlessness, ambition,
+ *    or a team that's clearly going nowhere
+ */
+export function dailyTeamDynamics(save, events) {
+  const abs = (save.year - 1) * DAYS_PER_YEAR + save.day
+  const regs = Object.values(save.players).filter((p) => p.isRegular)
+  const teamless = regs.filter((p) => !p.teamId)
+
+  for (const team of Object.values(save.teams)) {
+    team.lastGrowth ??= abs
+    const members = team.memberIds.map((id) => save.players[id]).filter(Boolean)
+    if (!members.length) continue
+
+    // Active recruiting: the most community-minded member works the room.
+    if (members.length < 4 && teamless.length && chance(0.18)) {
+      const recruiter = [...members].sort((x, y) => y.social.community - x.social.community)[0]
+      const candidates = teamless.filter((p) => getRel(recruiter, p) > 20 && getRel(p, recruiter) > 10)
+      if (candidates.length) {
+        const target = choice(candidates)
+        if (chance(0.45 + target.social.community * 0.03)) {
+          team.memberIds.push(target.id)
+          target.teamId = team.id
+          team.lastGrowth = abs
+          teamless.splice(teamless.indexOf(target), 1)
+          teamLog(save, team, `${target.alias || target.firstName} joined after ${recruiter.alias || recruiter.firstName} kept asking`)
+          events.push({
+            type: 'team',
+            text: `${recruiter.alias || recruiter.firstName} finally talked ${target.alias || target.firstName} into joining ${team.name} [${team.acronym}].`,
+          })
+        }
+      }
+    }
+
+    // Fizzle: a crew that can't hit four eventually stops pretending.
+    if (team.memberIds.length < 4 && abs - team.lastGrowth > 35 && chance(0.12)) {
+      disbandTeam(save, team, events, `fizzled out — never found a fourth, and the group chat went quiet.`)
+      continue
+    }
+  }
+
+  // Churn: even solid teams lose people. Loyalty resists it; a stalled
+  // team or a big ego accelerates it.
+  for (const p of regs) {
+    const team = p.teamId ? save.teams[p.teamId] : null
+    if (!team) continue
+    let c = 0.003
+    if (team.memberIds.length < 4) c += 0.008
+    if (p.social.persona >= 8) c += 0.004
+    c *= Math.max(0.3, 1.3 - p.personal.loyalty * 0.09)
+    if (chance(c)) {
+      team.memberIds = team.memberIds.filter((id) => id !== p.id)
+      p.teamId = null
+      teamLog(save, team, `${p.alias || p.firstName} left on good terms`)
+      events.push({
+        type: 'team',
+        text: `${p.alias || p.firstName} left ${team.name} [${team.acronym}] on good terms — just time for something new.`,
+      })
+    }
+  }
+
+  dissolveTinyTeams(save, events)
 }

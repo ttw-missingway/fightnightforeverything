@@ -12,7 +12,7 @@ import { speak } from './dialogue.js'
 import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
-  tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dissolveTinyTeams,
+  tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
 } from './social.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
 
@@ -535,19 +535,23 @@ function runInteraction(save, group, where, events, results = {}) {
     outcomes.push(`${pName(save, mentor)} started mentoring ${pName(save, student)}!`)
   }
 
-  // Team formation & recruitment. Existing teams make outsiders want their
-  // own banner — rivalry breeds rivalry.
-  const teamCount = Object.keys(save.teams).length
-  const foundingPressure = 1 + Math.min(teamCount, 3) * 0.6
+  // Team formation & recruitment. FULL teams inspire rivals to raise their
+  // own banner; a pile of struggling two-man crews does the opposite — and
+  // nobody founds a team when there aren't enough free agents to fill one.
+  const allTeams = Object.values(save.teams)
+  const fullTeams = allTeams.filter((t) => t.memberIds.length >= 4).length
+  const struggling = allTeams.filter((t) => t.memberIds.length < 4).length
+  const foundingPressure = Math.max(0.25, 1 + fullTeams * 0.5 - struggling * 0.35)
+  const freeAgents = Object.values(save.players).filter((p) => p.isRegular && !p.teamId).length
   for (const a of group) {
     const team = teamOf(save, a)
     if (team) {
       for (const b of group) {
-        if (b.id !== a.id && !b.teamId && getRel(a, b) > 35 && getRel(b, a) > 25) {
+        if (b.id !== a.id && !b.teamId && getRel(a, b) > 25 && getRel(b, a) > 15) {
           if (tryJoinTeam(save, team, b, a, events)) break
         }
       }
-    } else if (chance(a.social.community * 0.012 * foundingPressure)) {
+    } else if (freeAgents >= 5 && chance(a.social.community * 0.012 * foundingPressure)) {
       const buddy = group.find((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 40 && getRel(b, a) > 30)
       if (buddy) tryFoundTeam(save, a, buddy, save.day, save.year, events)
     }
@@ -890,7 +894,7 @@ export function endDay(save) {
     else maybeSettleMain(save, p, events)
     checkFallingOut(save, p, events)
   }
-  dissolveTinyTeams(save, events)
+  dailyTeamDynamics(save, events)
   maybeScheduleMoneyMatch(save, events)
 
   // The books: door quarters, concession sales, weekly rent.

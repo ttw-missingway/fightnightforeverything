@@ -281,6 +281,7 @@ export function migrateSave(save) {
   }
   for (const t of Object.values(save.teams)) {
     t.history ??= []
+    t.lastGrowth ??= (save.year - 1) * 336 + save.day // fresh clock on migration
   }
   // Character overhaul: legacy moves gain frame data, characters gain combos,
   // and the matchup chart is recomputed from the designs — the movesets are
