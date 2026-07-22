@@ -1,4 +1,4 @@
-import { clamp, rand, choice, chance, displayName } from './util.js'
+import { clamp, rand, displayName } from './util.js'
 import { getMatchup } from './model.js'
 
 // ---------- Character skill & learning curve ----------
@@ -121,79 +121,6 @@ export function updateElo(winner, loser, k = 32) {
   return delta
 }
 
-// ---------- Narration ----------
-//
-// User-authored moves are SPECIAL moves — highlights, not the whole kit.
-// Jabs, movement, and gameplan come from the character's archetype, so a
-// created character fights like their archetype without the user having to
-// define "jab".
-
-import { ARCHETYPE_FLAVOR, MOVE_VERBS } from './names.js'
-import { comboDamage } from './design.js'
-
-const OPENERS = [
-  (a, b) => `${a.name} and ${b.name} step up. The cabinet hums.`,
-  (a, b) => `${a.name} cracks their knuckles as ${b.name} picks their character.`,
-  (a, b) => `Quarters up. ${a.name} versus ${b.name} — winner keeps the stick warm.`,
-  (a, b) => `${a.name} and ${b.name} run the customary button check, then it's on.`,
-]
-
-const GRUDGE_OPENERS = [
-  (a, b) => `There's history here — ${a.name} and ${b.name} skip the fist bump entirely.`,
-  (a, b) => `The room goes quiet. ${a.name} vs ${b.name} is personal and everyone knows it.`,
-  (a, b) => `${a.name} sits down without a word. ${b.name} doesn't look at them. Here we go.`,
-]
-
-// The move's actual design showing through the commentary: frame data,
-// damage, durations — the numbers the user typed become the story.
-function dataClause(m, oppName) {
-  const options = []
-  if (m.startup != null && m.startup <= 5 && ['light', 'melee'].includes(m.type)) {
-    options.push(` — ${m.startup} frames of startup, faster than thought`)
-  }
-  if ((m.onBlock ?? -5) >= 2) options.push(` — plus ${m.onBlock} on block, so the pressure never ends`)
-  if ((m.damage ?? 0) >= 120) options.push(` — ${m.damage} damage and the health bar blinks`)
-  if (m.type === 'install' && m.duration) options.push(` — ${m.duration} seconds as a different character`)
-  if ((m.type === 'set up' || m.type === 'trap') && m.duration) {
-    options.push(` — ${m.duration} full seconds of screen ${oppName} has to respect`)
-  }
-  if (m.type === 'super' && (m.meterCost ?? 0) >= 100) options.push(' — the whole bar, cashed out at once')
-  if (m.type === 'projectile' && (m.chip ?? 0) >= 10) options.push(` — ${m.chip} chip a throw, and it adds up`)
-  return options.length && chance(0.55) ? choice(options) : ''
-}
-
-// One beat of offense from pName: a named combo cash-out, a special with its
-// real numbers, or archetype fundamentals. Returns {text, move} so chat can
-// react to the specific thing that happened.
-function beatFor(pName, char, oppName) {
-  // Named combos are the crown jewels of a designed character.
-  if (char && (char.combos || []).length && chance(0.22)) {
-    const combo = choice(char.combos)
-    const dmg = comboDamage(char, combo)
-    if (dmg > 0) {
-      return {
-        text: choice([
-          `${pName} confirms into the ${combo.name} — ${dmg} damage, the crowd counting every hit`,
-          `${pName} lands the full ${combo.name}. ${dmg} damage off one touch`,
-          `one clean opening and ${pName} runs the ${combo.name} for ${dmg}`,
-        ]),
-        move: combo.name,
-      }
-    }
-  }
-  if (char && char.moves.length && chance(0.5)) {
-    // Specials and supers make better television than jabs.
-    const flashy = char.moves.filter((m) => m.slot !== 'normal')
-    const move = choice(flashy.length && chance(0.75) ? flashy : char.moves)
-    const verbs = MOVE_VERBS[move.type] || MOVE_VERBS['melee']
-    return {
-      text: `${pName} ${choice(verbs).replaceAll('{m}', move.name).replaceAll('{o}', oppName)}${dataClause(move, oppName)}`,
-      move: move.name,
-    }
-  }
-  const pool = (char && ARCHETYPE_FLAVOR[char.archetype]) || ARCHETYPE_FLAVOR['All-Rounder']
-  return { text: `${pName} ${choice(pool).replaceAll('{o}', oppName)}`, move: null }
-}
 
 // "X leads the lifetime series 7–3" — computed from a's head-to-head record.
 export function seriesNoteFor(a, b, aName, bName) {
@@ -205,159 +132,13 @@ export function seriesNoteFor(a, b, aName, bName) {
     : `${bName} leads the lifetime series ${h.l}–${h.w}.`
 }
 
-function strugLine(pName, oppName) {
-  return choice([
-    `${pName} is getting cornered — ${oppName} smells blood.`,
-    `${pName} drops a combo at the worst possible moment.`,
-    `${pName} keeps mashing out of pressure and paying for it.`,
-    `${oppName} downloads ${pName} completely; every gamble gets read.`,
-    `${pName} burns all their meter and gets nothing for it.`,
-    `${pName} is stuck holding block while the chip damage piles up.`,
-  ])
-}
-
-/**
- * Narrates the match as a SET — first to 2 (casual) or first to 3
- * (tournament) — with a running score, so the story has a real arc: games
- * are won and lost on the way to a result that matches the odds.
- *
- * Returns { lines, meta, score }. meta[i] describes line i for stream chat:
- * { kind: 'opener'|'series'|'crowd'|'game'|'struggle'|'closer'|'phrase',
- *   actor: displayName|null, move: moveName|null }
- * upsetSeverityOf(probA, winnerIsA) grades how shocking the result is.
- */
+// How shocking a result is, graded from the pre-match odds — feeds the
+// closer tone, stream chat, and social media reactions.
 export function upsetSeverityOf(probA, winnerIsA) {
   const winnerProb = winnerIsA ? probA : 1 - probA
   if (winnerProb < 0.22) return 'severe'
   if (winnerProb < 0.4) return 'mild'
   return 'none'
-}
-
-export function narrateMatch({
-  aName, bName, charA, charB, probA, winnerIsA, long = false,
-  winnerPhrase = '', seriesNote = null, grudge = false, watcherCount = 0,
-  stageName = null,
-}) {
-  const A = { name: aName, char: charA }
-  const B = { name: bName, char: charB }
-  const winner = winnerIsA ? A : B
-  const loser = winnerIsA ? B : A
-  const winnerProb = winnerIsA ? probA : 1 - probA
-  const closeness = 1 - Math.abs(probA - 0.5) * 2
-  const severity = upsetSeverityOf(probA, winnerIsA)
-  const target = long ? 3 : 2
-
-  // How many games the loser scrapes together, tied to how close this was.
-  let loserGames = 0
-  for (let i = 0; i < target - 1; i++) if (chance(0.12 + closeness * 0.55)) loserGames++
-  if (severity !== 'none' && loserGames === 0 && chance(0.6)) loserGames = 1 // upsets are rarely sweeps
-
-  // Game sequence from the set-winner's perspective; the clincher is last.
-  const seq = [...Array(target - 1).fill('W'), ...Array(loserGames).fill('L')]
-  const games = [...seqShuffled(seq), 'W']
-
-  const lines = []
-  const meta = []
-  const push = (text, m = { kind: 'game', actor: null, move: null }) => {
-    if (!lines.includes(text)) { lines.push(text); meta.push(m) }
-  }
-
-  if (stageName && !grudge && chance(0.35)) {
-    push(choice([
-      `${aName} vs ${bName} — cursor lands on ${stageName}.`,
-      `Stage select: ${stageName}. ${aName} and ${bName} nod. It's on.`,
-      `They take it to ${stageName}, because some fights deserve a backdrop.`,
-    ]), { kind: 'opener', actor: null, move: null })
-  } else {
-    push((grudge ? choice(GRUDGE_OPENERS) : choice(OPENERS))(A, B), { kind: 'opener', actor: null, move: null })
-  }
-  if (seriesNote) push(seriesNote, { kind: 'series', actor: null, move: null })
-  if (watcherCount >= 3 && chance(0.6)) {
-    push(choice([
-      'The railbirds crowd in — this one has juice.',
-      'Chairs scrape closer. Everybody wants to see this.',
-      `Somebody calls "next" and gets waved off. Nobody is interrupting this.`,
-    ]), { kind: 'crowd', actor: null, move: null })
-  }
-
-  let w = 0
-  let l = 0
-  games.forEach((g, gi) => {
-    const isFinal = gi === games.length - 1
-    const gWinner = g === 'W' ? winner : loser
-    const gLoser = g === 'W' ? loser : winner
-    if (g === 'W') w++
-    else l++
-
-    if (isFinal) {
-      // The clincher gets tension instead of a score clause; the closer
-      // announces the result.
-      if (games.length > 1 && l === target - 1) {
-        push(`Final game. Match point both ways. The whole arcade holds its breath.`, { kind: 'crowd', actor: null, move: null })
-      }
-      // A stomped final game sometimes shows the loser breaking down instead.
-      if (winnerProb > 0.78 && loserGames === 0 && chance(0.5)) {
-        push(strugLine(gLoser.name, gWinner.name), { kind: 'struggle', actor: gLoser.name, move: null })
-      } else {
-        const beat = beatFor(gWinner.name, gWinner.char, gLoser.name)
-        push(`${beat.text}.`, { kind: 'game', actor: gWinner.name, move: beat.move })
-      }
-      return
-    }
-
-    const beat = beatFor(gWinner.name, gWinner.char, gLoser.name)
-    const score = g === 'W' ? `${w}–${l}` : `${l}–${w}`
-    let clause
-    if (gi === 0) clause = choice(['and takes the opener', 'to bank game one'])
-    else if (w === l) clause = `to even the set at ${score}`
-    else clause = choice([`to go up ${score}`, `to make it ${score}`])
-    push(`${beat.text}, ${clause}.`, { kind: 'game', actor: gWinner.name, move: beat.move })
-  })
-
-  // The closer, graded by how the set actually went.
-  const score = `${target}–${loserGames}`
-  let closer
-  if (severity === 'severe') {
-    closer = choice([
-      `${winner.name} takes the set ${score}. The arcade ERUPTS — nobody had this on their card.`,
-      `It's over — ${winner.name} wins ${score}. ${loser.name} stares at the screen, controller still in hand.`,
-    ])
-  } else if (severity === 'mild') {
-    closer = choice([
-      `${winner.name} closes it out ${score}. A quiet upset — the room saw it coming a game too late.`,
-      `${winner.name} takes the set ${score}, and ${loser.name} is already asking for the runback.`,
-    ])
-  } else if (loserGames === target - 1) {
-    closer = choice([
-      `Last hit trades — ${winner.name} escapes with the set, ${score}!`,
-      `${winner.name} clutches the decider. ${score}. What a set.`,
-    ])
-  } else if (loserGames === 0 && winnerProb > 0.7) {
-    closer = choice([
-      `A clean ${score} sweep. ${winner.name} never looked worried.`,
-      `${winner.name} sweeps it ${score}. Total control from the character select screen.`,
-    ])
-  } else {
-    closer = choice([
-      `${winner.name} takes the set ${score}.`,
-      `That's the set — ${winner.name} wins ${score}.`,
-    ])
-  }
-  push(closer, { kind: 'closer', actor: winner.name, move: null })
-
-  if (winnerPhrase && chance(0.4)) {
-    push(`${winner.name} stands up: "${winnerPhrase}"`, { kind: 'phrase', actor: winner.name, move: null })
-  }
-  return { lines, meta, score }
-}
-
-function seqShuffled(arr) {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
 }
 
 // Lifetime head-to-head between two players — feeds "leads the series 7–3"

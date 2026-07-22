@@ -15,6 +15,8 @@ import { ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BR
 import { FOODS, OTHER_GAMES, CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample } from '../game/util.js'
 import { trySpend, weeklyRent, PRICES } from '../game/economy.js'
+import { SpritePicker, StagePicker } from './SpritePicker.jsx'
+import { CHAR_SPRITE_CATALOG, charArtFor, stageArt } from './art.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
@@ -116,6 +118,16 @@ export function BasicsEditor({ save, update, live = false }) {
           <div className="row">
             <input value={save.arcade.name} onChange={(e) => update((s) => { s.arcade.name = e.target.value })} />
             <button className="small" title="random name" onClick={() => update((s) => { s.arcade.name = generateArcadeName() })}>🎲</button>
+          </div>
+        </Field>
+        <Field label="Location (aesthetic only)">
+          <div className="row">
+            <input placeholder="city" value={save.arcade.location?.city || ''}
+              onChange={(e) => update((s) => { s.arcade.location.city = e.target.value })} />
+            <input placeholder="state / region" value={save.arcade.location?.state || ''}
+              onChange={(e) => update((s) => { s.arcade.location.state = e.target.value })} />
+            <input placeholder="country" value={save.arcade.location?.country || ''}
+              onChange={(e) => update((s) => { s.arcade.location.country = e.target.value })} />
           </div>
         </Field>
         <Field label="Stream channel name">
@@ -312,6 +324,14 @@ export function CharactersEditor({ save, update }) {
             {ARCHETYPE_KITS[sel.archetype] && (
               <p className="dim small" style={{ margin: '4px 0 0' }}>{ARCHETYPE_KITS[sel.archetype].blurb}</p>
             )}
+          </Field>
+          <Field label="Sprite">
+            <SpritePicker
+              catalog={CHAR_SPRITE_CATALOG}
+              value={sel.spriteKey || null}
+              autoUrl={charArtFor(sel.id, sel.archetype)}
+              onChange={(k) => patchChar((c) => { c.spriteKey = k })}
+            />
           </Field>
           <div className="row">
             <NumField label="Difficulty (1-10)" value={sel.difficulty} min={1} max={10}
@@ -528,7 +548,7 @@ export function StagesEditor({ save, update }) {
           })}>🎲 Generate</button>
         </div>
       </div>
-      <p className="dim small">Flavor only for now — stages don't affect the simulation.</p>
+      <p className="dim small">Stages set the backdrop matches are fought on — pick each one's art below.</p>
       {save.game.stages.map((st) => (
         <div className="card sub" key={st.id}>
           <div className="row spread">
@@ -545,6 +565,15 @@ export function StagesEditor({ save, update }) {
             <button className="small danger" onClick={() => update((s) => {
               s.game.stages = s.game.stages.filter((y) => y.id !== st.id)
             })}>×</button>
+          </div>
+          <div style={{ margin: '6px 0' }}>
+            <StagePicker
+              value={st.bgKey || null}
+              autoStage={stageArt({ ...st, bgKey: null })}
+              onChange={(k) => update((s) => {
+                const x = s.game.stages.find((y) => y.id === st.id); if (x) x.bgKey = k
+              })}
+            />
           </div>
           <textarea placeholder="description…" value={st.description} onChange={(e) => update((s) => {
             const x = s.game.stages.find((y) => y.id === st.id); if (x) x.description = e.target.value

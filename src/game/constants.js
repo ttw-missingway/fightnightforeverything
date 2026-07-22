@@ -59,6 +59,12 @@ export const dayOfMonthOf = (dayOfYear) => ((dayOfYear - 1) % DAYS_PER_MONTH) + 
 
 export const BRACKET_SIZES = [2, 4, 8, 16, 32, 64]
 
+// Join a {city, state, country} into a display string, skipping blanks.
+export function formatLocation(loc) {
+  if (!loc) return ''
+  return [loc.city, loc.state, loc.country].map((s) => (s || '').trim()).filter(Boolean).join(', ')
+}
+
 export function formatDay(dayOfYear, year) {
   const m = Math.floor((dayOfYear - 1) / DAYS_PER_MONTH)
   const d = ((dayOfYear - 1) % DAYS_PER_MONTH) + 1
@@ -67,6 +73,39 @@ export function formatDay(dayOfYear, year) {
 
 export const HOURS_PER_DAY = 6 // the arcade is open 4 PM - 10 PM
 export const HOUR_LABELS = ['4 PM', '5 PM', '6 PM', '7 PM', '8 PM', '9 PM']
+
+// Absolute day number across years (year 1 day 1 === 1). Used for idle
+// catch-up math, auto-stream cadence gating, and scheduled patch dates.
+export const absDayOf = (dayOfYear, year) => (year - 1) * DAYS_PER_YEAR + dayOfYear
+export const dateOfAbs = (abs) => ({
+  year: Math.floor((abs - 1) / DAYS_PER_YEAR) + 1,
+  day: ((abs - 1) % DAYS_PER_YEAR) + 1,
+})
+
+// Idle mode: how much real time one advance-step (one in-game hour, plus the
+// open/close/tournament boundary steps) costs. `ms` is uniform across step
+// types so offline catch-up is just floor(elapsed / ms). Real time anchors an
+// in-game hour to a real hour; the faster tiers are for watching progress.
+export const IDLE_SPEEDS = [
+  { key: 'realtime', label: 'Real time', ms: 3600000, blurb: '1 hour = 1 hour · a full day ≈ 8 real hrs' },
+  { key: 'fast', label: 'Fast', ms: 60000, blurb: '1 hour = 1 min · a full day ≈ 8 min' },
+  { key: 'faster', label: 'Faster', ms: 10000, blurb: '1 hour = 10 sec · a full day ≈ 80 sec' },
+  { key: 'blitz', label: 'Blitz', ms: 1000, blurb: '1 hour = 1 sec · a full day ≈ 8 sec' },
+]
+export const idleSpeedOf = (key) => IDLE_SPEEDS.find((s) => s.key === key) || IDLE_SPEEDS[0]
+
+// Auto-stream: which match to put on the channel, and how often.
+export const AUTO_STREAM_SELECTORS = [
+  { key: 'closest', label: 'Closest matches', blurb: 'the match nearest a 50/50' },
+  { key: 'best', label: 'Best players', blurb: 'top combined skill + fame' },
+  { key: 'first', label: 'First setup', blurb: 'whatever is on setup 1' },
+]
+export const AUTO_STREAM_CADENCES = [
+  { key: 'hourly', label: 'Every hour' },
+  { key: 'daily', label: 'Once a day' },
+  { key: 'weekly', label: 'Once a week' },
+  { key: 'weekends', label: 'Weekends only' },
+]
 
 // Floor talk: game-brained nerd chatter over the side cabinets.
 export const TOPICS = [

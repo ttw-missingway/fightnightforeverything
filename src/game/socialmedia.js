@@ -119,6 +119,46 @@ export function postTierList(save, list, topNames) {
   })
 }
 
+// A patch got a DATE. Announcement hype, then countdown posts as it nears.
+export function postPatchAnnouncement(save, version, dateLabel, daysAhead) {
+  if (!feedActive(save)) return
+  post(save, {
+    platform: 'chirper',
+    text: choice([
+      `PATCH DATE. v${version} drops ${dateLabel}. mark it`,
+      `they really put a date on it. v${version}, ${dateLabel}. ${daysAhead} days of theorycrafting starts NOW`,
+      `v${version} announced for ${dateLabel}. my main better survive`,
+    ]),
+  })
+  post(save, {
+    platform: 'boards',
+    title: `v${version} confirmed for ${dateLabel} — predictions thread`,
+    text: choice([
+      'Post your buff/nerf predictions now so we can dunk on you later.',
+      'Calling it now: somebody gets gutted and the boards melt down.',
+      'What does everyone want out of this one? Wrong answers only.',
+    ]),
+  })
+}
+
+export function postPatchCountdown(save, version, daysLeft) {
+  if (!feedActive(save)) return
+  post(save, {
+    platform: 'chirper',
+    text: daysLeft === 1
+      ? choice([
+        `v${version} TOMORROW. i am not sleeping`,
+        `last night on the old patch. pour one out for the current meta`,
+        `patch eve. see everyone at the arcade tomorrow`,
+      ])
+      : choice([
+        `${daysLeft} days until v${version}. the speculation threads are unhinged`,
+        `v${version} in ${daysLeft} days. get your last wins in on this patch`,
+        `counting down: ${daysLeft} days to v${version}`,
+      ]),
+  })
+}
+
 // Patch day: the one topic the internet never skips.
 export function postPatchReaction(save, patch) {
   if (!feedActive(save)) return

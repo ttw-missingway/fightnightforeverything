@@ -4,6 +4,8 @@ import { PERSONAL_STATS, SOCIAL_STATS, GENDERS, STAT_PRESETS } from '../game/con
 import { rollStat } from '../game/util.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
 import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHES, VOICE_QUIRKS } from '../game/dialogue.js'
+import { SpritePicker } from './SpritePicker.jsx'
+import { PLAYER_SPRITE_CATALOG, playerArtFor } from './art.js'
 
 /**
  * Full player editor. `patch(fn)` applies fn to the live player object inside
@@ -40,6 +42,14 @@ export default function PlayerForm({ save, player, patch }) {
               </select>
             </Field>
           </div>
+          <Field label="Sprite">
+            <SpritePicker
+              catalog={PLAYER_SPRITE_CATALOG}
+              value={player.spriteKey || null}
+              autoUrl={playerArtFor(player.id)}
+              onChange={(k) => patch((p) => { p.spriteKey = k })}
+            />
+          </Field>
           <Field label="Physical description">
             <textarea value={player.description} onChange={(e) => patch((p) => { p.description = e.target.value })} />
           </Field>

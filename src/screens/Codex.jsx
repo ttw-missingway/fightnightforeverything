@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { displayName } from '../game/util.js'
 import { formatDay } from '../game/constants.js'
+import { Portrait } from '../components/ui.jsx'
+import { charArt } from '../components/art.js'
 
 // The Codex: an index of every technique (who discovered it, which character
 // it belongs to) and every character (milestones, mains, tech list).
@@ -102,7 +104,10 @@ function CharacterIndex({ save }) {
         return (
           <div className="card" key={c.id}>
             <div className="row spread">
-              <h3 style={{ margin: 0 }}>{c.name}</h3>
+              <span className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'nowrap' }}>
+                <Portrait url={charArt(c)} size={36} alt={c.name} className="hud-char" />
+                <h3 style={{ margin: 0 }}>{c.name}</h3>
+              </span>
               <span className="pill">{c.archetype}</span>
             </div>
             <p className="dim small">

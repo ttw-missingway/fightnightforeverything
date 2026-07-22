@@ -1,15 +1,17 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
-import { formatDay, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf } from '../game/constants.js'
+import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf,
+  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
 import StreamChat from '../components/StreamChat.jsx'
+import MatchHud from '../components/MatchHud.jsx'
 import { displayName } from '../game/util.js'
 import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
 
 export default function Arcade() {
-  const { save, screen, advance, skipDay, nav } = useStore()
+  const { save, screen, advance, skipDay, nav, enableIdle } = useStore()
   const dip = save.dayInProgress
   const report = save.lastDayReport
   const today = whatHappensToday(save)
@@ -34,6 +36,9 @@ export default function Arcade() {
         <div className="row spread">
           <div>
             <h2 style={{ margin: 0 }}>{save.arcade.name}</h2>
+            {formatLocation(save.arcade.location) && (
+              <div className="small dim">📍 {formatLocation(save.arcade.location)}</div>
+            )}
             <span className="dim">{WEEKDAYS[weekdayOf(save.day)]}, {formatDay(save.day, save.year)} · running <span className="cyan">{save.game.name}</span></span>
             <div className="small" style={{ marginTop: 2 }}>
               <span className="pink">📡 {save.stream.channelName}</span>
@@ -58,18 +63,95 @@ export default function Arcade() {
             )}
           </div>
           <div className="col" style={{ alignItems: 'flex-end' }}>
-            <div className="row">
-              <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
-                ⏩ Skip to recap
-              </button>
-              <button className="primary" onClick={advance}>{buttonLabel}</button>
-            </div>
+            {save.idle.enabled ? (
+              <IdleBar save={save} />
+            ) : (
+              <div className="row">
+                <button className="small" title="auto-advance the arcade over real time" onClick={() => enableIdle(true)}>
+                  🎮 Idle mode
+                </button>
+                <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
+                  ⏩ Skip to recap
+                </button>
+                <button className="primary" onClick={advance}>{buttonLabel}</button>
+              </div>
+            )}
             <span className="dim small">{daysToEvo === 0 ? 'EVO today!' : `${daysToEvo} days until EVO`}</span>
           </div>
         </div>
       </div>
 
       {dip ? <LiveDay save={save} nav={nav} /> : <RecapView save={save} report={report} nav={nav} />}
+    </div>
+  )
+}
+
+// ---------- Idle-mode controls ----------
+
+function formatCountdown(ms) {
+  const s = Math.ceil(ms / 1000)
+  if (s >= 3600) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+  if (s >= 60) return `${Math.floor(s / 60)}m ${s % 60}s`
+  return `${s}s`
+}
+
+function IdleBar({ save }) {
+  const { setIdleRunning, setIdleSpeed, setAutoStream, enableIdle } = useStore()
+  const idle = save.idle
+  const speed = idleSpeedOf(idle.speed)
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const h = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(h)
+  }, [])
+  const nextInMs = idle.running && idle.lastTickAt != null
+    ? Math.max(0, idle.lastTickAt + speed.ms - now)
+    : null
+
+  return (
+    <div className="idlebar">
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button className="primary small" onClick={() => setIdleRunning(!idle.running)}>
+          {idle.running ? '⏸ Pause' : '▶ Play'}
+        </button>
+        <select value={idle.speed} onChange={(e) => setIdleSpeed(e.target.value)}>
+          {IDLE_SPEEDS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+        <button className="small" title="return to manual play" onClick={() => enableIdle(false)}>
+          ✕ Exit
+        </button>
+      </div>
+      <div className="small dim" style={{ textAlign: 'right' }}>{speed.blurb}</div>
+      <div className="small" style={{ textAlign: 'right' }}>
+        {idle.running
+          ? <span className="cyan">▶ auto-advancing · next hour in {formatCountdown(nextInMs)}</span>
+          : <span className="dim">paused</span>}
+      </div>
+      <AutoStreamControls autoStream={idle.autoStream} setAutoStream={setAutoStream} />
+    </div>
+  )
+}
+
+function AutoStreamControls({ autoStream, setAutoStream }) {
+  return (
+    <div className="col" style={{ alignItems: 'flex-end', gap: 3, marginTop: 4 }}>
+      <label className="small row" style={{ gap: 4 }}>
+        <input type="checkbox" checked={autoStream.enabled}
+          onChange={(e) => setAutoStream({ enabled: e.target.checked })} />
+        📡 auto-stream
+      </label>
+      {autoStream.enabled && (
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <select className="small" value={autoStream.selector}
+            onChange={(e) => setAutoStream({ selector: e.target.value })}>
+            {AUTO_STREAM_SELECTORS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <select className="small" value={autoStream.cadence}
+            onChange={(e) => setAutoStream({ cadence: e.target.value })}>
+            {AUTO_STREAM_CADENCES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </div>
+      )}
     </div>
   )
 }
@@ -287,6 +369,7 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
       </span>
       {open && (
         <div className="narration" onClick={(e) => e.stopPropagation()}>
+          <MatchHud m={m} revealed={revealed} />
           {canStream && revealed === 0 && (
             <button className="small primary" style={{ marginBottom: 8 }} onClick={onStream}>
               📡 Put this match on stream <span className="small">(before watching — no take-backs)</span>
@@ -356,7 +439,7 @@ function InteractionEvent({ ev }) {
 function PlainEvent({ ev }) {
   const icons = {
     arrival: '🚪', team: '🛡', innovation: '💡', technique: '📈', main: '🎯', mentorship: '🎓',
-    idle: '🥤', minigame: '🏅', moneymatch_announce: '💸', economy: '🧾',
+    idle: '🥤', minigame: '🏅', moneymatch_announce: '💸', economy: '🧾', patch: '🛠',
   }
   return <div className={`event ${ev.type}`}>{icons[ev.type] || '•'} {ev.text}</div>
 }
@@ -418,6 +501,7 @@ function RecapEvent({ ev }) {
         }
       >
         <div className="narration">
+          <MatchHud m={ev} />
           {(ev.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
           {ev.narration.map((l, i) => (
             <Fragment key={i}>

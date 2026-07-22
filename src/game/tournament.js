@@ -1,8 +1,9 @@
-import { uid, chance, rand, choice, displayName, clamp } from './util.js'
+import { uid, chance, rand, randInt, choice, displayName, clamp } from './util.js'
 import { formatDay } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
-import { performance as playerPerf, narrateMatch, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
-import { getMatchup, remember, chronicle } from './model.js'
+import { performance as playerPerf, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
+import { narrateSet } from './fight.js'
+import { getMatchup, remember, chronicle, pushVod } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { buildStream, personalityOf, elitePersonality } from './stream.js'
@@ -81,12 +82,21 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
 
   const charA = save.game.characters.find((c) => c.id === a.charId)
   const charB = save.game.characters.find((c) => c.id === b.charId)
-  const nar = narrateMatch({
+  const stage = save.game.stages.length ? choice(save.game.stages) : null
+  // Finals and EVO are marquee broadcasts: extra seeds, keep the best cut.
+  const marquee = long || context === 'evo'
+  const nar = narrateSet({
     aName: a.name, bName: b.name, charA, charB, probA, winnerIsA: aWins, long,
+    skillA: entrantSkill(a), skillB: entrantSkill(b),
+    statsA: a.kind === 'arcade' ? a.ref.personal : null,
+    statsB: b.kind === 'arcade' ? b.ref.personal : null,
+    stageName: stage?.name,
     winnerPhrase: winner.kind === 'arcade' ? winner.ref.catchphrase : '',
     seriesNote: bothArcade ? seriesNoteFor(a.ref, b.ref, a.name, b.name) : null,
     grudge: bothArcade && (getRel(a.ref, b.ref) < -40 || getRel(b.ref, a.ref) < -40),
     watcherCount: context === 'evo' ? 10 : 4, // tournaments always draw a rail
+    marquee, spice: marquee ? 3 : 2,
+    seed: randInt(1, 2147483646),
   })
   // Every tournament match goes out on the arcade's stream channel.
   const stream = buildStream(save, {
@@ -116,8 +126,11 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     aId: a.id, bId: b.id,
     aName: a.name, bName: b.name,
     aChar: entrantCharName(save, a), bChar: entrantCharName(save, b),
+    charAId: a.charId || null, charBId: b.charId || null,
+    stageName: stage?.name,
     probA, winnerId: winner.id, winnerName: winner.name,
     narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
+    narrationHud: nar.hud, ftTarget: nar.target, narrationSeed: nar.seed,
     stream,
     postMatch,
     bye: false,
@@ -325,6 +338,7 @@ export function runSinglesTournament(save, scheduleEntry) {
   updateFeedFromTournament(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
+  pushVod(save, record) // same object reference → shared reveal cursor
   return { ok: true, record }
 }
 
@@ -444,6 +458,7 @@ export function runTeamTournament(save, scheduleEntry) {
   updateFeedFromTournament(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
+  pushVod(save, record) // same object reference → shared reveal cursor
   return { ok: true, record }
 }
 
@@ -526,6 +541,7 @@ export function runEvo(save) {
   updateFeedFromTournament(save, record)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
+  pushVod(save, record) // same object reference → shared reveal cursor
   return { ok: true, record }
 }
 

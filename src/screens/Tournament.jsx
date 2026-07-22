@@ -2,17 +2,24 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import StreamChat from '../components/StreamChat.jsx'
 import { SpeechLine } from '../components/ui.jsx'
+import MatchHud from '../components/MatchHud.jsx'
 
 export default function Tournament() {
-  const { save, nav, mutate } = useStore()
-  const t = save.lastTournament
+  const { save, screen, nav, mutate } = useStore()
+  const vodId = screen.vodId
+  // A VOD replay targets a specific record; otherwise show the most recent one.
+  const t = vodId ? (save.vods || []).find((v) => v.id === vodId) : save.lastTournament
 
   if (!t) {
     return (
       <div className="card">
         <h2>Tournament Hall</h2>
-        <p className="dim">No tournament has been run yet. Schedule one from the Manage screen, then play to that day.</p>
-        <button onClick={() => nav('arcade')}>Back to the arcade</button>
+        <p className="dim">
+          {vodId
+            ? 'That VOD is no longer available — older broadcasts roll off over time.'
+            : 'No tournament has been run yet. Schedule one from the Manage screen, then play to that day.'}
+        </p>
+        <button onClick={() => nav(vodId ? 'vods' : 'arcade')}>{vodId ? 'Back to VODs' : 'Back to the arcade'}</button>
       </div>
     )
   }
@@ -35,12 +42,15 @@ export default function Tournament() {
   const isRevealed = (idx) => idx < revealedCount || flat[idx].m.bye
   const roundDetermined = (ri) => ri === 0 || revealedCount >= roundStarts[ri]
 
-  const playNext = () => mutate((s) => {
-    if (s.lastTournament) s.lastTournament.revealed = revealedCount + 1
+  // Advance the reveal cursor on the matching record wherever it lives — the
+  // latest tournament and its VOD copy may be the same object or two, so key
+  // by id and update both.
+  const setRevealed = (val) => mutate((s) => {
+    if (s.lastTournament && s.lastTournament.id === t.id) s.lastTournament.revealed = val
+    for (const v of s.vods || []) if (v.id === t.id) v.revealed = val
   })
-  const skipAll = () => mutate((s) => {
-    if (s.lastTournament) s.lastTournament.revealed = 999999
-  })
+  const playNext = () => setRevealed(revealedCount + 1)
+  const skipAll = () => setRevealed(999999)
 
   return (
     <div>
@@ -62,7 +72,9 @@ export default function Tournament() {
         <div className="row">
           {!done && <button onClick={skipAll}>⏭ Skip to results</button>}
           <button onClick={() => nav('halloffame')}>Hall of Fame</button>
-          <button onClick={() => nav('arcade')}>Back to arcade →</button>
+          {vodId
+            ? <button onClick={() => nav('vods')}>Back to VODs →</button>
+            : <button onClick={() => nav('arcade')}>Back to arcade →</button>}
         </div>
       </div>
 
@@ -151,11 +163,13 @@ function NowPlaying({ m, roundTitle, onFinished }) {
         {started ? 'Now playing' : 'Up next'} — {roundTitle}
         {m.stream && started && <span className="small"> · 👁 {m.stream.viewers}</span>}
       </h3>
-      <p style={{ fontSize: 18 }}>
-        {m.aName} {m.aChar && !isTeamMatch && <span className="dim small">({m.aChar})</span>}
-        {' '}<span className="dim">vs</span>{' '}
-        {m.bName} {m.bChar && !isTeamMatch && <span className="dim small">({m.bChar})</span>}
-      </p>
+      {isTeamMatch ? (
+        <p style={{ fontSize: 18 }}>
+          {m.aName} <span className="dim">vs</span> {m.bName}
+        </p>
+      ) : (
+        <MatchHud m={m} revealed={lines} />
+      )}
 
       {!started && <button className="primary" onClick={() => setLines(1)}>▶ Play the match</button>}
 
@@ -227,6 +241,7 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
       {m.stream && <div className="dim small">👁 {m.stream.viewers}</div>}
       {open && (
         <div className="narration" onClick={(e) => e.stopPropagation()}>
+          <MatchHud m={m} />
           {(m.narration || []).map((l, i) => <p key={i}>{l}</p>)}
           {m.duels && m.duels.map((d, i) => (
             <p key={i} className="small" style={{ fontStyle: 'normal' }}>

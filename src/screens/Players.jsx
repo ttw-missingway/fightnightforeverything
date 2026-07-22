@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
-import { StatBar, moodFace } from '../components/ui.jsx'
+import { StatBar, moodFace, Portrait } from '../components/ui.jsx'
+import { playerArt, charArt } from '../components/art.js'
 import PlayerForm from '../components/PlayerForm.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS } from '../game/constants.js'
 import { relLabel, moodLabel } from '../game/social.js'
@@ -75,9 +76,15 @@ export default function Players() {
             return (
               <tr key={p.id} className="clickable" onClick={() => nav('players', { playerId: p.id })}>
                 <td className="dim">{i + 1}</td>
-                <td><strong>{displayName(p, save)}</strong><br />
-                  <span className="dim small">{p.firstName} {p.lastName}</span></td>
+                <td>
+                  <span className="row" style={{ gap: 8, flexWrap: 'nowrap', alignItems: 'center' }}>
+                    <Portrait url={playerArt(p)} size={26} alt={displayName(p, save)} />
+                    <span><strong>{displayName(p, save)}</strong><br />
+                      <span className="dim small">{p.firstName} {p.lastName}</span></span>
+                  </span>
+                </td>
                 <td className="cyan">
+                  {main && <Portrait url={charArt(main)} size={20} alt={main.name} />}{main && ' '}
                   {main ? main.name : '—'}
                   {main && !p.settledMain && <span className="dim small"> (trying out)</span>}
                 </td>
@@ -121,7 +128,10 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
       </div>
 
       <div className="card">
-        <h2 style={{ margin: '4px 0' }}>{displayName(p, save)} {moodFace(p.mood)}</h2>
+        <div className="row" style={{ gap: 12, alignItems: 'center', flexWrap: 'nowrap' }}>
+          <Portrait url={playerArt(p)} size={56} alt={displayName(p, save)} className="hud-char" />
+          <h2 style={{ margin: '4px 0' }}>{displayName(p, save)} {moodFace(p.mood)}</h2>
+        </div>
         <p className="dim">
           {p.firstName} "{p.alias || '—'}" {p.lastName} · {p.gender} · {p.createdBy === 'user' ? 'created player' : 'generated player'}
           {p.description && <> · {p.description}</>}

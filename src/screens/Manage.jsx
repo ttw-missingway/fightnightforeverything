@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
+import { formatLocation } from '../game/constants.js'
 import { SettingsEditor, ArcadeManagement, ScheduleEditor } from '../components/editors.jsx'
 
 const TABS = [
@@ -17,7 +18,10 @@ export default function Manage() {
 
   return (
     <div>
-      <h2>Manage — {save.arcade.name}</h2>
+      <h2 style={{ marginBottom: 0 }}>Manage — {save.arcade.name}</h2>
+      {formatLocation(save.arcade.location) && (
+        <div className="small dim" style={{ marginBottom: 8 }}>📍 {formatLocation(save.arcade.location)}</div>
+      )}
       <div className="tabs">
         {TABS.map(([k, label]) => (
           <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{label}</button>

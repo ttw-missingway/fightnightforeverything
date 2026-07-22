@@ -1,10 +1,11 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf } from './constants.js'
 import { generatePlayer, driftEvoRoster } from './generate.js'
 import { newInnovation, remember, chronicle } from './model.js'
-import { daysSincePatch } from './patch.js'
-import { postPatchDemand } from './socialmedia.js'
-import { resolveMatch, narrateMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
+import { daysSincePatch, releasePatch } from './patch.js'
+import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
+import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
+import { narrateSet } from './fight.js'
 import { buildStream, personalityOf } from './stream.js'
 import { econLog, weeklyRent } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList } from './socialmedia.js'
@@ -393,13 +394,20 @@ function runMoneyMatch(save, mm, present, events) {
   const loser = result.loser
   const charA = save.game.characters.find((c) => c.id === a.mainCharId)
   const charB = save.game.characters.find((c) => c.id === b.mainCharId)
-  const nar = narrateMatch({
+  const mmStage = save.game.stages.length ? choice(save.game.stages) : null
+  // Money matches are marquee: several seeds, keep the most dramatic cut.
+  const nar = narrateSet({
     aName: pName(save, a), bName: pName(save, b),
     charA, charB, probA, winnerIsA: result.aWins, long: true,
+    skillA: a.charSkill[a.mainCharId] || 0, skillB: b.charSkill[b.mainCharId] || 0,
+    statsA: a.personal, statsB: b.personal,
+    stageName: mmStage?.name,
     winnerPhrase: winner.catchphrase,
     seriesNote: seriesNoteFor(a, b, pName(save, a), pName(save, b)),
     grudge: true,
     watcherCount: watchers.length,
+    marquee: true, spice: 3,
+    seed: randInt(1, 2147483646),
   })
   // The stare-down before the sticks are even plugged in.
   const preMatch = []
@@ -423,12 +431,15 @@ function runMoneyMatch(save, mm, present, events) {
     aId: a.id, bId: b.id,
     aName: pName(save, a), bName: pName(save, b),
     charAName: charA?.name || 'Random', charBName: charB?.name || 'Random',
+    charAId: charA?.id || null, charBId: charB?.id || null,
+    stageName: mmStage?.name,
     probA,
     winnerId: winner.id, winnerName: pName(save, winner),
     eloDelta: result.eloDelta,
     watcherIds: watchers.map((w) => w.id),
     watcherNames: watchers.map((w) => pName(save, w)),
     narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
+    narrationHud: nar.hud, ftTarget: nar.target, narrationSeed: nar.seed,
     preMatch, postMatch,
   }
   // A money match is an event: it goes on stream automatically and the
@@ -577,6 +588,26 @@ function runInteraction(save, group, where, events, results = {}) {
  */
 export function startDay(save) {
   const events = []
+
+  // A scheduled patch ships the morning its date arrives — whatever the
+  // draft looks like at that moment. Countdown posts fire on the way there.
+  if (save.scheduledPatch) {
+    const todayAbs = absDayOf(save.day, save.year)
+    if (todayAbs >= save.scheduledPatch.absDay) {
+      if (save.gameDraft) {
+        const patch = releasePatch(save)
+        events.push({
+          type: 'patch',
+          text: `🛠 Patch v${patch.version} went live this morning, right on schedule — ${patch.reception}.`,
+        })
+      } else {
+        save.scheduledPatch = null // draft was discarded; the date quietly dies
+      }
+    } else {
+      const left = save.scheduledPatch.absDay - todayAbs
+      if ([7, 3, 1].includes(left)) postPatchCountdown(save, save.scheduledPatch.version, left)
+    }
+  }
 
   // A new generated player may wander in.
   const cpuCount = Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
@@ -730,14 +761,18 @@ export function simHour(save) {
       const charB = save.game.characters.find((c) => c.id === b.mainCharId)
       const grudge = getRel(a, b) < -40 || getRel(b, a) < -40
       const stage = save.game.stages.length ? choice(save.game.stages) : null
-      const nar = narrateMatch({
+      const nar = narrateSet({
         aName: pName(save, a), bName: pName(save, b),
         charA, charB, probA, winnerIsA: result.aWins,
+        skillA: a.charSkill[a.mainCharId] || 0, skillB: b.charSkill[b.mainCharId] || 0,
+        statsA: a.personal, statsB: b.personal,
         winnerPhrase: result.winner.catchphrase,
         seriesNote: seriesNoteFor(a, b, pName(save, a), pName(save, b)),
         grudge,
         watcherCount: watcherGroup.length,
         stageName: stage?.name,
+        spice: grudge ? 2 : 1,
+        seed: randInt(1, 2147483646),
       })
       const narration = nar.lines
       // Post-match social: loser's read on the winner is shaped by winner's sportsmanship.
@@ -770,7 +805,7 @@ export function simHour(save) {
         if (!chance(0.5)) continue
         const spots = nar.meta
           .map((m2, i) => ({ m: m2, i }))
-          .filter((x) => (x.m.kind === 'game' && x.m.move) || x.m.kind === 'struggle')
+          .filter((x) => ((x.m.kind === 'game' || x.m.kind === 'beat') && x.m.move) || x.m.kind === 'struggle')
         if (!spots.length) continue
         const spot = choice(spots)
         const line = speak(w, spot.m.kind === 'struggle' ? 'watcherWince' : 'watcherHype',
@@ -814,6 +849,7 @@ export function simHour(save) {
         aId: a.id, bId: b.id,
         aName: pName(save, a), bName: pName(save, b),
         charAName: charA?.name || 'Random', charBName: charB?.name || 'Random',
+        charAId: charA?.id || null, charBId: charB?.id || null,
         stageName: stage?.name,
         streamTags: shuffle(streamTags).slice(0, 2),
         probA,
@@ -825,6 +861,9 @@ export function simHour(save) {
         narration,
         narrationMeta: nar.meta,
         setScore: nar.score,
+        narrationHud: nar.hud,
+        ftTarget: nar.target,
+        narrationSeed: nar.seed,
         chatter,
         postMatch,
       })

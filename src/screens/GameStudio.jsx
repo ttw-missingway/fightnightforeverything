@@ -3,9 +3,12 @@ import { useStore } from '../state/store.jsx'
 import {
   CharactersEditor, MatchupReport, StagesEditor, TechniquesEditor, TagsEditor,
 } from '../components/editors.jsx'
-import { diffGame, computeReception, daysSincePatch, releasePatch } from '../game/patch.js'
+import {
+  diffGame, computeReception, daysSincePatch, releasePatch,
+  schedulePatch, cancelScheduledPatch, scheduledPatchDaysLeft,
+} from '../game/patch.js'
 import { balanceConfidence, observedMatchup, observedPower } from '../game/balance.js'
-import { formatDay } from '../game/constants.js'
+import { formatDay, dateOfAbs } from '../game/constants.js'
 
 const TABS = [
   ['characters', 'Characters'],
@@ -25,8 +28,11 @@ const TABS = [
 export default function GameStudio() {
   const { save, mutate } = useStore()
   const [tab, setTab] = useState('characters')
+  const [shipDays, setShipDays] = useState(7)
   const draft = save.gameDraft
   const displaySave = draft ? { ...save, game: draft } : save
+  const scheduled = save.scheduledPatch
+  const daysLeft = scheduledPatchDaysLeft(save)
 
   // All studio edits write to the draft (created lazily from the live game).
   const update = (fn) => mutate((s) => {
@@ -38,7 +44,9 @@ export default function GameStudio() {
   const observe = (game, a, b) => observedMatchup(save, game, a, b)
   const diff = draft ? diffGame(save.game, draft, observe) : null
   const days = daysSincePatch(save)
-  const preview = diff ? computeReception(diff, days) : null
+  // Forecast reception as of the (scheduled or immediate) release day.
+  const anticipation = scheduled ? Math.min(28, scheduled.absDay - scheduled.announcedAbs) : 0
+  const preview = diff ? computeReception(diff, days, anticipation) : null
   const sandbox = save.settings.mode === 'sandbox'
   const confidence = balanceConfidence(save)
 
@@ -56,13 +64,41 @@ export default function GameStudio() {
           </div>
           {draft ? (
             <div className="col" style={{ alignItems: 'flex-end' }}>
-              <div className="row">
-                <button className="danger" onClick={() => mutate((s) => { s.gameDraft = null })}>Discard draft</button>
-                <button className="primary" onClick={() => mutate((s) => releasePatch(s))}>
-                  🚀 Release Patch v{bumpPreview(save.game.version)}
-                </button>
-              </div>
-              <span className="dim small">{diff.notes.length} change{diff.notes.length === 1 ? '' : 's'} pending</span>
+              {scheduled ? (
+                <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <span className="gold">
+                    📅 v{scheduled.version} ships {formatDay(dateOfAbs(scheduled.absDay).day, dateOfAbs(scheduled.absDay).year)}
+                    {' '}<strong>({daysLeft} day{daysLeft === 1 ? '' : 's'} away)</strong>
+                  </span>
+                  <div className="row">
+                    <button className="small" onClick={() => mutate((s) => cancelScheduledPatch(s))}>Cancel date</button>
+                    <button className="primary small" onClick={() => mutate((s) => releasePatch(s))}>
+                      🚀 Ship early
+                    </button>
+                  </div>
+                  <span className="dim small">the community is counting down — edits until then still make the patch</span>
+                </div>
+              ) : (
+                <>
+                  <div className="row">
+                    <button className="danger" onClick={() => mutate((s) => { s.gameDraft = null; cancelScheduledPatch(s) })}>Discard draft</button>
+                    <button className="primary" onClick={() => mutate((s) => releasePatch(s))}>
+                      🚀 Release Patch v{bumpPreview(save.game.version)}
+                    </button>
+                  </div>
+                  <div className="row" style={{ marginTop: 4 }}>
+                    <span className="dim small">or announce a date:</span>
+                    <input type="number" min={1} max={56} value={shipDays} style={{ width: 58 }}
+                      onChange={(e) => setShipDays(Number(e.target.value))} />
+                    <span className="dim small">days out</span>
+                    <button className="small" title="announce the release date — hype builds until it ships automatically"
+                      onClick={() => mutate((s) => schedulePatch(s, shipDays))}>
+                      📅 Schedule
+                    </button>
+                  </div>
+                  <span className="dim small">{diff.notes.length} change{diff.notes.length === 1 ? '' : 's'} pending</span>
+                </>
+              )}
             </div>
           ) : (
             <span className="dim small">no unreleased changes — edit anything to start a draft</span>

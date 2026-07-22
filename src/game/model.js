@@ -9,6 +9,7 @@ export function newCharacter(partial = {}) {
     id: uid('char'),
     name: 'New Fighter',
     archetype: 'Shoto',
+    spriteKey: null, // pixel-art sprite name (null = auto-pick by archetype)
     difficulty: 5, // 1-10, how hard to learn
     popularity: 5, // 1-10, how likely players gravitate to them
     description: '',
@@ -32,7 +33,7 @@ export function newMove(partial = {}) {
 }
 
 export function newStage(partial = {}) {
-  return { id: uid('stage'), name: 'New Stage', description: '', vibe: 'hype', ...partial }
+  return { id: uid('stage'), name: 'New Stage', description: '', vibe: 'hype', bgKey: null, ...partial }
 }
 
 export function newTechnique(partial = {}) {
@@ -60,6 +61,7 @@ export function newPlayer(partial = {}) {
     gender: 'non-binary',
     description: '',
     catchphrase: '',
+    spriteKey: null, // pixel-art sprite name (null = auto-pick from id)
     createdBy: 'user', // 'user' | 'cpu'
     personal: blankStats(PERSONAL_KEYS),
     social: blankStats(SOCIAL_KEYS),
@@ -152,6 +154,7 @@ export function newSave(partial = {}) {
       matchups: {}, // "charIdA|charIdB" -> win % for the lower-sorted id (50 = even)
     },
     gameDraft: null, // in-progress patch: a clone of game being edited in the Studio
+    scheduledPatch: null, // {absDay, version, announcedAbs} — announced release date for the draft
     patches: [], // released patches: {id, version, day, year, notes, score, reception}
     patchMorale: 0, // -10..10 community feeling about the game's balance/freshness
     lastPatch: { day: 1, year: 1 },
@@ -161,6 +164,7 @@ export function newSave(partial = {}) {
     pendingTierList: null, // {version, dueAbs} — absolute day the next list drops
     arcade: {
       name: 'The Arcade',
+      location: { city: '', state: '', country: '' }, // aesthetic only, for now
       foods: [],
       otherGames: [],
       schedule: [], // newTournamentEntry()
@@ -188,8 +192,53 @@ export function newSave(partial = {}) {
     evoLegacy: {}, // eliteId -> {titles}
     lastDayReport: null, // events from the most recent simulated day
     lastTournament: null, // full bracket/narration of most recent tournament
+    vods: [], // full tournament/EVO records kept for spoiler-free replay, newest first
+    idle: newIdleState(), // idle-mode config + runtime clock
     ...partial,
   }
+}
+
+// Idle mode: auto-advancing config. `running`/`lastTickAt` are the runtime
+// clock; the rest is user-chosen config. See constants.IDLE_SPEEDS.
+export function newIdleState() {
+  return {
+    enabled: false, // is the idle UI active
+    running: false, // is the loop currently ticking / accruing offline time
+    speed: 'fast', // key into IDLE_SPEEDS
+    lastTickAt: null, // wall-clock ms of the last processed step (for catch-up)
+    autoStream: {
+      enabled: true,
+      selector: 'closest', // 'closest' | 'best' | 'first'
+      cadence: 'daily', // 'hourly' | 'daily' | 'weekly' | 'weekends'
+      lastStreamAbsDay: null, // last absolute day an auto-stream fired (cadence gate)
+    },
+    awayReport: null, // {steps, daysPassed, tournaments, headlines, ...} for the welcome-back modal
+  }
+}
+
+const VOD_CAP = 40 // keep replays bounded so saves stay ~100KB, not unbounded
+
+// Record a finished tournament for spoiler-free replay. Pushes the SAME object
+// reference that becomes save.lastTournament, so watching it in the Tournament
+// screen and in the VOD list share one `revealed` cursor.
+export function pushVod(save, record) {
+  if (!save.vods) save.vods = []
+  save.vods.unshift(record)
+  if (save.vods.length > VOD_CAP) save.vods.length = VOD_CAP
+}
+
+// Total non-bye matches in a tournament record — used to tell whether a VOD has
+// been fully watched (so the list can reveal the champion) without spoiling.
+export function tournamentMatchCount(record) {
+  let n = 0
+  for (const round of record.rounds || []) {
+    for (const m of round.matches) if (!m.bye) n += 1
+  }
+  return n
+}
+
+export function isVodWatched(record) {
+  return (record.revealed ?? 0) >= tournamentMatchCount(record)
 }
 
 export function newInnovation(partial = {}) {
@@ -253,6 +302,7 @@ export function migrateSave(save) {
   save.settings.mode ??= 'consequential'
   save.game.version ??= '1.0'
   save.gameDraft ??= null
+  save.scheduledPatch ??= null
   save.patches ??= []
   save.patchMorale ??= 0
   save.lastPatch ??= { day: save.day, year: save.year }
@@ -315,5 +365,9 @@ export function migrateSave(save) {
   if (save.lastTournament && save.lastTournament.revealed == null) {
     save.lastTournament.revealed = 999999
   }
+  save.arcade.location ??= { city: '', state: '', country: '' }
+  save.vods ??= []
+  save.idle ??= newIdleState()
+  save.idle.autoStream ??= newIdleState().autoStream
   return save
 }

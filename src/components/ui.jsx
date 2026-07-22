@@ -103,6 +103,19 @@ export function SpeechLine({ s }) {
   )
 }
 
+// A pixel sprite scaled up crisp. `facing="right"` mirrors it so the two
+// sides of a match face each other.
+export function Portrait({ url, size = 40, alt = '', facing = 'left', className = '' }) {
+  if (!url) return null
+  return (
+    <img
+      className={`pixel-portrait ${className}`}
+      src={url} width={size} height={size} alt={alt} title={alt}
+      style={facing === 'right' ? { transform: 'scaleX(-1)' } : undefined}
+    />
+  )
+}
+
 export function moodFace(mood) {
   if (mood >= 9) return '🤩'
   if (mood >= 7) return '😄'

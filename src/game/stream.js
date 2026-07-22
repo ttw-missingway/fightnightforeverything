@@ -79,7 +79,7 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
   const reactTo = (at, onFinish) => {
     const m = meta[at] || {}
     // React to the specific thing that just happened on this line.
-    if (m.kind === 'game' && m.move && chance(0.5)) {
+    if ((m.kind === 'game' || m.kind === 'beat') && m.move && chance(0.5)) {
       return choice(CHAT_LINES.moveReact).replaceAll('{m}', m.move)
     }
     if (m.kind === 'game' && m.actor && chance(0.35)) {
@@ -188,6 +188,48 @@ export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily')
     winnerName: matchEvent.winnerName,
     context,
   })
+}
+
+/**
+ * Idle auto-streaming: does the cadence allow a stream on this day?
+ * `hourly` and `weekends` gate by day only (the once-per-hour cap is enforced
+ * separately by hour.streamedSetup); `daily`/`weekly` also gate on when the
+ * last auto-stream actually fired. Returns true if a stream may fire now.
+ */
+export function autoStreamAllowed(save, absDay, weekday, cadence) {
+  const last = save.idle?.autoStream?.lastStreamAbsDay ?? null
+  if (cadence === 'weekends') return weekday === 0 || weekday === 6
+  if (cadence === 'daily') return last == null || absDay > last
+  if (cadence === 'weekly') return last == null || absDay - last >= 7
+  return true // hourly
+}
+
+/**
+ * Pick which match of an hour to auto-stream, per the selector. Only considers
+ * live matches not already streamed. Returns the setupIndex, or null if none.
+ */
+export function pickAutoStreamSetup(save, hour, selector) {
+  const candidates = (hour?.events || []).filter((e) => e.type === 'match' && !e.stream)
+  if (!candidates.length) return null
+  let pick
+  if (selector === 'first') {
+    pick = candidates.reduce((a, b) => (a.setupIndex <= b.setupIndex ? a : b))
+  } else if (selector === 'best') {
+    const score = (ev) => {
+      const a = save.players[ev.aId]
+      const b = save.players[ev.bId]
+      if (!a || !b) return -1
+      const level = ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200
+      const personality = (personalityOf(a) + personalityOf(b)) / 2
+      return level + personality
+    }
+    pick = candidates.reduce((a, b) => (score(a) >= score(b) ? a : b))
+  } else {
+    // 'closest': nearest to a 50/50.
+    pick = candidates.reduce((a, b) =>
+      (Math.abs(a.probA - 0.5) <= Math.abs(b.probA - 0.5) ? a : b))
+  }
+  return pick.setupIndex
 }
 
 export function hypeLabel(hype) {
