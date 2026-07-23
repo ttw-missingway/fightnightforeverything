@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useStore, loadIndex, deleteSaveById, exportSaveById, importSaveFromText } from '../state/store.jsx'
+import { useStore, loadIndex, deleteSaveById, exportSaveById, importSaveFromText, resetSaveById } from '../state/store.jsx'
 import { formatDay } from '../game/constants.js'
 
 export default function MainMenu() {
@@ -58,6 +58,17 @@ export default function MainMenu() {
                         e.stopPropagation()
                         exportSaveById(s.id)
                       }}>📤 Export</button>
+                      <button className="small" title="reset this world to how it was first created" onClick={(e) => {
+                        e.stopPropagation()
+                        if (!confirm(`Reset "${s.saveName}" back to how it was first created? All progress — days played, players, tournaments, streams — will be lost. This cannot be undone.`)) return
+                        const res = resetSaveById(s.id)
+                        setSaves(loadIndex())
+                        setNotice(res.ok
+                          ? { kind: 'ok', text: res.hadSnapshot
+                              ? `Reset "${s.saveName}" to its original state. Every setting is back to day one.`
+                              : `Reset "${s.saveName}". This save predates reset snapshots, so its current game design and arcade were kept and only the simulation was wiped.` }
+                          : { kind: 'err', text: res.error })
+                      }}>♻ Reset</button>
                       <button className="small danger" onClick={(e) => {
                         e.stopPropagation()
                         if (confirm(`Delete save "${s.saveName}"? This cannot be undone.`)) {

@@ -4,7 +4,7 @@ import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf } from '../game/constan
 import { runSinglesTournament, runTeamTournament, runEvo } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { generateEvoRoster } from '../game/generate.js'
-import { migrateSave } from '../game/model.js'
+import { migrateSave, newSave } from '../game/model.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
 
@@ -57,6 +57,39 @@ export function loadSaveById(id) {
 export function deleteSaveById(id) {
   localStorage.removeItem(saveKey(id))
   writeIndex(loadIndex().filter((e) => e.id !== id))
+}
+
+/**
+ * Reset a world to how it was when first created. New saves carry an `origin`
+ * snapshot (taken at startSave) that we restore verbatim, keeping only the
+ * save's identity. Saves made before this feature have no snapshot, so we fall
+ * back to a soft reset: keep the current game design + arcade config, wipe all
+ * simulation progress. Returns { ok, hadSnapshot } for the UI to message.
+ */
+export function resetSaveById(id) {
+  const save = loadSaveById(id)
+  if (!save) return { ok: false, error: 'Save not found.' }
+  const hadSnapshot = !!save.origin
+  let world
+  if (hadSnapshot) {
+    world = structuredClone(save.origin)
+    world.origin = structuredClone(save.origin) // keep it so it can be reset again
+  } else {
+    world = newSave({
+      settings: structuredClone(save.settings),
+      game: structuredClone(save.game),
+      arcade: structuredClone(save.arcade),
+      evoRoster: structuredClone(save.evoRoster || []),
+    })
+    if (save.stream?.channelName) world.stream.channelName = save.stream.channelName
+    world.origin = null // still no true snapshot; future resets stay soft
+  }
+  // Preserve identity regardless of which path we took.
+  world.id = save.id
+  world.saveName = save.saveName
+  world.createdAt = save.createdAt
+  persistSave(migrateSave(world))
+  return { ok: true, hadSnapshot }
 }
 
 // ---------- Sharing worlds ----------
@@ -258,6 +291,11 @@ export function StoreProvider({ children }) {
     const next = structuredClone(draft)
     computeMatchups(next.game) // the designed movesets decide the chart
     if (!next.evoRoster.length) next.evoRoster = generateEvoRoster(next)
+    // Snapshot the freshly-created world so it can be reset later. Stored
+    // without its own `origin` field to avoid nesting snapshots.
+    const originSnap = structuredClone(next)
+    delete originSnap.origin
+    next.origin = originSnap
     persistSave(next)
     setSave(next)
     setScreen({ name: 'arcade' })

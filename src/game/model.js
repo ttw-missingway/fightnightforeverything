@@ -194,6 +194,7 @@ export function newSave(partial = {}) {
     lastTournament: null, // full bracket/narration of most recent tournament
     vods: [], // full tournament/EVO records kept for spoiler-free replay, newest first
     idle: newIdleState(), // idle-mode config + runtime clock
+    origin: null, // snapshot of the world at creation, for "reset to first created"
     ...partial,
   }
 }
