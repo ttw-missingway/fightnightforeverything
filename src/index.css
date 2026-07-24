@@ -258,6 +258,41 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 .zonecard .zone-icon { font-size: 44px; line-height: 1; }
 .zonecard h3 { font-size: 20px; }
 
+/* The rumor mill — the concession stand's ranked gossip readout. */
+.rumor-mill { border-color: var(--gold); }
+.rumor-mill > .row + .rumor-list, .rumor-mill > h3 + .rumor-list { margin-top: 8px; }
+.rumor-list { display: flex; flex-direction: column; gap: 2px; }
+.rumor {
+  display: grid;
+  grid-template-columns: 22px 1fr auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 8px;
+  border-left: 3px solid var(--gold);
+  border-radius: 6px;
+  background: rgba(255, 206, 79, 0.05);
+}
+.rumor.clickable { cursor: pointer; }
+.rumor.clickable:hover { background: rgba(255, 206, 79, 0.12); }
+.rumor-icon { font-size: 15px; line-height: 1.35; }
+.rumor-text { font-size: 14px; line-height: 1.35; }
+.rumor-heat {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+  white-space: nowrap; font-weight: 700; align-self: center;
+}
+.rumor-dismiss {
+  align-self: center; padding: 0; width: 20px; height: 20px; line-height: 1;
+  font-size: 12px; border-radius: 5px; color: var(--dim);
+  background: transparent; border: 1px solid transparent; cursor: pointer;
+  opacity: 0.5; transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+.rumor:hover .rumor-dismiss { opacity: 1; }
+.rumor-dismiss:hover { color: var(--red); border-color: var(--red); opacity: 1; }
+@media (max-width: 800px) {
+  .rumor { grid-template-columns: 20px 1fr auto; }
+  .rumor-heat { grid-column: 2; margin-top: 2px; }
+}
+
 .rollchip {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 34px; height: 34px; border-radius: 8px; margin: 3px;

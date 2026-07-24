@@ -7,12 +7,53 @@
 
 import { clamp, rand, randInt, choice, chance } from './util.js'
 import { CHAT_NAME_PARTS, CHAT_LINES } from './names.js'
+import { difficultyOf } from './constants.js'
 import { upsetSeverityOf } from './match.js'
+import { bumpPassion } from './career.js'
 import { econLog } from './economy.js'
 
-// How famous an arcade player is, 0..1. Respect and glory are the resume.
+// How famous an arcade player is, 0..1. Respect and glory are the resume; a
+// growing public profile (popularity, earned from being featured) adds to it —
+// so pointing the camera at someone genuinely makes them a bigger draw.
 export function personalityOf(player) {
-  return clamp((player.respect + player.glory * 1.2) / 100, 0, 1)
+  return clamp((player.respect + player.glory * 1.2 + (player.popularity || 0) * 0.4) / 100, 0, 1)
+}
+
+// Being featured under the lights is how a player becomes battle-tested. Every
+// streamed set builds BELIEF (the earned stage composure that raises their
+// skill ceiling and, crucially, is the antidote to the EVO choke) and
+// POPULARITY (a public profile that keeps their passion topped up). Bigger
+// crowds and bigger stages give more — which is what makes deep tournament runs
+// and EVO worth chasing, and makes WHO you point the daily camera at a real
+// decision: the hypest match grows your channel, but your prospect's match is
+// what forges a champion.
+const STAGE_BASE = { daily: 0.6, moneymatch: 1.6, tournament: 1.0, evo: 4 }
+// Each kind of stage only takes belief so far. Grinding local weeklies makes you
+// SEASONED (~45) but not a star; the leap to champion-level nerve (70+) comes
+// only from the biggest stages — EVO, money matches — and, above all, from being
+// deliberately put in the spotlight day after day (the daily stream you choose).
+// This is what keeps the choke real on autopilot: a scene that just competes
+// plateaus its belief and still folds at EVO. Only cultivation forges a champion.
+const STAGE_CAP = { daily: 100, moneymatch: 55, tournament: 45, evo: 100 }
+
+export function applyStageReps(save, players, stream, context = 'daily', weight = 1) {
+  const viewers = stream?.viewers || 0
+  const base = (STAGE_BASE[context] ?? 0.5) * weight
+  const cap = STAGE_CAP[context] ?? 100
+  const viewerFactor = clamp(0.4 + viewers / 120, 0.4, 2.5)
+  for (const p of players) {
+    if (!p || p.kind === 'elite') continue // elites are already made
+    const ref = p.ref || p // accept a raw player or a tournament entrant
+    if (!ref || ref.createdBy == null) continue
+    // Belief asymptotes toward this stage's cap — the first reps matter most,
+    // and routine stages can't carry you past their ceiling.
+    const bAim = Math.max(0, cap - (ref.belief ?? 0)) / 100
+    ref.belief = clamp((ref.belief ?? 0) + base * viewerFactor * bAim, 0, 100)
+    // Popularity climbs with eyeballs (fades slowly without them, in endDay).
+    ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * (1 - (ref.popularity ?? 0) / 120), 0, 100)
+    // Recognition rekindles the fire — being seen is why a lot of people play.
+    bumpPassion(ref, Math.min(2.5, 0.25 + viewers / 100))
+  }
 }
 
 export function elitePersonality(elite) {
@@ -149,16 +190,32 @@ export function buildStream(save, {
   // Even a zero-viewer stream of a great match seeds a few followers — the
   // clips get around. Growth is capped per stream and saturates as the
   // channel approaches local-celebrity size, so it can't compound forever.
+  // Difficulty throttles (or pads) how fast popularity comes.
+  const popMult = save.settings?.mode === 'sandbox' ? 1 : difficultyOf(save).popularityMult
   const saturation = Math.max(0.05, 1 - st.followers / 20000)
-  st.followers += Math.round(Math.min(viewers * 0.05, 25) * saturation)
-    + (quality > 55 ? 2 : quality > 35 ? 1 : 0)
+  const growth = (Math.min(viewers * 0.05, 25) * saturation
+    + (quality > 55 ? 2 : quality > 35 ? 1 : 0)) * popMult
+  // Overexposure: each daily stream builds audience fatigue (it decays every
+  // night in endDay). Once you're going live constantly, a genuinely WEAK
+  // stream sheds followers who tuned in expecting something worth their time.
+  // A normal cadence never trips this — fatigue only bites past a couple of
+  // streams stacked up — and a good match always nets growth, so the play is
+  // still to stream OFTEN, just not to broadcast garbage on a loop.
+  let churn = 0
+  if (context === 'daily') {
+    st.fatigue = (st.fatigue || 0) + 1
+    const overexposed = Math.max(0, st.fatigue - 2)
+    const weakness = clamp((50 - quality) / 40, 0, 1)
+    churn = overexposed * weakness * 3
+  }
+  st.followers = Math.max(0, st.followers + Math.round(growth - churn))
   // Hand-picked daily streams move the needle most — that's the curation
   // game. Tournament coverage grinds slowly; EVO is always a boost. Growth
   // has diminishing returns as the channel gets big.
   let gain = context === 'evo' ? 3 + quality / 50
     : context === 'tournament' ? (quality - 45) / 55
     : (quality - 32) / 14
-  if (gain > 0) gain *= 1 - st.hype / 120
+  if (gain > 0) gain *= (1 - st.hype / 120) * popMult
   st.hype = clamp(st.hype + gain, 0, 100)
 
   // Ad revenue: pennies per viewer, capped — this is a community arcade
@@ -176,7 +233,7 @@ export function buildStream(save, {
 export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily') {
   const level = ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200
   const personality = (personalityOf(a) + personalityOf(b)) / 2
-  return buildStream(save, {
+  const stream = buildStream(save, {
     level,
     personality,
     probA: matchEvent.probA,
@@ -188,6 +245,15 @@ export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily')
     winnerName: matchEvent.winnerName,
     context,
   })
+  // Getting your set picked for the channel is a genuine thrill — the two
+  // featured players get a mood lift, bigger when the broadcast actually
+  // pulls a crowd.
+  const lift = 0.4 + Math.min(0.6, (stream.viewers || 0) / 200)
+  a.mood = clamp(a.mood + lift, 0, 10)
+  b.mood = clamp(b.mood + lift, 0, 10)
+  // ...and, more importantly, they get stage reps: belief, popularity, passion.
+  applyStageReps(save, [a, b], stream, context)
+  return stream
 }
 
 /**

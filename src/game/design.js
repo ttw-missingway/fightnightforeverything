@@ -208,6 +208,39 @@ export function comboRoute(char, combo) {
     .join(' ▸ ')
 }
 
+// One-click balance shortcuts: shove a whole kit up or down the power curve
+// without hand-editing every frame. A blunt instrument by design — it scales
+// damage/chip, startup/recovery, block advantage and meter cost together and
+// coherently, so the derived ratings (and the matchup chart) actually move.
+// 'light' is a nudge; 'heavy' is a sledgehammer. Stackable for bigger swings.
+const POWER_STEPS = {
+  light: { dmg: 0.10, frame: 0.08, block: 1, meter: 0.08 },
+  heavy: { dmg: 0.24, frame: 0.18, block: 3, meter: 0.20 },
+}
+
+/**
+ * Adjust a character's whole moveset. direction: 'buff' | 'nerf';
+ * magnitude: 'light' | 'heavy'. Mutates and returns the char. Combos read the
+ * moves' damage, so their scaling follows automatically.
+ */
+export function adjustCharacterPower(char, direction = 'buff', magnitude = 'light') {
+  const step = POWER_STEPS[magnitude] || POWER_STEPS.light
+  const sign = direction === 'nerf' ? -1 : 1 // +1 stronger, -1 weaker
+  for (const m of char.moves || []) {
+    // Damage & chip: straight scale — more hurt is more power.
+    if (m.damage) m.damage = Math.max(0, Math.round(m.damage * (1 + sign * step.dmg)))
+    if (m.chip) m.chip = Math.max(0, Math.round(m.chip * (1 + sign * step.dmg)))
+    // Startup & recovery: LOWER is stronger, so a buff shrinks them.
+    if (m.startup != null) m.startup = Math.max(1, Math.round(m.startup * (1 - sign * step.frame)))
+    if (m.recovery != null) m.recovery = Math.max(3, Math.round(m.recovery * (1 - sign * step.frame)))
+    // On block: HIGHER (more plus) is stronger — additive so signed values behave.
+    if (m.onBlock != null) m.onBlock += sign * step.block
+    // Meter cost: CHEAPER supers/installs are stronger — a buff lowers the cost.
+    if (m.meterCost) m.meterCost = Math.min(200, Math.max(25, Math.round(m.meterCost * (1 - sign * step.meter))))
+  }
+  return char
+}
+
 /**
  * Generate a plausible route: starter (light/melee) into damage, optionally
  * ending in the super. Named from the pool.

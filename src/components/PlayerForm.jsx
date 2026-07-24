@@ -1,18 +1,68 @@
 import { useState } from 'react'
 import { Field, NumField, PillPicker } from './ui.jsx'
-import { PERSONAL_STATS, SOCIAL_STATS, GENDERS, STAT_PRESETS } from '../game/constants.js'
-import { rollStat } from '../game/util.js'
+import { PERSONAL_STATS, SOCIAL_STATS, GENDERS, STAT_PRESETS, difficultyOf, TASTE_CHANGE_COST } from '../game/constants.js'
+import { rollStat, clamp } from '../game/util.js'
+import { FOODS, OTHER_GAMES } from '../game/names.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
 import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHES, VOICE_QUIRKS } from '../game/dialogue.js'
 import { SpritePicker } from './SpritePicker.jsx'
 import { PLAYER_SPRITE_CATALOG, playerArtFor } from './art.js'
 
+const statSum = (player) =>
+  PERSONAL_STATS.reduce((s, [k]) => s + (player.personal[k] || 0), 0) +
+  SOCIAL_STATS.reduce((s, [k]) => s + (player.social[k] || 0), 0)
+
+// How many of a player's food/arcade tastes differ from their free random
+// roll (added or removed). Each difference costs stat points to keep.
+const symDiff = (a = [], b = []) =>
+  a.filter((x) => !b.includes(x)).length + b.filter((x) => !a.includes(x)).length
+const tasteEdits = (player) => {
+  const roll = player.tasteRoll || { foods: player.foods || [], otherGames: player.otherGames || [] }
+  return symDiff(player.foods, roll.foods) + symDiff(player.otherGames, roll.otherGames)
+}
+
+// Clamp a stat spread to the per-stat cap, then shave the highest stats
+// until the total fits the budget. Used when applying presets in
+// consequential mode — presets work, they're just capped. (Also used by
+// RosterEditor to make freshly added players legal.)
+export function capAndFit(personal, social, cap, budget) {
+  const p = { ...personal }
+  const so = { ...social }
+  for (const [k] of PERSONAL_STATS) p[k] = clamp(p[k] || 5, 1, cap)
+  for (const [k] of SOCIAL_STATS) so[k] = clamp(so[k] || 5, 1, cap)
+  if (budget != null) {
+    const total = () =>
+      PERSONAL_STATS.reduce((s, [k]) => s + p[k], 0) + SOCIAL_STATS.reduce((s, [k]) => s + so[k], 0)
+    let guard = 500
+    while (total() > budget && guard-- > 0) {
+      let bestGroup = null
+      let bestKey = null
+      let bestVal = 1
+      for (const [k] of PERSONAL_STATS) if (p[k] > bestVal) { bestVal = p[k]; bestGroup = p; bestKey = k }
+      for (const [k] of SOCIAL_STATS) if (so[k] > bestVal) { bestVal = so[k]; bestGroup = so; bestKey = k }
+      if (!bestGroup) break
+      bestGroup[bestKey] -= 1
+    }
+  }
+  return { personal: p, social: so }
+}
+
 /**
  * Full player editor. `patch(fn)` applies fn to the live player object inside
  * the draft/save; works for both the setup wizard and mid-save editing.
+ *
+ * Consequential mode is a point-buy: each stat is capped by the difficulty,
+ * and the total is bounded by the difficulty's stat points plus any banked
+ * prestige from past runs.
  */
 export default function PlayerForm({ save, player, patch }) {
   const [statMode, setStatMode] = useState('direct') // 'direct' | 'roll'
+  const consequential = save.settings.mode !== 'sandbox'
+  const diff = difficultyOf(save)
+  const statCap = consequential ? diff.statCap : 10
+  const budget = consequential ? diff.statPoints + (save.prestige?.points || 0) : null
+  const tasteCost = consequential ? tasteEdits(player) * TASTE_CHANGE_COST : 0
+  const spent = statSum(player) + tasteCost
 
   return (
     <div>
@@ -105,8 +155,17 @@ export default function PlayerForm({ save, player, patch }) {
         <div className="card sub">
           <div className="row spread">
             <h4>Play Style</h4>
-            <button className="small" onClick={() => patch((p) => Object.assign(p, randomPreferences(save)))}>
-              🎲 Randomize preferences
+            <button className="small" onClick={() => patch((p) => {
+              Object.assign(p, randomPreferences(save))
+              // The mulligan: your first re-roll rebases the free taste roll, so
+              // it costs nothing. After that, re-rolling costs points like any
+              // change (the new tastes now differ from the locked-in baseline).
+              if (consequential && !p.tasteRerolled) {
+                p.tasteRoll = { foods: [...p.foods], otherGames: [...p.otherGames] }
+                p.tasteRerolled = true
+              }
+            })}>
+              🎲 Randomize preferences{consequential ? (player.tasteRerolled ? ' (costs points)' : ' — free mulligan') : ''}
             </button>
           </div>
           <Field label="Main character">
@@ -145,14 +204,23 @@ export default function PlayerForm({ save, player, patch }) {
                 p.attractedTags = p.attractedTags.filter((x) => x !== t)
               })} />
           </Field>
+          {consequential && (
+            <p className="dim small" style={{ margin: '4px 0' }}>
+              🎲 Tastes below came from a free random roll. Each change from that roll (adding or removing)
+              costs {TASTE_CHANGE_COST} stat points{tasteCost > 0 ? ` — ${tasteCost} spent so far` : ''}.
+              {!player.tasteRerolled
+                ? ' You get one free re-roll (mulligan) with Randomize preferences above.'
+                : ' Your free mulligan has been used.'}
+            </p>
+          )}
           <Field label="Other games they like">
-            <PillPicker options={save.arcade.otherGames} selected={player.otherGames}
+            <PillPicker options={OTHER_GAMES} selected={player.otherGames}
               onToggle={(g) => patch((p) => {
                 p.otherGames = p.otherGames.includes(g) ? p.otherGames.filter((x) => x !== g) : [...p.otherGames, g]
               })} />
           </Field>
           <Field label="Foods they like">
-            <PillPicker options={save.arcade.foods} selected={player.foods}
+            <PillPicker options={FOODS} selected={player.foods}
               onToggle={(f) => patch((p) => {
                 p.foods = p.foods.includes(f) ? p.foods.filter((x) => x !== f) : [...p.foods, f]
               })} />
@@ -162,25 +230,43 @@ export default function PlayerForm({ save, player, patch }) {
 
       <div className="card sub">
         <div className="row spread">
-          <h4>Stats</h4>
+          <h4>
+            Stats
+            {budget != null && (
+              <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
+                {spent}/{budget} points · cap {statCap}/stat
+                {tasteCost > 0 && <span> · incl. {tasteCost} for taste changes</span>}
+                {(save.prestige?.points || 0) > 0 && <span className="gold"> · +{save.prestige.points} prestige included</span>}
+              </span>
+            )}
+          </h4>
           <div className="tabs" style={{ margin: 0 }}>
             <button className={`small ${statMode === 'direct' ? 'active' : ''}`} onClick={() => setStatMode('direct')}>Edit directly</button>
-            <button className={`small ${statMode === 'roll' ? 'active' : ''}`} onClick={() => setStatMode('roll')}>🎲 Roll & allocate</button>
+            {!consequential && (
+              <button className={`small ${statMode === 'roll' ? 'active' : ''}`} onClick={() => setStatMode('roll')}>🎲 Roll & allocate</button>
+            )}
           </div>
         </div>
+        {budget != null && spent > budget && (
+          <p className="red small">Over budget — lower some stats before this player is tournament-legal.</p>
+        )}
         <div className="row" style={{ marginBottom: 8 }}>
           <span className="dim small">preset:</span>
           {Object.keys(STAT_PRESETS).map((name) => (
-            <span key={name} className="pill clickable" title="apply this stat spread"
+            <span key={name} className="pill clickable"
+              title={consequential ? 'apply this spread, capped to your stat limits' : 'apply this stat spread'}
               onClick={() => patch((p) => {
-                p.personal = { ...STAT_PRESETS[name].personal }
-                p.social = { ...STAT_PRESETS[name].social }
+                const fitted = capAndFit(STAT_PRESETS[name].personal, STAT_PRESETS[name].social, statCap, budget)
+                p.personal = fitted.personal
+                p.social = fitted.social
               })}>
               {name}
             </span>
           ))}
         </div>
-        {statMode === 'direct' ? <DirectStats player={player} patch={patch} /> : <RollAllocate player={player} patch={patch} />}
+        {statMode === 'direct' || consequential
+          ? <DirectStats player={player} patch={patch} statCap={statCap} budget={budget} spent={spent} />
+          : <RollAllocate player={player} patch={patch} />}
       </div>
 
       <div className="card sub">
@@ -211,12 +297,18 @@ export default function PlayerForm({ save, player, patch }) {
   )
 }
 
-function DirectStats({ player, patch }) {
+function DirectStats({ player, patch, statCap = 10, budget = null, spent = 0 }) {
   const statRow = (group, [key, desc]) => (
     <div className="row" key={key} title={desc} style={{ marginBottom: 4 }}>
       <span className="small" style={{ width: 120, color: 'var(--dim)' }}>{key}</span>
       <input type="range" min={1} max={10} value={player[group][key]} style={{ flex: 1 }}
-        onChange={(e) => patch((p) => { p[group][key] = Number(e.target.value) })} />
+        onChange={(e) => patch((p) => {
+          const cur = p[group][key]
+          let next = Math.min(Number(e.target.value), statCap)
+          // Point-buy: raising a stat can't blow past the remaining budget.
+          if (budget != null && next > cur) next = Math.min(next, cur + Math.max(0, budget - spent))
+          p[group][key] = Math.max(1, next)
+        })} />
       <span style={{ width: 22, textAlign: 'right' }}>{player[group][key]}</span>
     </div>
   )

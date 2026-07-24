@@ -140,18 +140,39 @@ export function balanceConfidence(save) {
  * The matchup number the DATA currently suggests: truth plus an error that
  * is stable within a patch (seeded by pair + version) and shrinks as sets
  * are played. At zero data the error can be ±9 points.
+ *
+ * `confOverride` lets the Studio force a confidence level — unreleased
+ * draft changes have ZERO play data no matter how settled the live build
+ * is, so their projections use confidence 0.
  */
-export function observedMatchup(save, game, a, b) {
+export function observedMatchup(save, game, a, b, confOverride = null) {
   const truth = computeMatchup(a, b)
-  const conf = balanceConfidence(save)
+  const conf = confOverride ?? balanceConfidence(save)
   const noise = (hash01(`${a.id}|${b.id}|${game.version}:obs`) - 0.5) * 2 // -1..1
   return clamp(Math.round(truth + noise * (1 - conf) * 9), 10, 90)
 }
 
-export function observedPower(save, game, char) {
+export function observedPower(save, game, char, confOverride = null) {
   const others = game.characters.filter((c) => c.id !== char.id)
   if (!others.length) return 50
-  return others.reduce((s, o) => s + observedMatchup(save, game, char, o), 0) / others.length
+  return others.reduce((s, o) => s + observedMatchup(save, game, char, o, confOverride), 0) / others.length
+}
+
+/**
+ * Which characters in the draft carry design changes vs the live game —
+ * i.e. whose numbers are pre-release projections rather than observed data.
+ */
+export function draftChangedCharIds(liveGame, draft) {
+  const changed = new Set()
+  if (!draft) return changed
+  const liveById = new Map(liveGame.characters.map((c) => [c.id, c]))
+  for (const c of draft.characters) {
+    const old = liveById.get(c.id)
+    if (!old || JSON.stringify([c.moves, c.combos]) !== JSON.stringify([old.moves, old.combos])) {
+      changed.add(c.id)
+    }
+  }
+  return changed
 }
 
 // ---------- Community tier lists ----------

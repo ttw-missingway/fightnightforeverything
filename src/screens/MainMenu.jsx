@@ -58,17 +58,15 @@ export default function MainMenu() {
                         e.stopPropagation()
                         exportSaveById(s.id)
                       }}>📤 Export</button>
-                      <button className="small" title="reset this world to how it was first created" onClick={(e) => {
+                      <button className="small" title="start a new run: keep the game design and roster, wipe all progress, archive this run's history" onClick={(e) => {
                         e.stopPropagation()
-                        if (!confirm(`Reset "${s.saveName}" back to how it was first created? All progress — days played, players, tournaments, streams — will be lost. This cannot be undone.`)) return
+                        if (!confirm(`Start a new run of "${s.saveName}"? The game design and player roster stay (progress wiped); patches, teams, money, and the arcade's stock reset. This run's chronicle, hall of fame, and VODs move to the archives, and its fame becomes prestige points. This cannot be undone.`)) return
                         const res = resetSaveById(s.id)
                         setSaves(loadIndex())
                         setNotice(res.ok
-                          ? { kind: 'ok', text: res.hadSnapshot
-                              ? `Reset "${s.saveName}" to its original state. Every setting is back to day one.`
-                              : `Reset "${s.saveName}". This save predates reset snapshots, so its current game design and arcade were kept and only the simulation was wiped.` }
+                          ? { kind: 'ok', text: `New run started for "${s.saveName}" — +${res.prestigeGain} prestige earned (${res.points} total to spend on player creation).` }
                           : { kind: 'err', text: res.error })
-                      }}>♻ Reset</button>
+                      }}>♻ New run</button>
                       <button className="small danger" onClick={(e) => {
                         e.stopPropagation()
                         if (confirm(`Delete save "${s.saveName}"? This cannot be undone.`)) {

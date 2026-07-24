@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatLocation } from '../game/constants.js'
-import { SettingsEditor, ArcadeManagement, ScheduleEditor } from '../components/editors.jsx'
+import { SettingsEditor, ArcadeManagement, ScheduleEditor, StaffManagement } from '../components/editors.jsx'
 
 const TABS = [
   ['arcade', 'Arcade'],
+  ['staff', 'Staff'],
   ['schedule', 'Schedule'],
   ['settings', 'Settings'],
 ]
@@ -28,6 +29,7 @@ export default function Manage() {
         ))}
       </div>
       {tab === 'arcade' && <ArcadeManagement save={save} update={mutate} />}
+      {tab === 'staff' && <StaffManagement save={save} update={mutate} />}
       {tab === 'schedule' && <ScheduleEditor save={save} update={mutate} />}
       {tab === 'settings' && <SettingsEditor save={save} update={mutate} />}
     </div>

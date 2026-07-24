@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { TIER_ORDER } from '../game/balance.js'
 import { formatDay, DAYS_PER_YEAR } from '../game/constants.js'
+import { Portrait } from '../components/ui.jsx'
+import { charArt } from '../components/art.js'
 
 // Classic tiermaker colors: black text on candy rows.
 const TIER_COLORS = {
@@ -65,6 +67,7 @@ export default function TierList() {
               <div className="tiercells">
                 {chars.map((c) => (
                   <div className="tiercard" key={c.id} title={`${c.name} — ${c.archetype}`}>
+                    <Portrait url={charArt(c)} size={40} alt={c.name} className="hud-char" />
                     <span className="tiercard-name">{c.name}</span>
                     <span className="tiercard-arch">{c.archetype}</span>
                   </div>

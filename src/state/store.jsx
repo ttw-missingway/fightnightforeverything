@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game/sim.js'
-import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf } from '../game/constants.js'
-import { runSinglesTournament, runTeamTournament, runEvo } from '../game/tournament.js'
+import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyOf } from '../game/constants.js'
+import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
-import { generateEvoRoster } from '../game/generate.js'
-import { migrateSave, newSave } from '../game/model.js'
+import { generateEvoRoster, populateRoster } from '../game/generate.js'
+import { migrateSave, newSave, newPlayer } from '../game/model.js'
+import { prestigeEarned, startingBudget, arcadeBuildCost } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
 
@@ -29,9 +30,34 @@ function writeIndex(index) {
   localStorage.setItem(INDEX_KEY, JSON.stringify(index))
 }
 
+function isQuotaExceeded(err) {
+  return (
+    err instanceof DOMException &&
+    // 22 = QuotaExceededError (Chrome/Safari); 1014 = NS_ERROR_DOM_QUOTA_REACHED (Firefox).
+    (err.code === 22 || err.code === 1014 ||
+      err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')
+  )
+}
+
+// Last-resort weight shedding when a write hits the storage quota: drop the
+// oldest replay data (archived runs first, then the current run's oldest VODs).
+// Replays are by far the heaviest payload, so this reclaims the most per drop.
+// Returns true if something was removed and a retry is worth attempting.
+function shedSaveWeight(save) {
+  const archived = (save.archives || []).find((a) => (a.vods || []).length)
+  if (archived) {
+    archived.vods.pop()
+    return true
+  }
+  if ((save.vods || []).length > 1) {
+    save.vods.pop()
+    return true
+  }
+  return false
+}
+
 export function persistSave(save) {
   save.updatedAt = Date.now()
-  localStorage.setItem(saveKey(save.id), JSON.stringify(save))
   const index = loadIndex().filter((e) => e.id !== save.id)
   index.unshift({
     id: save.id,
@@ -42,7 +68,23 @@ export function persistSave(save) {
     year: save.year,
     updatedAt: save.updatedAt,
   })
-  writeIndex(index)
+  // A too-large save must never crash the game loop. On a quota error, shed the
+  // heaviest data (old replays) and retry until it fits or there's nothing left
+  // to drop; only then give up quietly with a warning.
+  for (;;) {
+    try {
+      localStorage.setItem(saveKey(save.id), JSON.stringify(save))
+      writeIndex(index)
+      return
+    } catch (err) {
+      if (isQuotaExceeded(err) && shedSaveWeight(save)) continue
+      if (isQuotaExceeded(err)) {
+        console.warn('Save exceeds local storage even after trimming replays — this step may not persist.', err)
+        return
+      }
+      throw err
+    }
+  }
 }
 
 export function loadSaveById(id) {
@@ -59,37 +101,89 @@ export function deleteSaveById(id) {
   writeIndex(loadIndex().filter((e) => e.id !== id))
 }
 
+// A player's identity, stats, and tastes survive a reset; their PROGRESS
+// (elo, skills, relationships, records, teams) starts over. A main pinned
+// at creation stays pinned; anything they settled into through play resets.
+function resetPlayerForNewRun(p) {
+  return newPlayer({
+    id: p.id,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    alias: p.alias,
+    gender: p.gender,
+    description: p.description,
+    catchphrase: p.catchphrase,
+    spriteKey: p.spriteKey || null,
+    createdBy: p.createdBy,
+    personal: structuredClone(p.personal),
+    social: structuredClone(p.social), // includes income
+    voice: p.voice ? structuredClone(p.voice) : null,
+    defaultMood: p.defaultMood,
+    mood: p.defaultMood,
+    mainCharId: p.lockedMain ? p.mainCharId : null,
+    lockedMain: p.lockedMain,
+    settledMain: !!p.lockedMain,
+    exploredChars: p.lockedMain && p.mainCharId ? [p.mainCharId] : [],
+    attractedTags: [...(p.attractedTags || [])],
+    repelledTags: [...(p.repelledTags || [])],
+    playerTags: [...(p.playerTags || [])],
+    attractedPlayerTags: [...(p.attractedPlayerTags || [])],
+    repelledPlayerTags: [...(p.repelledPlayerTags || [])],
+    otherGames: [...(p.otherGames || [])],
+    foods: [...(p.foods || [])],
+  })
+}
+
 /**
- * Reset a world to how it was when first created. New saves carry an `origin`
- * snapshot (taken at startSave) that we restore verbatim, keeping only the
- * save's identity. Saves made before this feature have no snapshot, so we fall
- * back to a soft reset: keep the current game design + arcade config, wipe all
- * simulation progress. Returns { ok, hadSnapshot } for the UI to message.
+ * Start the world over. The DESIGN survives — characters, stages, and the
+ * player roster (identities and stats, progress wiped). Everything you
+ * earned in play resets: patches, arcade games and food, teams, streams,
+ * money. The run's history is preserved in an archive (chronicle, hall of
+ * fame, VODs, innovations), and the run's fame converts to prestige points
+ * for player creation. Returns { ok, prestigeGain, points }.
  */
 export function resetSaveById(id) {
   const save = loadSaveById(id)
   if (!save) return { ok: false, error: 'Save not found.' }
-  const hadSnapshot = !!save.origin
-  let world
-  if (hadSnapshot) {
-    world = structuredClone(save.origin)
-    world.origin = structuredClone(save.origin) // keep it so it can be reset again
-  } else {
-    world = newSave({
-      settings: structuredClone(save.settings),
-      game: structuredClone(save.game),
-      arcade: structuredClone(save.arcade),
-      evoRoster: structuredClone(save.evoRoster || []),
-    })
-    if (save.stream?.channelName) world.stream.channelName = save.stream.channelName
-    world.origin = null // still no true snapshot; future resets stay soft
+  const prestigeGain = prestigeEarned(save)
+  const runNumber = (save.prestige?.runs || 0) + 1
+  const archive = {
+    run: runNumber,
+    endedDateLabel: formatDay(save.day, save.year),
+    chronicle: save.chronicle || [],
+    hallOfFame: save.hallOfFame || [],
+    vods: (save.vods || []).slice(0, 12), // bounded — archives shouldn't balloon the save
+    innovations: save.innovations || [],
   }
-  // Preserve identity regardless of which path we took.
+
+  const game = structuredClone(save.game)
+  game.version = '1.0' // patches reset with the run
+  const arcade = structuredClone(save.arcade)
+  arcade.foods = [] // bought things don't carry over
+  arcade.otherGames = []
+  arcade.cleanliness = 80
+  arcade.closedUntilAbs = null
+
+  const world = newSave({
+    settings: structuredClone(save.settings),
+    game,
+    arcade,
+    evoRoster: structuredClone(save.evoRoster || []),
+    prestige: { points: (save.prestige?.points || 0) + prestigeGain, runs: runNumber },
+    archives: [...(save.archives || []), archive].slice(-5),
+  })
+  if (save.stream?.channelName) world.stream.channelName = save.stream.channelName
+  if (world.settings.mode !== 'sandbox') {
+    world.economy.money = difficultyOf(world).startingMoney
+  }
+  for (const p of Object.values(save.players)) {
+    world.players[p.id] = resetPlayerForNewRun(p)
+  }
   world.id = save.id
   world.saveName = save.saveName
   world.createdAt = save.createdAt
   persistSave(migrateSave(world))
-  return { ok: true, hadSnapshot }
+  return { ok: true, prestigeGain, points: world.prestige.points }
 }
 
 // ---------- Sharing worlds ----------
@@ -151,7 +245,29 @@ export function importSaveFromText(text) {
  * tournament/EVO day — run the whole event. Callers decide what to do with
  * the outcome (navigate, keep idling, etc).
  */
+// A tournament caught mid-broadcast (idle mode reveals it match by match)
+// needs finalizing before the day can move on: reveal whatever's left at once
+// and tick the calendar. Manual advance, skip-day, and offline catch-up all
+// route through here so an in-progress broadcast is never re-simulated.
+function finalizeTournamentInProgress(next) {
+  const id = next.tournamentInProgress
+  if (!id) return null
+  const rec = next.lastTournament && next.lastTournament.id === id ? next.lastTournament : null
+  if (rec) {
+    rec.revealed = 999999 // show the rest of the bracket instantly
+    for (const v of next.vods || []) if (v.id === rec.id) v.revealed = 999999
+  }
+  next.tournamentInProgress = null
+  advanceDay(next)
+  return rec
+}
+
 function stepSave(next) {
+  // An idle broadcast left half-revealed: finish it and move on.
+  if (next.tournamentInProgress) {
+    const rec = finalizeTournamentInProgress(next)
+    return { type: 'tournament', record: rec }
+  }
   if (!next.dayInProgress) {
     const today = whatHappensToday(next)
     if (today === 'evo' || today) {
@@ -177,6 +293,53 @@ function stepSave(next) {
   }
   endDay(next) // produces the daily recap and ticks the calendar
   return { type: 'recap' }
+}
+
+/**
+ * One idle step while the player is watching the arcade. Identical to stepSave
+ * on normal days, but a tournament/EVO day plays out MATCH BY MATCH at the idle
+ * tick rate instead of resolving in a single step: the first tick sims the whole
+ * event (deterministic) and shows the opening match; each later tick reveals one
+ * more; a final tick (once the bracket is fully shown) ticks the calendar.
+ */
+function idleArcadeStep(next) {
+  // Mid-broadcast: reveal one more match, or finalize once it's all shown.
+  if (next.tournamentInProgress) {
+    const rec = next.lastTournament && next.lastTournament.id === next.tournamentInProgress
+      ? next.lastTournament : null
+    if (!rec) { next.tournamentInProgress = null; return stepSave(next) }
+    if (revealState(rec).done) {
+      // The whole bracket has been on screen for a tick — now move the day on.
+      next.tournamentInProgress = null
+      advanceDay(next)
+      return { type: 'tournament', record: rec }
+    }
+    revealNextMatch(rec)
+    for (const v of next.vods || []) if (v.id === rec.id) v.revealed = rec.revealed
+    return { type: 'tournament-reveal', record: rec }
+  }
+  // Start a broadcast if today is a tournament/EVO day.
+  if (!next.dayInProgress) {
+    const today = whatHappensToday(next)
+    if (today === 'evo' || today) {
+      const res = today === 'evo'
+        ? runEvo(next)
+        : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+      if (res.ok) {
+        const rec = res.record
+        rec.revealed = 0
+        revealNextMatch(rec) // open on the first match rather than an empty bracket
+        for (const v of next.vods || []) if (v.id === rec.id) v.revealed = rec.revealed
+        next.tournamentInProgress = rec.id
+        return { type: 'tournament-reveal', record: rec }
+      }
+      // Tournament fell through — run a normal day instead.
+      startDay(next)
+      simHour(next)
+      return { type: 'hour', notice: res.reason }
+    }
+  }
+  return stepSave(next)
 }
 
 // Auto-stream one match of the hour just simulated, per the idle config, if
@@ -210,9 +373,9 @@ function maybeAutoStream(next) {
  * idle.lastTickAt by exactly the time consumed; if the backlog exceeded
  * maxSteps, the overflow is discarded so we don't lag forever.
  */
-function idleRun(next, maxSteps) {
+function idleRun(next, maxSteps, revealTournaments = false) {
   const idle = next.idle
-  if (!idle) return null
+  if (!idle || next.economy?.foreclosed || next.rosterCollapsed) return null // no idling past the end of a run
   const speed = idleSpeedOf(idle.speed)
   const now = Date.now()
   if (idle.lastTickAt == null) { idle.lastTickAt = now; return null }
@@ -231,13 +394,16 @@ function idleRun(next, maxSteps) {
   let hoursSimmed = 0
 
   for (let i = 0; i < due; i++) {
-    const outcome = stepSave(next)
+    if (next.economy?.foreclosed || next.rosterCollapsed) break // the run ended mid-catch-up
+    // On the arcade tab, tournaments reveal a match per tick; everywhere else
+    // (and during offline catch-up) they resolve in one step.
+    const outcome = revealTournaments ? idleArcadeStep(next) : stepSave(next)
     if (outcome.type === 'hour') {
       hoursSimmed += 1
       maybeAutoStream(next)
     } else if (outcome.type === 'tournament') {
       const r = outcome.record
-      tournaments.push({ id: r.id, name: r.name, type: r.type, dateLabel: r.dateLabel })
+      if (r) tournaments.push({ id: r.id, name: r.name, type: r.type, dateLabel: r.dateLabel })
     }
   }
 
@@ -269,6 +435,9 @@ export function StoreProvider({ children }) {
   const [save, _setSave] = useState(null)
   const saveRef = useRef(null)
   const [screen, setScreen] = useState({ name: 'menu' })
+  // Latest screen, readable from the idle timer without re-arming the callback.
+  const screenRef = useRef(screen)
+  useEffect(() => { screenRef.current = screen }, [screen])
 
   const setSave = useCallback((s) => {
     saveRef.current = s
@@ -290,12 +459,15 @@ export function StoreProvider({ children }) {
   const startSave = useCallback((draft) => {
     const next = structuredClone(draft)
     computeMatchups(next.game) // the designed movesets decide the chart
+    // Seed the whole finite cast now — they discover the arcade over time, and
+    // nobody is ever generated again. Running out of them ends the run.
+    populateRoster(next)
     if (!next.evoRoster.length) next.evoRoster = generateEvoRoster(next)
-    // Snapshot the freshly-created world so it can be reset later. Stored
-    // without its own `origin` field to avoid nesting snapshots.
-    const originSnap = structuredClone(next)
-    delete originSnap.origin
-    next.origin = originSnap
+    // Consequential worlds: you spent your starting budget building the
+    // arcade during setup — whatever's left is your opening cash.
+    if (next.settings.mode !== 'sandbox') {
+      next.economy.money = Math.max(0, startingBudget(next) - arcadeBuildCost(next))
+    }
     persistSave(next)
     setSave(next)
     setScreen({ name: 'arcade' })
@@ -324,7 +496,7 @@ export function StoreProvider({ children }) {
   // screen; everything else stays in the arcade.
   const advance = useCallback(() => {
     const prev = saveRef.current
-    if (!prev) return
+    if (!prev || prev.economy?.foreclosed || prev.rosterCollapsed) return // the run is over
     const next = structuredClone(prev)
     const outcome = stepSave(next)
     persistSave(next)
@@ -337,9 +509,18 @@ export function StoreProvider({ children }) {
   // Skip straight to the daily recap: finish (or run) the whole day at once.
   const skipDay = useCallback(() => {
     const prev = saveRef.current
-    if (!prev) return
+    if (!prev || prev.economy?.foreclosed || prev.rosterCollapsed) return
     const next = structuredClone(prev)
     let notice
+    // A tournament being revealed match by match: finish the broadcast and jump
+    // to its full bracket rather than re-running the day.
+    if (next.tournamentInProgress) {
+      finalizeTournamentInProgress(next)
+      persistSave(next)
+      setSave(next)
+      setScreen({ name: 'tournament' })
+      return
+    }
     if (!next.dayInProgress) {
       const today = whatHappensToday(next)
       if (today === 'evo' || today) {
@@ -365,17 +546,35 @@ export function StoreProvider({ children }) {
   }, [setSave])
 
   // One idle pass (called on a timer while idle mode runs). Runs any due
-  // steps, auto-streams, and stays put — tournaments land in the VOD tab.
+  // steps, auto-streams, and stays put. On the arcade tab a tournament day
+  // plays out match by match (live in the arcade); elsewhere it resolves at
+  // once and lands in the VOD tab.
   const idleAdvance = useCallback(() => {
     const prev = saveRef.current
     if (!prev || !prev.idle?.enabled || !prev.idle?.running) return
     const next = structuredClone(prev)
-    const report = idleRun(next, IDLE_FOREGROUND_CAP)
+    const onArcade = screenRef.current?.name === 'arcade'
+    const report = idleRun(next, IDLE_FOREGROUND_CAP, onArcade)
     // Persist even when nothing was due but the clock was just initialised.
     if (report || next.idle.lastTickAt !== prev.idle?.lastTickAt) {
       persistSave(next)
       setSave(next)
     }
+  }, [setSave])
+
+  // Foreclosure (or a voluntary fresh start): archive the run, convert fame
+  // to prestige, and reopen the same save as a new run.
+  const resetCurrentRun = useCallback(() => {
+    const prev = saveRef.current
+    if (!prev) return
+    const res = resetSaveById(prev.id)
+    if (!res.ok) return
+    const reloaded = loadSaveById(prev.id)
+    setSave(reloaded)
+    setScreen({
+      name: 'arcade',
+      notice: `♻ New run started. +${res.prestigeGain} prestige earned — ${res.points} point${res.points === 1 ? '' : 's'} to spend on player creation stats.`,
+    })
   }, [setSave])
 
   const idleActions = useMemo(() => ({
@@ -398,8 +597,8 @@ export function StoreProvider({ children }) {
 
   const value = useMemo(() => ({
     save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay,
-    idleAdvance, ...idleActions,
-  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay, idleAdvance, idleActions])
+    resetCurrentRun, idleAdvance, ...idleActions,
+  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay, resetCurrentRun, idleAdvance, idleActions])
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>
 }

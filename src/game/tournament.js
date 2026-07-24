@@ -6,7 +6,8 @@ import { narrateSet } from './fight.js'
 import { getMatchup, remember, chronicle, pushVod } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
-import { buildStream, personalityOf, elitePersonality } from './stream.js'
+import { bumpPassion } from './career.js'
+import { buildStream, personalityOf, elitePersonality, applyStageReps } from './stream.js'
 import { speak } from './dialogue.js'
 
 const pName = (save, p) => displayName(p, save)
@@ -24,13 +25,24 @@ function eliteEntrant(elite) {
 function entrantPerformance(save, e, context = 'tournament') {
   if (e.kind === 'arcade') {
     let perf = playerPerf(save, e.ref, e.charId)
-    // Big-stage nerves: shaky composure bleeds performance under the lights,
-    // and EVO is the brightest light there is. Varies set to set.
+    // The choke. On the big stage, how much of your practice-room level you
+    // actually bring down is decided by your NERVE — innate composure PLUS the
+    // earned belief that only comes from being battle-tested under the lights
+    // (streamed sets, deep tournament runs). A monster who's never performed in
+    // front of a crowd leaves a huge chunk of their skill in the lab; a
+    // seasoned competitor barely flinches. EVO is the brightest light there is.
     const composure = e.ref.personal.composure ?? 5
-    perf -= (10 - composure) * (context === 'evo' ? 0.7 : 0.35) * (0.5 + rand() * 0.5)
+    const belief = e.ref.belief ?? 0
+    const nerve = composure * 0.6 + belief * 0.06 // ~0..12
+    const stageWeight = context === 'evo' ? 1.4 : 0.55
+    perf -= Math.max(0, 11 - nerve) * stageWeight * (0.5 + rand() * 0.5)
+    // Peak or burnt out: a fired-up player overperforms, a checked-out one folds.
+    perf += ((e.ref.passion ?? 80) - 60) * (context === 'evo' ? 0.08 : 0.04)
     return perf
   }
-  return e.ref.skill * 0.78 + (e.ref.elo - 1200) / 40 + rand() * 6
+  // The elite field is genuinely elite — the best players on the planet. Beating
+  // them takes a fully cultivated champion, not just the best kid in your arcade.
+  return e.ref.skill * 0.82 + (e.ref.elo - 1200) / 38 + rand() * 6
 }
 
 function entrantCharName(save, e) {
@@ -106,6 +118,10 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     aName: a.name, bName: b.name, winnerName: winner.name,
     context,
   })
+  // Competing on the big stage is how a player gets battle-tested — arcade
+  // entrants earn belief/popularity from every set, and the marquee sets (finals,
+  // EVO) forge the most. This is what makes deep runs and big brackets worth it.
+  applyStageReps(save, [a, b], stream, context === 'evo' ? 'evo' : 'tournament', marquee ? 1.6 : 1)
 
   // Bracket sets end with words too — when both players are real people.
   const postMatch = []
@@ -221,6 +237,124 @@ const roundName = (idx, total) => {
   return `Round of ${remaining}`
 }
 
+// ---------- Round robin ----------
+// Everyone plays everyone (circle method); standings by wins, tiebreak elo.
+// Returns pre-titled rounds so the record builder can use them as-is.
+function roundRobinBracket(save, entrants, { context = 'tournament' } = {}) {
+  const arr = [...entrants]
+  if (arr.length % 2 === 1) arr.push(null) // a rotating bye
+  const n = arr.length
+  const half = n / 2
+  const wins = new Map(entrants.map((e) => [e.id, 0]))
+  const rounds = []
+  const order = [...arr]
+  for (let r = 0; r < n - 1; r++) {
+    const matches = []
+    for (let i = 0; i < half; i++) {
+      const a = order[i]
+      const b = order[n - 1 - i]
+      if (!a || !b) continue // the bye sits out
+      const m = resolveEntrantMatch(save, a, b, { context })
+      const winner = m.winnerId === a.id ? a : b
+      wins.set(winner.id, wins.get(winner.id) + 1)
+      matches.push(m)
+    }
+    rounds.push({ title: `Round ${r + 1}`, matches })
+    // rotate everyone but the first
+    const fixed = order[0]
+    const rest = order.slice(1)
+    rest.unshift(rest.pop())
+    order.splice(0, order.length, fixed, ...rest)
+  }
+  const ranked = [...entrants].sort((a, b) => (wins.get(b.id) - wins.get(a.id)) || ((b.ref.elo || 0) - (a.ref.elo || 0)))
+  const placements = ranked.map((e, i) => ({ entrant: e, place: i + 1 }))
+  return { rounds, placements, champion: ranked[0] }
+}
+
+// ---------- Double elimination ----------
+// Two lives: lose in winners, drop to losers; lose again, out. WB champ meets
+// LB champ in the grand finals (with a bracket reset if the LB player takes the
+// first set). Requires a power-of-two field (fillBracket delivers exactly the
+// scheduled size; the runner trims to the nearest power of two just in case).
+function doubleElimBracket(save, entrants, { context = 'tournament' } = {}) {
+  let pow = 1
+  while (pow * 2 <= entrants.length) pow *= 2
+  const seeded = seedBracket(entrants.slice(0, pow)).filter(Boolean)
+  const N = seeded.length
+  const k = Math.log2(N)
+  const rounds = []
+  const place = new Map()
+  let nextPlace = N
+  const pairsOf = (list) => { const p = []; for (let i = 0; i < list.length; i += 2) p.push([list[i], list[i + 1]]); return p }
+  const playRound = (pairs, bracket, title) => {
+    const matches = []; const winners = []; const losers = []
+    for (const [a, b] of pairs) {
+      const m = resolveEntrantMatch(save, a, b, { context })
+      const w = m.winnerId === a.id ? a : b
+      matches.push(m); winners.push(w); losers.push(w === a ? b : a)
+    }
+    rounds.push({ title, matches, bracket })
+    return { winners, losers }
+  }
+
+  // Winners bracket, collecting each round's losers.
+  let wb = seeded
+  const wbLosers = []
+  for (let r = 0; r < k; r++) {
+    const { winners, losers } = playRound(pairsOf(wb), 'wb', wb.length === 2 ? 'Winners Final' : `Winners Round ${r + 1}`)
+    wbLosers.push(losers)
+    wb = winners
+  }
+  const wbChamp = wb[0]
+
+  // Losers bracket: alternate a "minor" round (LB survivors play each other)
+  // with a "major" round (LB survivors meet the next batch of WB losers).
+  let lb = wbLosers[0]
+  let feed = 1
+  let lbNum = 1
+  while (!(feed >= k && lb.length === 1)) {
+    if (lb.length > 1) {
+      const { winners, losers } = playRound(pairsOf(lb), 'lb', `Losers Round ${lbNum++}`)
+      for (const l of losers) place.set(l.id, nextPlace--)
+      lb = winners
+    }
+    if (feed < k) {
+      const merged = []
+      for (let i = 0; i < lb.length; i++) { merged.push(lb[i]); merged.push(wbLosers[feed][i]) }
+      const { winners, losers } = playRound(pairsOf(merged), 'lb', `Losers Round ${lbNum++}`)
+      for (const l of losers) place.set(l.id, nextPlace--)
+      lb = winners
+      feed++
+    }
+    if (lb.length === 0) break
+  }
+  const lbChamp = lb[0]
+
+  // Grand finals — WB champ has one life in hand.
+  const gf = playRound([[wbChamp, lbChamp]], 'gf', 'Grand Finals')
+  let champion
+  if (gf.winners[0] === wbChamp) {
+    place.set(lbChamp.id, 2); place.set(wbChamp.id, 1); champion = wbChamp
+  } else {
+    const reset = playRound([[wbChamp, lbChamp]], 'gf', 'Grand Finals (Reset)')
+    champion = reset.winners[0]
+    place.set(reset.losers[0].id, 2); place.set(champion.id, 1)
+  }
+
+  const placements = [...place.entries()]
+    .map(([id, p]) => ({ entrant: seeded.find((e) => e.id === id), place: p }))
+    .filter((x) => x.entrant)
+    .sort((a, b) => a.place - b.place)
+  return { rounds, placements, champion }
+}
+
+// Pick the bracket runner for a scheduled format.
+function runFormat(save, entrants, format) {
+  if (format === 'roundrobin') return roundRobinBracket(save, entrants, {})
+  if (format === 'doubleelim') return doubleElimBracket(save, entrants, {})
+  return runBracket(save, entrants)
+}
+
 // ---------- Invitations ----------
 
 /**
@@ -266,13 +400,16 @@ function fillBracket(save, ranked, size, storylines) {
 // ---------- Singles tournaments ----------
 
 export function runSinglesTournament(save, scheduleEntry) {
-  const size = scheduleEntry?.size || 8
   const name = scheduleEntry?.name || 'Tournament'
+  // Consequential worlds hold a real tournament to a minimum of 8 entrants —
+  // no dinky 2- or 4-player brackets. Sandbox honors the scheduled size.
+  const consequential = save.settings.mode !== 'sandbox'
+  const size = consequential ? Math.max(8, scheduleEntry?.size || 8) : (scheduleEntry?.size || 8)
   const ranked = Object.values(save.players)
-    .filter((p) => p.isRegular && p.mainCharId)
+    .filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
     .sort((a, b) => invitationScore(b) - invitationScore(a))
   if (ranked.length < size) {
-    return { ok: false, reason: `${name} cancelled — only ${ranked.length} of ${size} slots could be filled.` }
+    return { ok: false, reason: `${name} cancelled — only ${ranked.length} eligible, need at least ${size}.` }
   }
   const storylines = []
   const field = fillBracket(save, ranked, size, storylines)
@@ -280,7 +417,8 @@ export function runSinglesTournament(save, scheduleEntry) {
     return { ok: false, reason: `${name} cancelled — too many dropouts left the bracket short of ${size}.` }
   }
   const entrants = field.map((p) => arcadeEntrant(save, p))
-  const { rounds, placements, champion } = runBracket(save, entrants)
+  const format = scheduleEntry?.format || 'single'
+  const { rounds, placements, champion } = runFormat(save, entrants, format)
 
   // Baseline glory scales with field size AND how rare the event is — a
   // 64-man yearly major is legacy, a weekly 8-man is a good Tuesday. On top
@@ -293,6 +431,8 @@ export function runSinglesTournament(save, scheduleEntry) {
   const baseGlory = Math.max(2, Math.round(size * cadenceMult))
   for (const { entrant, place } of placements) {
     const p = entrant.ref
+    // A deep run is exactly what keeps a player in love with the game.
+    bumpPassion(p, place === 1 ? 12 : place === 2 ? 7 : place <= 4 ? 4 : 1.5)
     if (place === 1) {
       p.glory += baseGlory + impact
       p.respect += Math.ceil(baseGlory * 0.75)
@@ -325,11 +465,14 @@ export function runSinglesTournament(save, scheduleEntry) {
   const record = {
     id: uid('t'),
     type: 'singles',
+    format,
     name,
     day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
     storylines,
     revealed: 0,
-    rounds: rounds.map((ms, i) => ({ title: roundName(i, rounds.length), matches: ms })),
+    // Single-elim returns raw match arrays (titled by roundName); round-robin
+    // and double-elim return pre-titled {title, matches} rounds — support both.
+    rounds: rounds.map((r, i) => (r.matches ? { title: r.title, matches: r.matches } : { title: roundName(i, rounds.length), matches: r })),
     placements: placements.slice(0, 8).map(({ entrant, place }) => ({ place, name: entrant.name })),
     champion: champion.name,
     entrantCount: entrants.length,
@@ -349,16 +492,18 @@ export function runTeamTournament(save, scheduleEntry) {
     .filter((t) => t.memberIds.length >= 4)
     .map((t) => ({
       team: t,
-      squad: t.memberIds.map((id) => save.players[id]).filter((p) => p && p.mainCharId)
+      squad: t.memberIds.map((id) => save.players[id]).filter((p) => p && p.mainCharId && !p.retired && !p.banished)
         .sort((a, b) => b.elo - a.elo).slice(0, 4),
       avgScore: 0,
     }))
     .filter((s) => s.squad.length === 4)
-  const minSize = Math.min(scheduleEntry?.size || 2, 8)
-  if (allSquads.length < Math.max(2, minSize)) {
+  // Consequential worlds require at least 4 full teams to run a real crew battle.
+  const consequential = save.settings.mode !== 'sandbox'
+  const minTeams = Math.max(consequential ? 4 : 2, Math.min(scheduleEntry?.size || 2, 8))
+  if (allSquads.length < minTeams) {
     return {
       ok: false,
-      reason: `${scheduleEntry?.name || 'Team battle'} cancelled — only ${allSquads.length} full team${allSquads.length === 1 ? '' : 's'} (need ${Math.max(2, minSize)}).`,
+      reason: `${scheduleEntry?.name || 'Team battle'} cancelled — only ${allSquads.length} full team${allSquads.length === 1 ? '' : 's'} (need ${minTeams}).`,
     }
   }
   // Power-of-two field: the strongest teams by average invitation score.
@@ -434,7 +579,7 @@ export function runTeamTournament(save, scheduleEntry) {
   const champion = current[0]
   const teamCadence = scheduleEntry?.cadence || 'yearly'
   const teamGlory = Math.round(8 * (teamCadence === 'yearly' ? 2 : teamCadence === 'monthly' ? 1.2 : 0.6))
-  for (const p of champion.squad) { p.glory += teamGlory; p.respect += 5; p.mood = clamp(p.mood + 1.5, 0, 10) }
+  for (const p of champion.squad) { p.glory += teamGlory; p.respect += 5; p.mood = clamp(p.mood + 1.5, 0, 10); bumpPassion(p, 9) }
   // Winning together bonds a team.
   for (const a of champion.squad) for (const b of champion.squad) if (a !== b) shiftRel(a, b, 4)
   teamLog(save, champion.team, `🏆 Won ${scheduleEntry?.name || 'a team battle'} (${entrants.length} teams)`)
@@ -464,19 +609,97 @@ export function runTeamTournament(save, scheduleEntry) {
 
 // ---------- EVO ----------
 
+const EVO_SOUNDBITES = [
+  "I didn't come all this way to place top 8. I came to win.",
+  "Pools were a warmup. The real tournament starts now.",
+  "Everyone's got a gameplan until they're down to last pixel on the big stage.",
+  "Respect to my pool. But I'm not here to make friends.",
+  "I've been dreaming about this stage since I was a kid feeding quarters into a cabinet.",
+  "The bracket doesn't scare me. I scare the bracket.",
+  "My arcade back home is watching. I'm not letting them down.",
+]
+
+// Distribute a field into `count` pools, snake-seeded by elo so each pool is
+// balanced (best player to pool 0, next to pool 1, … then back).
+function snakePools(entrants, count) {
+  const sorted = [...entrants].sort((a, b) => (b.ref.elo || 0) - (a.ref.elo || 0))
+  const pools = Array.from({ length: count }, () => [])
+  let dir = 1
+  let p = 0
+  for (const e of sorted) {
+    pools[p].push(e)
+    if (dir === 1 && p === count - 1) dir = -1
+    else if (dir === -1 && p === 0) dir = 1
+    else p += dir
+  }
+  return pools
+}
+
+// The media-break day between pools and the main event: a couple of exhibition
+// money matches between marquee names, plus interview soundbites. No bracket
+// stakes — pure spectacle and story.
+function buildMediaDay(save, advancers) {
+  const rounds = []
+  const storylines = []
+  const marquee = [...advancers].sort((a, b) => entrantPersonality(b) - entrantPersonality(a)).slice(0, 4)
+  const matches = []
+  for (let i = 0; i + 1 < marquee.length; i += 2) {
+    const m = resolveEntrantMatch(save, marquee[i], marquee[i + 1], { context: 'evo' })
+    m.exhibition = true
+    matches.push(m)
+    storylines.push(`Media Day exhibition: ${marquee[i].name} vs ${marquee[i + 1].name} — a money match with nothing but pride on the line.`)
+  }
+  if (matches.length) rounds.push({ title: 'Media Day · Exhibitions', matches, phase: 'media' })
+  for (const e of marquee.slice(0, 3)) {
+    storylines.push(`${e.name} at the presser: "${choice(EVO_SOUNDBITES)}"`)
+  }
+  return { rounds, storylines }
+}
+
 export function runEvo(save) {
   const regulars = Object.values(save.players)
-    .filter((p) => p.isRegular && p.mainCharId)
+    .filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
     .sort((a, b) => invitationScore(b) - invitationScore(a))
   const qualified = regulars.slice(0, 8)
   if (!qualified.length) return { ok: false, reason: 'No arcade players qualified for EVO this year.' }
 
-  const elites = [...save.evoRoster].sort((a, b) => b.elo - a.elo).slice(0, 32 - qualified.length)
+  // EVO WEEK. A 24-player field (8 arcade qualifiers + 16 world elites) runs as:
+  //  · Pools — four round-robin groups; the top 4 of each advance (16 make it).
+  //  · Media Day — exhibition money matches and interviews.
+  //  · Top 16 — a double-elimination bracket to the Grand Finals.
+  const elites = [...save.evoRoster].sort((a, b) => b.elo - a.elo).slice(0, 16)
   const entrants = [
     ...qualified.map((p) => arcadeEntrant(save, p)),
     ...elites.map(eliteEntrant),
   ]
-  const { rounds, placements, champion, abruptEndRound } = runBracket(save, entrants, { stopWhenNoArcade: true, context: 'evo' })
+  const rounds = []
+  const storylines = []
+
+  // ---- Pools ----
+  const pools = snakePools(entrants, 4)
+  const advancers = []
+  const poolOut = [] // pool non-advancers, ranked, fill places 17+
+  pools.forEach((pool, pi) => {
+    const rr = roundRobinBracket(save, pool, { context: 'evo' })
+    const letter = String.fromCharCode(65 + pi)
+    rr.rounds.forEach((r) => rounds.push({ title: `Pool ${letter} · ${r.title}`, matches: r.matches, phase: 'pools' }))
+    rr.placements.forEach((pl, idx) => { if (idx < 4) advancers.push(pl.entrant); else poolOut.push(pl.entrant) })
+  })
+
+  // ---- Media Day ----
+  const media = buildMediaDay(save, advancers)
+  rounds.push(...media.rounds)
+  storylines.push(...media.storylines)
+
+  // ---- Top 16, double elimination ----
+  const de = doubleElimBracket(save, advancers.slice(0, 16), { context: 'evo' })
+  de.rounds.forEach((r) => rounds.push({ title: `Top 16 · ${r.title}`, matches: r.matches, phase: 'top16' }))
+  const champion = de.champion
+
+  // Overall placements: top 16 from the bracket, then the pool casualties.
+  const placements = [...de.placements]
+  let place = 17
+  for (const e of poolOut) placements.push({ entrant: e, place: place++ })
 
   const arcadePlacements = placements.filter((pl) => pl.entrant.kind === 'arcade')
   for (const { entrant, place } of arcadePlacements) {
@@ -484,7 +707,9 @@ export function runEvo(save) {
     const glory = place === 1 ? 100 : place === 2 ? 60 : place <= 4 ? 40 : place <= 8 ? 25 : place <= 16 ? 12 : 5
     p.glory += glory
     p.respect += Math.round(glory / 3)
-    if (place === 1) { p.tournamentWins += 1; p.mood = 10; remember(save, p, 'evo', `WINNING EVO Year ${save.year}`) }
+    // The world stage reignites a career — the reason they grind another year.
+    bumpPassion(p, place === 1 ? 30 : place <= 4 ? 18 : place <= 8 ? 12 : 6)
+    if (place === 1) { p.tournamentWins += 1; p.evoTitles = (p.evoTitles || 0) + 1; p.mood = 10; remember(save, p, 'evo', `WINNING EVO Year ${save.year}`) }
     else if (place <= 8) { p.mood = clamp(p.mood + 2, 0, 10); remember(save, p, 'evo', `the top-${place <= 4 ? 4 : 8} run at EVO Year ${save.year}`) }
   }
   if (champion.kind === 'elite') {
@@ -524,17 +749,13 @@ export function runEvo(save) {
     type: 'evo',
     name: `EVO — Year ${save.year}`,
     day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
-    storylines: [],
+    storylines,
     revealed: 0,
-    rounds: rounds.map((ms, i) => ({
-      title: roundName(i, rounds.length),
-      matches: ms,
-      offScreen: abruptEndRound !== null && i >= abruptEndRound,
-    })),
+    rounds: rounds.map((r) => ({ title: r.title, matches: r.matches, phase: r.phase })),
     placements: placements.slice(0, 8).map(({ entrant, place }) => ({ place, name: entrant.name, arcade: entrant.kind === 'arcade' })),
     arcadeResults: arcadePlacements.map(({ entrant, place }) => ({ place, name: entrant.name })),
     champion: champion.name,
-    abrupt: abruptEndRound !== null,
+    abrupt: false,
     entrantCount: entrants.length,
   }
   decorateStreamStats(save, record)
@@ -543,6 +764,47 @@ export function runEvo(save) {
   save.lastTournament = record
   pushVod(save, record) // same object reference → shared reveal cursor
   return { ok: true, record }
+}
+
+// ---------- Match-by-match reveal ----------
+// A tournament record is fully simulated up front but plays back one match at
+// a time via its `revealed` cursor (used by the Tournament/VOD screens AND by
+// idle mode's live-in-the-arcade broadcast). These are the shared helpers so
+// every surface computes the reveal identically.
+
+// Flatten a bracket into broadcast order (round by round, byes included).
+export function flattenBracket(record) {
+  const flat = []
+  record.rounds.forEach((round, ri) => {
+    round.matches.forEach((m) => flat.push({ m, ri, offScreen: !!round.offScreen }))
+  })
+  return flat
+}
+
+/**
+ * The reveal state for a record's current `revealed` cursor: byes air
+ * instantly, and hitting an off-screen round (EVO after the last arcade player
+ * is out) ends the broadcast. Returns { flat, revealedCount, done }.
+ */
+export function revealState(record) {
+  const flat = flattenBracket(record)
+  let cursor = Math.min(record.revealed ?? 0, flat.length)
+  while (cursor < flat.length && flat[cursor].m.bye) cursor++
+  const broadcastEnded = cursor < flat.length && flat[cursor].offScreen
+  const revealedCount = broadcastEnded ? flat.length : cursor
+  return { flat, revealedCount, done: revealedCount >= flat.length }
+}
+
+/**
+ * Push the reveal cursor forward by one REAL match (skipping byes so a single
+ * tick always surfaces something worth watching). Mutates record.revealed.
+ */
+export function revealNextMatch(record) {
+  const flat = flattenBracket(record)
+  let r = (record.revealed ?? 0) + 1
+  while (r < flat.length && flat[r - 1]?.m.bye) r++
+  record.revealed = Math.min(r, flat.length)
+  return record
 }
 
 function decorateStreamStats(save, record) {

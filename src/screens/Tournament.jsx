@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import StreamChat from '../components/StreamChat.jsx'
 import { SpeechLine } from '../components/ui.jsx'
@@ -9,6 +9,10 @@ export default function Tournament() {
   const vodId = screen.vodId
   // A VOD replay targets a specific record; otherwise show the most recent one.
   const t = vodId ? (save.vods || []).find((v) => v.id === vodId) : save.lastTournament
+
+  if (t && t.type === 'moneymatch') {
+    return <MoneyMatchVod t={t} nav={nav} mutate={mutate} />
+  }
 
   if (!t) {
     return (
@@ -51,6 +55,13 @@ export default function Tournament() {
   })
   const playNext = () => setRevealed(revealedCount + 1)
   const skipAll = () => setRevealed(999999)
+  // Watch in any order: clicking a later match fast-forwards the broadcast
+  // to it — after fair warning, because everything before it gets revealed.
+  const jumpTo = (flatIdx) => {
+    if (flatIdx <= revealedCount) return
+    if (!confirm('⚠️ SPOILER ALERT: this match is later in the broadcast, and it hasn\'t played through to it yet. Skip ahead to this match? Every result before it will be revealed.')) return
+    setRevealed(flatIdx)
+  }
 
   return (
     <div>
@@ -125,6 +136,7 @@ export default function Tournament() {
                   revealed={isRevealed(flatIdx)}
                   determined={roundDetermined(ri)}
                   isNext={!done && current && flatIdx === revealedCount}
+                  onJump={() => jumpTo(flatIdx)}
                 />
               )
             })}
@@ -206,7 +218,7 @@ function NowPlaying({ m, roundTitle, onFinished }) {
   )
 }
 
-function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
+function BracketMatch({ m, offScreen, revealed, determined, isNext, onJump }) {
   const [open, setOpen] = useState(false)
   if (m.bye) {
     return (
@@ -216,19 +228,24 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
     )
   }
   if (!determined) {
+    // Not yet reached on the broadcast — click to skip ahead (spoiler prompt).
     return (
-      <div className="bmatch" style={{ cursor: 'default', opacity: 0.5 }}>
+      <div className="bmatch" style={{ opacity: 0.5 }} onClick={onJump}
+        title="skip the broadcast ahead to this match">
         <div className="dim">TBD</div>
         <div className="dim">TBD</div>
+        <div className="dim small">click to skip ahead…</div>
       </div>
     )
   }
   if (!revealed) {
     return (
-      <div className="bmatch" style={isNext ? { borderColor: 'var(--pink)' } : { cursor: 'default' }}>
+      <div className="bmatch" style={isNext ? { borderColor: 'var(--pink)' } : {}}
+        onClick={isNext ? undefined : onJump}
+        title={isNext ? undefined : 'skip the broadcast ahead to this match'}>
         <div>{m.aName} {m.aChar && <span className="dim small">({m.aChar})</span>}</div>
         <div>{m.bName} {m.bChar && <span className="dim small">({m.bChar})</span>}</div>
-        <div className={`small ${isNext ? 'pink' : 'dim'}`}>{isNext ? '▶ up next' : 'waiting…'}</div>
+        <div className={`small ${isNext ? 'pink' : 'dim'}`}>{isNext ? '▶ up next' : 'click to skip ahead…'}</div>
       </div>
     )
   }
@@ -260,6 +277,83 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * A money-match VOD: one marquee set, played back line by line with the
+ * stream chat, exactly as it was broadcast. The reveal cursor persists on
+ * the VOD record so it stays spoiler-free across sessions.
+ */
+function MoneyMatchVod({ t, nav, mutate }) {
+  const m = t.match
+  if (!m) {
+    return (
+      <div className="card">
+        <p className="dim">That broadcast didn't survive. Older VODs roll off over time.</p>
+        <button onClick={() => nav('vods')}>Back to VODs</button>
+      </div>
+    )
+  }
+  const total = m.narration.length
+  const revealed = Math.min(t.revealed ?? 0, total)
+  const started = revealed > 0
+  const finished = revealed >= total
+  const setRevealed = (val) => mutate((s) => {
+    for (const v of s.vods || []) if (v.id === t.id) v.revealed = val
+  })
+
+  return (
+    <div>
+      <div className="row spread">
+        <div>
+          <h1 style={{ fontSize: 30, margin: '4px 0' }}>💸 {t.name}</h1>
+          <span className="dim">{t.dateLabel} · in-world stakes, whole-arcade audience</span>
+          {t.channelName && (
+            <div className="small">
+              <span className="pink">📡 broadcast on {t.channelName}</span>
+              {t.peakViewers > 0 && <span className="dim"> · peak {t.peakViewers} viewers</span>}
+            </div>
+          )}
+        </div>
+        <div className="row">
+          {!finished && started && <button onClick={() => setRevealed(999999)}>⏭ Skip to result</button>}
+          <button onClick={() => nav('vods')}>Back to VODs →</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ borderColor: 'var(--gold)' }}>
+        <h3 className="gold" style={{ marginTop: 0 }}>
+          {m.aName} ({m.charAName}) vs {m.bName} ({m.charBName})
+          {finished && <span> — {m.winnerName} wins {m.setScore || ''}</span>}
+        </h3>
+        <MatchHud m={m} revealed={revealed} />
+        {(m.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
+        {!started && <button className="primary" onClick={() => setRevealed(1)}>▶ Play the match</button>}
+        {started && (
+          <div className={m.stream ? 'stream-split' : ''}>
+            <div className="narration" style={{ marginTop: 0 }}>
+              {m.narration.slice(0, revealed).map((l, i) => (
+                <Fragment key={i}>
+                  <p>{l}</p>
+                  {(m.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
+                </Fragment>
+              ))}
+              {!finished && (
+                <button className="small" onClick={() => setRevealed(revealed + 1)}>▶ What happens next?</button>
+              )}
+              {finished && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
+              {finished && m.probA != null && (
+                <p className="dim small" style={{ fontStyle: 'normal' }}>
+                  odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+                </p>
+              )}
+            </div>
+            {m.stream && <StreamChat stream={m.stream} revealed={revealed} />}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

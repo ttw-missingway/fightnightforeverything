@@ -9,6 +9,9 @@ import StreamChat from '../components/StreamChat.jsx'
 import MatchHud from '../components/MatchHud.jsx'
 import { displayName } from '../game/util.js'
 import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
+import { revealState } from '../game/tournament.js'
+import { relevanceLabel } from '../game/relevance.js'
+import { gatherRumors, allRumors, rumorHeatLabel } from '../game/rumors.js'
 
 export default function Arcade() {
   const { save, screen, advance, skipDay, nav, enableIdle } = useStore()
@@ -16,9 +19,13 @@ export default function Arcade() {
   const report = save.lastDayReport
   const today = whatHappensToday(save)
   const daysToEvo = (EVO_DAY - save.day + DAYS_PER_YEAR) % DAYS_PER_YEAR
+  // A tournament being revealed match by match (idle mode, live in the arcade).
+  const revealing = save.tournamentInProgress && save.lastTournament?.id === save.tournamentInProgress
 
   let buttonLabel
-  if (!dip) {
+  if (revealing) {
+    buttonLabel = '⏭ Skip the broadcast'
+  } else if (!dip) {
     buttonLabel = today === 'evo' ? '▶ EVO is TODAY!'
       : today ? `▶ Run "${today.name}"`
       : '▶ Open the arcade'
@@ -40,6 +47,14 @@ export default function Arcade() {
               <div className="small dim">📍 {formatLocation(save.arcade.location)}</div>
             )}
             <span className="dim">{WEEKDAYS[weekdayOf(save.day)]}, {formatDay(save.day, save.year)} · running <span className="cyan">{save.game.name}</span></span>
+            {save.relevance != null && (
+              <div className="small" style={{ marginTop: 2 }}>
+                <span className="dim">🌐 national interest: </span>
+                <span style={{ color: save.relevance >= 62 ? 'var(--green)' : save.relevance >= 24 ? 'var(--gold)' : 'var(--red)' }}>
+                  {relevanceLabel(save.relevance)} ({Math.round(save.relevance)}/100)
+                </span>
+              </div>
+            )}
             <div className="small" style={{ marginTop: 2 }}>
               <span className="pink">📡 {save.stream.channelName}</span>
               <span className="dim"> · {save.stream.followers} followers · {hypeLabel(save.stream.hype)}</span>
@@ -81,7 +96,122 @@ export default function Arcade() {
         </div>
       </div>
 
-      {dip ? <LiveDay save={save} nav={nav} /> : <RecapView save={save} report={report} nav={nav} />}
+      {revealing
+        ? <LiveTournament save={save} nav={nav} />
+        : dip
+          ? (dip.closed ? <ClosedDay dip={dip} /> : <LiveDay save={save} nav={nav} />)
+          : <RecapView save={save} report={report} nav={nav} />}
+    </div>
+  )
+}
+
+// The live in-the-arcade broadcast: while idle mode reveals a tournament one
+// match at a time, this shows the current bracket state — the set that just
+// aired up top, the whole bracket filling in below — updating on each idle
+// tick. Fully consistent with the Tournament/VOD reveal (same `revealed`
+// cursor), so opening it there later picks up right where this left off.
+function LiveTournament({ save, nav }) {
+  const t = save.lastTournament
+  const { flat, revealedCount, done } = revealState(t)
+  const roundStarts = []
+  { let acc = 0; for (const r of t.rounds) { roundStarts.push(acc); acc += r.matches.length } }
+  const isRevealed = (idx) => idx < revealedCount || flat[idx].m.bye
+  const determined = (ri) => ri === 0 || revealedCount >= roundStarts[ri]
+  // The most recent real (non-bye) match on screen — the "now airing" highlight.
+  let latest = null
+  for (let i = Math.min(revealedCount, flat.length) - 1; i >= 0; i--) {
+    if (!flat[i].m.bye) { latest = flat[i]; break }
+  }
+  const realTotal = flat.filter((f) => !f.m.bye).length
+  const realShown = flat.slice(0, revealedCount).filter((f) => !f.m.bye).length
+
+  return (
+    <div>
+      <div className="card" style={{ borderColor: 'var(--pink)' }}>
+        <div className="row spread">
+          <h3 style={{ margin: 0 }} className="pink">
+            {t.type === 'evo' ? '🌏 ' : '🏆 '}{t.name} — <span className="cyan">LIVE</span>
+          </h3>
+          <span className="dim small">
+            {done ? 'broadcast complete' : `match ${Math.min(realShown, realTotal)} of ${realTotal}`}
+            {t.channelName && <> · 📡 {t.channelName}</>}
+          </span>
+        </div>
+
+        {latest && (
+          <div style={{ marginTop: 8 }}>
+            <div className="small dim">{done ? 'Final on the big screen' : 'On the big screen now'} — {t.rounds[latest.ri].title}</div>
+            <div className="row spread" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 18 }}>
+                <span className={latest.m.winnerName === latest.m.aName ? 'winner' : 'loser'}>{latest.m.aName}</span>
+                <span className="dim"> vs </span>
+                <span className={latest.m.winnerName === latest.m.bName ? 'winner' : 'loser'}>{latest.m.bName}</span>
+              </span>
+              <span className="gold">{latest.m.score || (latest.m.setScore ? `${latest.m.setScore}` : '')}</span>
+            </div>
+            {latest.m.narrationHud && <MatchHud m={latest.m} />}
+            {(latest.m.narration || []).length > 0 && (
+              <Expandable summary={<span className="small pink">▸ watch the set back</span>}>
+                <div className="narration" style={{ marginTop: 6 }}>
+                  {latest.m.narration.map((l, i) => <p key={i}>{l}</p>)}
+                  {(latest.m.postMatch || []).map((s, i) => <SpeechLine key={`p${i}`} s={s} />)}
+                </div>
+              </Expandable>
+            )}
+          </div>
+        )}
+
+        {done && (
+          <div className="row" style={{ marginTop: 8 }}>
+            <span className="gold">🏆 Champion: {t.champion}</span>
+            <button className="small" onClick={() => nav('tournament')}>See the full bracket →</button>
+          </div>
+        )}
+      </div>
+
+      <div className="bracket">
+        {t.rounds.map((round, ri) => (
+          <div className="round" key={ri}>
+            <h4 className={round.offScreen ? 'dim' : 'cyan'} style={{ textAlign: 'center' }}>
+              {round.title}{round.offScreen ? ' (off-screen)' : ''}
+            </h4>
+            {round.matches.map((m, mi) => (
+              <LiveBracketMatch key={m.id} m={m}
+                offScreen={round.offScreen}
+                revealed={isRevealed(roundStarts[ri] + mi)}
+                determined={determined(ri)}
+                isNext={!done && roundStarts[ri] + mi === revealedCount} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function LiveBracketMatch({ m, offScreen, revealed, determined, isNext }) {
+  if (m.bye) {
+    return <div className="bmatch"><span className="winner">{m.aName}</span> <span className="dim small">— bye</span></div>
+  }
+  if (!determined) {
+    return <div className="bmatch" style={{ opacity: 0.4 }}><div className="dim">TBD</div><div className="dim">TBD</div></div>
+  }
+  if (!revealed) {
+    return (
+      <div className="bmatch" style={isNext ? { borderColor: 'var(--pink)' } : { opacity: 0.6 }}>
+        <div>{m.aName} {m.aChar && <span className="dim small">({m.aChar})</span>}</div>
+        <div>{m.bName} {m.bChar && <span className="dim small">({m.bChar})</span>}</div>
+        <div className={`small ${isNext ? 'pink' : 'dim'}`}>{isNext ? '▶ on now…' : 'up next'}</div>
+      </div>
+    )
+  }
+  const aWon = m.winnerName === m.aName
+  return (
+    <div className={`bmatch ${offScreen ? 'offscreen' : ''}`}>
+      <div className={aWon ? 'winner' : 'loser'}>{m.aName} {m.aChar && <span className="small">({m.aChar})</span>}</div>
+      <div className={!aWon ? 'winner' : 'loser'}>{m.bName} {m.bChar && <span className="small">({m.bChar})</span>}</div>
+      {m.score && <div className="gold small">{m.score}</div>}
+      {m.stream && <div className="dim small">👁 {m.stream.viewers}</div>}
     </div>
   )
 }
@@ -107,6 +237,7 @@ function IdleBar({ save }) {
   const nextInMs = idle.running && idle.lastTickAt != null
     ? Math.max(0, idle.lastTickAt + speed.ms - now)
     : null
+  const revealing = save.tournamentInProgress && save.lastTournament?.id === save.tournamentInProgress
 
   return (
     <div className="idlebar">
@@ -124,7 +255,7 @@ function IdleBar({ save }) {
       <div className="small dim" style={{ textAlign: 'right' }}>{speed.blurb}</div>
       <div className="small" style={{ textAlign: 'right' }}>
         {idle.running
-          ? <span className="cyan">▶ auto-advancing · next hour in {formatCountdown(nextInMs)}</span>
+          ? <span className="cyan">▶ auto-advancing · next {revealing ? 'match' : 'hour'} in {formatCountdown(nextInMs)}</span>
           : <span className="dim">paused</span>}
       </div>
       <AutoStreamControls autoStream={idle.autoStream} setAutoStream={setAutoStream} />
@@ -190,6 +321,16 @@ function splitZones(hour) {
   return { setups, concession, floor }
 }
 
+function ClosedDay({ dip }) {
+  return (
+    <div className="card" style={{ borderColor: 'var(--red)' }}>
+      <h3 className="red" style={{ marginTop: 0 }}>🚧 Closed by order of the health department</h3>
+      {dip.openingEvents.map((ev, i) => <PlainEvent key={i} ev={ev} />)}
+      <p className="dim small">Advance the day — the shutdown lifts on its own. Maybe hire some cleaners.</p>
+    </div>
+  )
+}
+
 function LiveDay({ save, nav }) {
   const { mutate } = useStore()
   const dip = save.dayInProgress
@@ -223,6 +364,15 @@ function LiveDay({ save, nav }) {
   const concessionPeople = new Set(zones.concession.flatMap((e) => e.memberIds || [])).size
   const floorGroups = zones.floor.filter((e) => e.type === 'interaction').length
 
+  // The rumor mill lives at the counter. Read it once here so the floor-plan
+  // card can flag hot gossip — a nudge to slow down and look before scrubbing on.
+  const rumors = gatherRumors(save)
+  const hotRumors = rumors.filter((r) => r.heat >= 55).length
+  const concessionTeaser = (concessionPeople === 0 ? 'quiet right now'
+    : `${concessionPeople} ${concessionPeople === 1 ? 'person' : 'people'} hanging out`)
+    + (hotRumors ? ` · 🔥 ${hotRumors} hot rumor${hotRumors === 1 ? '' : 's'}`
+      : rumors.length ? ' · 🗣 gossip flowing' : '')
+
   const zoneMeta = {
     setups: { icon: '🕹', title: 'The Setups', accent: 'var(--pink)', events: zones.setups },
     concession: { icon: '🌭', title: 'Concession Stand', accent: 'var(--gold)', events: zones.concession },
@@ -250,8 +400,7 @@ function LiveDay({ save, nav }) {
               teaser={matchCount === 0 ? `no games of ${save.game.name} running`
                 : `${matchCount} match${matchCount === 1 ? '' : 'es'} under way${railbirds ? ` · ${railbirds} watching` : ''}`} />
             <ZoneCard meta={zoneMeta.concession} onClick={() => setZone('concession')}
-              teaser={concessionPeople === 0 ? 'quiet right now'
-                : `${concessionPeople} ${concessionPeople === 1 ? 'person' : 'people'} hanging out`} />
+              teaser={concessionTeaser} />
             <ZoneCard meta={zoneMeta.floor} onClick={() => setZone('floor')}
               teaser={floorGroups === 0 ? 'the side cabinets sit idle'
                 : `${floorGroups} group${floorGroups === 1 ? '' : 's'} on the side cabinets`} />
@@ -278,6 +427,8 @@ function LiveDay({ save, nav }) {
         <ZoneView
           meta={zoneMeta[zone]}
           zone={zone}
+          save={save}
+          nav={nav}
           hourIdx={hourIdx}
           isCurrent={isCurrent}
           gameName={save.game.name}
@@ -302,7 +453,7 @@ function ZoneCard({ meta, teaser, onClick }) {
   )
 }
 
-function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, channelName, streamedSetup, onStream, back }) {
+function ZoneView({ meta, zone, save, nav, hourIdx, isCurrent, gameName, channelName, streamedSetup, onStream, back }) {
   return (
     <div style={{ marginTop: 10 }}>
       <div className="row">
@@ -312,6 +463,9 @@ function ZoneView({ meta, zone, hourIdx, isCurrent, gameName, channelName, strea
           <span className="dim small">pick one match to put on {channelName} this hour</span>
         )}
       </div>
+      {zone === 'concession' && save && (
+        <div style={{ marginTop: 8 }}><RumorMill save={save} nav={nav} limit={5} /></div>
+      )}
       <div style={{ marginTop: 8 }}>
         {meta.events.length === 0 && (
           <p className="dim">
@@ -436,10 +590,92 @@ function InteractionEvent({ ev }) {
   )
 }
 
+// The concession stand's read on the scene, ranked hottest first. Derived
+// live from mood/passion/balance/feuds, so it's really a diagnostic: the room
+// is already whispering about the star who's souring or the character warping
+// the meta, days before it shows up in the numbers. Click a rumor to go read
+// the player it's about; ✕ to wave it off (it comes back if it heats up).
+// Reused on the recap and inside the concession zone.
+function RumorMill({ save, nav, limit = 5, title = '🗣 The Rumor Mill' }) {
+  const { mutate } = useStore()
+  const [expanded, setExpanded] = useState(false)
+  const rumors = gatherRumors(save)
+
+  // Keep only dismissals for rumors that still exist. `allRumors` is already
+  // bounded, so this both self-cleans stale entries (resolved conditions forget
+  // their dismissal) and keeps the map from ever outgrowing the active set —
+  // no arbitrary cap that could evict a just-cleared rumor back into view.
+  const pruneDismissed = (s) => {
+    const active = new Set(allRumors(s).map((r) => r.id))
+    for (const id of Object.keys(s.dismissedRumors)) {
+      if (!active.has(id)) delete s.dismissedRumors[id]
+    }
+  }
+  const dismiss = (id, heat) => mutate((s) => {
+    s.dismissedRumors ??= {}
+    s.dismissedRumors[id] = heat
+    pruneDismissed(s)
+  })
+  const clearAll = () => mutate((s) => {
+    s.dismissedRumors ??= {}
+    // Wave off the entire bounded set — clearing it truly empties the mill.
+    for (const r of allRumors(s)) s.dismissedRumors[r.id] = r.heat
+    pruneDismissed(s)
+  })
+
+  if (!rumors.length) {
+    return (
+      <div className="card rumor-mill">
+        <h3 style={{ margin: 0 }}>{title}</h3>
+        <p className="dim small" style={{ margin: '6px 0 0' }}>
+          Nothing making the rounds right now. New chatter surfaces as the scene shifts.
+        </p>
+      </div>
+    )
+  }
+  const shown = expanded ? rumors : rumors.slice(0, limit)
+  const more = rumors.length - Math.min(rumors.length, limit)
+  return (
+    <div className="card rumor-mill">
+      <div className="row spread">
+        <h3 style={{ margin: 0 }}>{title}</h3>
+        <span className="dim small">what the counter's whispering</span>
+      </div>
+      <div className="rumor-list">
+        {shown.map((r) => {
+          const heat = rumorHeatLabel(r.heat)
+          const clickable = r.subjectIds?.length > 0
+          return (
+            <div key={r.id} className={`rumor ${clickable ? 'clickable' : ''}`}
+              onClick={clickable ? () => nav('players', { playerId: r.subjectIds[0] }) : undefined}>
+              <span className="rumor-icon">{r.icon}</span>
+              <span className="rumor-text">{r.text}</span>
+              <span className="rumor-heat" style={{ color: heat.color }}>{heat.label}</span>
+              <button className="rumor-dismiss" title="wave it off — comes back if it heats up"
+                onClick={(e) => { e.stopPropagation(); dismiss(r.id, r.heat) }}>✕</button>
+            </div>
+          )
+        })}
+      </div>
+      <div className="row spread" style={{ marginTop: 8 }}>
+        {more > 0 ? (
+          <button className="small" onClick={() => setExpanded(!expanded)}>
+            {expanded ? '▾ show less' : `▸ show ${more} more bit${more === 1 ? '' : 's'} of chatter`}
+          </button>
+        ) : <span />}
+        <button className="small dim" title="wave off everything going around right now" onClick={clearAll}>
+          clear all
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function PlainEvent({ ev }) {
   const icons = {
     arrival: '🚪', team: '🛡', innovation: '💡', technique: '📈', main: '🎯', mentorship: '🎓',
-    idle: '🥤', minigame: '🏅', moneymatch_announce: '💸', economy: '🧾', patch: '🛠',
+    idle: '🥤', minigame: '🏅', moneymatch_announce: '💸', economy: '🧾', patch: '🛠', staff: '🧹',
+    retirement: '🏁', relevance: '🌐',
   }
   return <div className={`event ${ev.type}`}>{icons[ev.type] || '•'} {ev.text}</div>
 }
@@ -455,7 +691,9 @@ function RecapView({ save, report, nav }) {
     )
   }
   return (
-    <div className="grid-main">
+    <div>
+      <RumorMill save={save} nav={nav} limit={3} title="🗣 Around the arcade" />
+      <div className="grid-main">
       <div className="card">
         <h3>📋 Daily Recap — {report.dateLabel}</h3>
         {report.events.length === 0 && <p className="dim">A quiet day. Nobody came in.</p>}
@@ -478,6 +716,7 @@ function RecapView({ save, report, nav }) {
           )
         })}
         {report.attendeeIds.length === 0 && <p className="dim">Empty arcade.</p>}
+      </div>
       </div>
     </div>
   )

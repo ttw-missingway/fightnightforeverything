@@ -5,11 +5,12 @@ import { formatDay } from '../game/constants.js'
 import { Portrait } from '../components/ui.jsx'
 import { charArt } from '../components/art.js'
 
-// The Codex: an index of every technique (who discovered it, which character
-// it belongs to) and every character (milestones, mains, tech list).
+// The Codex: an index of every discovered technique (who found it, which
+// character it belongs to) and every character (milestones, mains, tech).
 export default function Codex() {
   const { save } = useStore()
   const [tab, setTab] = useState('techniques')
+  const archives = (save.archives || []).filter((a) => (a.innovations || []).length)
 
   return (
     <div>
@@ -18,9 +19,40 @@ export default function Codex() {
         <div className="tabs" style={{ margin: 0 }}>
           <button className={`small ${tab === 'techniques' ? 'active' : ''}`} onClick={() => setTab('techniques')}>Technique Index</button>
           <button className={`small ${tab === 'characters' ? 'active' : ''}`} onClick={() => setTab('characters')}>Character Index</button>
+          {archives.length > 0 && (
+            <button className={`small ${tab === 'archive' ? 'active' : ''}`} onClick={() => setTab('archive')}>🗄 Archives</button>
+          )}
         </div>
       </div>
-      {tab === 'techniques' ? <TechniqueIndex save={save} /> : <CharacterIndex save={save} />}
+      {tab === 'techniques' && <TechniqueIndex save={save} />}
+      {tab === 'characters' && <CharacterIndex save={save} />}
+      {tab === 'archive' && <ArchiveIndex save={save} archives={archives} />}
+    </div>
+  )
+}
+
+// Techniques discovered in past runs — the knowledge died with the reset,
+// but the record keeps the names alive.
+function ArchiveIndex({ save, archives }) {
+  return (
+    <div>
+      {[...archives].reverse().map((a) => (
+        <div className="card" key={a.run}>
+          <h3 style={{ marginTop: 0 }}>Run {a.run} <span className="dim small">— ended {a.endedDateLabel}</span></h3>
+          <div className="table-scroll"><table>
+            <thead><tr><th>Innovation</th><th>Character</th><th>When</th></tr></thead>
+            <tbody>
+              {[...a.innovations].reverse().map((i) => (
+                <tr key={i.id}>
+                  <td><strong className="green">{i.name}</strong></td>
+                  <td className="cyan">{charName(save, i.charId) || <span className="dim">universal</span>}</td>
+                  <td className="dim small">{formatDay(i.day, i.year)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -33,39 +65,13 @@ function charName(save, charId) {
 
 function TechniqueIndex({ save }) {
   const players = Object.values(save.players)
-  const knowsTech = (tid) => players.filter((p) => p.knownTechniques.includes(tid)).length
   const knowsInnov = (iid) => players.filter((p) => p.knownInnovations.includes(iid)).length
 
   return (
     <div>
       <div className="card">
-        <h3>Designed Techniques ({save.game.techniques.length})</h3>
-        <p className="dim small">Built into {save.game.name} — unlocked through play.</p>
-        {save.game.techniques.length === 0 && <p className="dim">None defined.</p>}
-        {save.game.techniques.length > 0 && (
-          <div className="table-scroll"><table>
-            <thead><tr><th>Technique</th><th>Character</th><th>Difficulty</th><th>XP</th><th>Known by</th></tr></thead>
-            <tbody>
-              {save.game.techniques.map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    <strong>{t.name}</strong>
-                    {t.description && <div className="dim small">{t.description}</div>}
-                  </td>
-                  <td className="cyan">{charName(save, t.charId) || <span className="dim">universal</span>}</td>
-                  <td className="dim">{t.difficulty}</td>
-                  <td className="dim">{t.xp}</td>
-                  <td>{knowsTech(t.id)} player{knowsTech(t.id) === 1 ? '' : 's'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>Discovered Innovations ({save.innovations.length})</h3>
-        <p className="dim small">Tech invented by the community itself. Knowing every innovation for a character is the only path to skill 100.</p>
+        <h3>Discovered Techniques ({save.innovations.length})</h3>
+        <p className="dim small">All tech is discovered by the community, in play. Knowing every innovation for a character is the only path to skill 100.</p>
         {save.innovations.length === 0 && <p className="dim">Nothing has been discovered yet. High-innovation players will get there.</p>}
         {save.innovations.length > 0 && (
           <div className="table-scroll"><table>
@@ -99,7 +105,6 @@ function CharacterIndex({ save }) {
         const mains = players.filter((p) => p.mainCharId === c.id && p.isRegular)
           .sort((a, b) => (b.charSkill[c.id] || 0) - (a.charSkill[c.id] || 0))
         const innovs = save.innovations.filter((i) => i.charId === c.id)
-        const techs = save.game.techniques.filter((t) => t.charId === c.id)
         const milestones = [...(save.charMilestones || [])].filter((m) => m.charId === c.id).reverse()
         return (
           <div className="card" key={c.id}>
@@ -125,11 +130,10 @@ function CharacterIndex({ save }) {
               </div>
             ))}
 
-            {(techs.length > 0 || innovs.length > 0) && (
+            {innovs.length > 0 && (
               <>
                 <h4>Tech</h4>
                 <div>
-                  {techs.map((t) => <span key={t.id} className="pill on">{t.name}</span>)}
                   {innovs.map((i) => {
                     const creator = save.players[i.creatorId]
                     return (

@@ -5,9 +5,8 @@ import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
   ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES, CATCHPHRASES,
   GAME_TITLE_PARTS, ARCADE_NAME_PARTS, STAGE_IDEAS, TOURNAMENT_NAME_PARTS,
-  TECHNIQUE_NAME_PARTS,
 } from './names.js'
-import { newStage, newTechnique } from './model.js'
+import { newStage } from './model.js'
 import { deriveVoice } from './dialogue.js'
 import { applyArchetypeKit, STAGE_VIBES } from './design.js'
 
@@ -35,31 +34,6 @@ export function generateStage(existing = []) {
   const fresh = STAGE_IDEAS.filter(([n]) => !used.has(n))
   const [name, description] = fresh.length ? choice(fresh) : choice(STAGE_IDEAS)
   return newStage({ name, description, vibe: choice(STAGE_VIBES) })
-}
-
-const TECH_DESCRIPTIONS = [
-  'Squeezes extra frames out of a cancel window almost nobody knows exists.',
-  'A timing-strict input that converts a stray hit into full damage.',
-  'Turns a defensive option into a surprise offensive tool.',
-  'Abuses a movement quirk to approach from an angle the game never intended.',
-  'A resource trick that banks meter where others would burn it.',
-  'A defensive escape that only works if you buffer it a beat early.',
-  'A setup that looks unsafe on paper and is completely airtight in practice.',
-  'Milks a knockdown for one extra guess the opponent never gets used to.',
-]
-
-// charId: undefined = random scope, null = general, otherwise that character.
-export function generateTechnique(save, charId = undefined) {
-  const chars = save.game.characters
-  let scope = charId
-  if (scope === undefined) scope = chars.length > 0 && chance(0.5) ? choice(chars).id : null
-  return newTechnique({
-    name: `${choice(TECHNIQUE_NAME_PARTS.prefix)} ${choice(TECHNIQUE_NAME_PARTS.suffix)}`,
-    charId: scope,
-    difficulty: randInt(2, 9),
-    xp: randInt(3, 12),
-    description: choice(TECH_DESCRIPTIONS),
-  })
 }
 
 export function generateTournamentName() {
@@ -92,8 +66,10 @@ export function randomPreferences(save) {
     playerTags: pTags.length ? sample(pTags, randInt(0, Math.min(2, pTags.length))) : [],
     attractedPlayerTags: drawnTo,
     repelledPlayerTags: pTags.length ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1)) : [],
-    otherGames: sample(save.arcade.otherGames.length ? save.arcade.otherGames : OTHER_GAMES, randInt(1, 3)),
-    foods: sample(save.arcade.foods.length ? save.arcade.foods : FOODS, randInt(1, 3)),
+    // Tastes span the whole catalog — a player can love a food/game whether or
+    // not you stock it. Stocking what they like is the separate design choice.
+    otherGames: sample(OTHER_GAMES, randInt(1, 3)),
+    foods: sample(FOODS, randInt(1, 3)),
   }
 }
 
@@ -108,9 +84,37 @@ export function generateCharacter(usedNames = new Set()) {
   return char
 }
 
+// A generated player's latent CEILING tier. Most people who wander into an
+// arcade are here to hang out, not to become a world champion — so the roster
+// is deliberately top-light. A tier biases the stats that decide how high they
+// can ever climb (aptitude/mastery), how hard they push (the intensity stats),
+// how often they show up (spark), and their nerve on stage (composure). Only a
+// handful roll "talent" — the raw material a cultivated run turns into an EVO
+// threat. Everyone else plateaus no matter what. Target over 48: ~40 forgettable
+// or casual, ~8 with real competitive potential, of whom 1–3 might ever win.
+const CEILING_TIERS = [
+  { key: 'spectator', weight: 46, range: [1, 4] },
+  { key: 'regular', weight: 32, range: [3, 6] },
+  { key: 'prospect', weight: 15, range: [5, 8] },
+  { key: 'talent', weight: 7, range: [7, 10] },
+]
+const CEILING_STATS = ['spark', 'determination', 'dominance', 'mojo', 'xfactor', 'aptitude', 'mastery', 'composure']
+
+function rollCeilingTier() {
+  const total = CEILING_TIERS.reduce((s, t) => s + t.weight, 0)
+  let r = randInt(1, total)
+  for (const t of CEILING_TIERS) { r -= t.weight; if (r <= 0) return t }
+  return CEILING_TIERS[1]
+}
+
 export function generatePlayer(save, overrides = {}) {
   const personal = rollStatBlock(PERSONAL_KEYS)
   const social = rollStatBlock(SOCIAL_KEYS)
+  // Skew the ceiling stats by tier so the roster is top-light (see above). The
+  // rest of the stats stay freely rolled, so personalities still vary within a
+  // tier — a talented player can still be a slob with no sportsmanship.
+  const tier = rollCeilingTier()
+  for (const k of CEILING_STATS) personal[k] = randInt(tier.range[0], tier.range[1])
   const first = choice(FIRST_NAMES)
   const last = choice(LAST_NAMES)
   const taken = new Set(Object.values(save.players).map((p) => p.alias))
@@ -135,7 +139,7 @@ export function generatePlayer(save, overrides = {}) {
     description: choice(APPEARANCES),
     createdBy: 'cpu',
     personal,
-    social,
+    social, // rollStatBlock(SOCIAL_KEYS) now rolls `income` too
     voice: deriveVoice({ personal, social }),
     defaultMood: randInt(4, 7),
     mood: randInt(4, 7),
@@ -145,10 +149,32 @@ export function generatePlayer(save, overrides = {}) {
     playerTags: ownTags,
     attractedPlayerTags: drawnTo,
     repelledPlayerTags: putOffBy,
-    otherGames: sample(save.arcade.otherGames.length ? save.arcade.otherGames : OTHER_GAMES, randInt(1, 3)),
-    foods: sample(save.arcade.foods.length ? save.arcade.foods : FOODS, randInt(1, 3)),
+    // Tastes span the whole catalog, not just what's stocked (see randomPreferences).
+    otherGames: sample(OTHER_GAMES, randInt(1, 3)),
+    foods: sample(FOODS, randInt(1, 3)),
     ...overrides,
   })
+}
+
+// Seed the WHOLE finite cast up front. The roster is fixed the day the run
+// begins: consequential worlds fill to 48, sandbox honors the allow toggle +
+// CPU cap. Everyone starts a stranger (isRegular=false) and DISCOVERS the
+// arcade over time through the normal attendance ramp — so the early game still
+// feels like a scene slowly forming. Nobody is ever generated again: once these
+// people retire, they're gone, and running out of them ends the run.
+export function populateRoster(save) {
+  const sandbox = save.settings.mode === 'sandbox'
+  if (sandbox && !save.settings.allowGeneratedPlayers) return
+  const total = () => Object.keys(save.players).length
+  const cpuCount = () => Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
+  const roomToGrow = sandbox
+    ? () => cpuCount() < save.settings.maxGeneratedPlayers
+    : () => total() < 48
+  let guard = 0
+  while (roomToGrow() && guard++ < 200) {
+    const p = generatePlayer(save)
+    save.players[p.id] = p
+  }
 }
 
 // The EVO elite roster is generated once per save and persists year to year,

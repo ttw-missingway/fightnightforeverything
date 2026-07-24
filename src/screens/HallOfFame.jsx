@@ -11,11 +11,12 @@ export default function HallOfFame() {
   const players = Object.values(save.players)
   const mostGlorious = [...players].sort((a, b) => b.glory - a.glory).slice(0, 5).filter((p) => p.glory > 0)
   const evoLegends = [...save.evoRoster].sort((a, b) => (b.titles || 0) - (a.titles || 0)).filter((e) => e.titles > 0)
+  const archives = save.archives || []
 
   if (tab === 'chronicle') {
     return (
       <div>
-        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} />
+        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} />
         <h1 style={{ fontSize: 30 }}>📜 The Arcade Chronicle</h1>
         <p className="dim">The moments everyone remembers — told and retold until they're legend.</p>
         {(save.chronicle || []).length === 0 && (
@@ -33,9 +34,51 @@ export default function HallOfFame() {
     )
   }
 
+  if (tab === 'archive') {
+    return (
+      <div>
+        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} />
+        <h1 style={{ fontSize: 30 }}>🗄 The Archives</h1>
+        <p className="dim">Past runs of this world — everything that happened before the reset(s).</p>
+        {[...archives].reverse().map((a) => (
+          <div className="card" key={a.run}>
+            <h3 style={{ marginTop: 0 }}>Run {a.run} <span className="dim small">— ended {a.endedDateLabel}</span></h3>
+            {(a.hallOfFame || []).length > 0 && (
+              <>
+                <h4 className="gold">Tournament results</h4>
+                {[...a.hallOfFame].reverse().map((r) => (
+                  <div className="row spread" key={r.id} style={{ padding: '2px 0' }}>
+                    <span className="small">
+                      {r.type === 'evo' ? '🌏' : r.type === 'teams' ? '🛡' : '🏆'} {r.name}
+                    </span>
+                    <span className="small gold">{r.champion}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {(a.chronicle || []).length > 0 && (
+              <>
+                <h4 className="cyan">Chronicle</h4>
+                {a.chronicle.map((c, i) => (
+                  <div className="row spread" key={i} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
+                    <span className="small">{c.icon} {c.text}</span>
+                    <span className="dim small" style={{ whiteSpace: 'nowrap' }}>{formatDay(c.day, c.year)}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {(a.hallOfFame || []).length === 0 && (a.chronicle || []).length === 0 && (
+              <p className="dim small">A quiet run — nothing made the record books.</p>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div>
-      <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} />
+      <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} />
       <h1 style={{ fontSize: 30 }}>🏛 Hall of Fame</h1>
 
       <div className="grid2">
@@ -92,13 +135,18 @@ export default function HallOfFame() {
   )
 }
 
-function HofTabs({ tab, setTab, count }) {
+function HofTabs({ tab, setTab, count, archives = 0 }) {
   return (
     <div className="tabs">
       <button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>🏛 Hall of Fame</button>
       <button className={tab === 'chronicle' ? 'active' : ''} onClick={() => setTab('chronicle')}>
         📜 Arcade Chronicle ({count})
       </button>
+      {archives > 0 && (
+        <button className={tab === 'archive' ? 'active' : ''} onClick={() => setTab('archive')}>
+          🗄 Archives ({archives})
+        </button>
+      )}
     </div>
   )
 }

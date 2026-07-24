@@ -236,6 +236,34 @@ const LINES = {
       ],
     },
   },
+  // Small talk at the counter — the game falls away for a second and people
+  // are just people. This is what keeps the cast from reading as stat blocks.
+  lifeChat: {
+    dimension: 'humor',
+    pools: {
+      dry: [
+        "Slept four hours. Gonna play like it too.",
+        "My coworkers think 'labbing' is a personality disorder. They're not wrong.",
+        "Rent went up again. Anyway. Who's got next.",
+        "I'm told there's a world outside this building. Sounds fake.",
+        "Ordered the same thing here for three years. Don't fix what works.",
+      ],
+      earnest: [
+        "Honestly? Best part of my whole week is walking through that door.",
+        "My sister asked what I do here. I said 'family.' She hung up.",
+        "Got the promotion, by the way. Still can't beat you though, so.",
+        "I brought snacks for everybody. No reason. Just felt like it.",
+        "Whatever kind of week you're having — glad you're here. I mean it.",
+      ],
+      clowning: [
+        "I told my date I was 'in esports.' She left. Worth it.",
+        "New goal: get sponsored so my mom stops asking about a real job.",
+        "Dreamt about my blockstrings again. I need help. I need next, actually.",
+        "Put me on the arcade lease. I basically live here.",
+        "My plant died because I was here. I named it after {t}. RIP.",
+      ],
+    },
+  },
 }
 
 // A quirk hijacks the line about half the time. This is where a voice
@@ -258,6 +286,7 @@ const QUIRK_LINES = {
     trashTalk: ["Back in my day we punished that on REACTION, {t}.", "I was doing this before the game told you the frame data, {t}."],
     ggWin: ["Experience, baby. There's no patch for it."],
     watcherHype: ["THAT'S the old-school way. Beautiful."],
+    lifeChat: ["Arcades like this used to be on every corner. We're the last of something, you know.", "My back's a tier list of injuries and it's all top tier. Anyway."],
   },
   'technical': {
     joke: ["{t}'s blockstrings have more holes than a training-mode dummy."],
@@ -281,12 +310,14 @@ const QUIRK_LINES = {
     ggLossGood: ["A worthy defeat. I'll sit with it."],
     winGlow: ["Winning teaches nothing. Fortunately, I learn nothing gladly."],
     watcherWince: ["Every collapse contains its own instruction."],
+    lifeChat: ["We come here to lose in a place where losing costs nothing real. Think about that.", "A day outside this room is just a longer wait for the next set."],
   },
   'hypeman': {
     watcherHype: ["YOOOOOO!!", "THE ARCADE IS ON FIRE TONIGHT!!", "I'M TELLING EVERYBODY ABOUT THIS!"],
     ggWin: ["LET'S GOOOOO!", "THAT'S what we practice for!!"],
     jokeLanded: ["AHAHAHA no because it's TRUE—"],
     winGlow: ["Somebody stream ME next, I was COOKING today."],
+    lifeChat: ["EVERYBODY good?? Everybody eat?? Good. Let's have the BEST night!", "I love this room. I LOVE this room. Somebody had to say it."],
   },
 }
 

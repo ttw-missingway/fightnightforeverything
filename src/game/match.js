@@ -1,39 +1,67 @@
 import { clamp, rand, displayName } from './util.js'
 import { getMatchup } from './model.js'
+import { areRivals, rivalOf } from './social.js'
+import { competitiveIntensity } from './constants.js'
 
 // ---------- Character skill & learning curve ----------
 
-// Skill cap: reaching 100 requires knowing every character-specific innovation.
-export function skillCap(save, player, charId) {
-  const charInnovs = save.innovations.filter((i) => i.charId === charId)
-  if (charInnovs.length === 0) return 100
-  const known = charInnovs.filter((i) => player.knownInnovations.includes(i.id)).length
-  return 90 + Math.round(10 * (known / charInnovs.length))
+// Does this player have an active rival RIGHT NOW? Read from the day's cached
+// scene read (O(1)) in the hot sim path; falls back to a live scan for the UI
+// and fresh saves where the scene hasn't been computed yet.
+function hasActiveRival(save, player) {
+  const ids = save.scene?.rivalIds
+  if (ids) return ids.includes(player.id)
+  return !!rivalOf(save, player)
 }
 
-// Learning curve: aptitude lowers the difficulty floor (fast early gains),
-// mastery lowers the difficulty ceiling (keeps gains alive at high skill).
-// Character difficulty slows everything down.
+/**
+ * The skill CEILING — how good this player can ever realistically get on a
+ * character. This is the heart of the mid-game: raw talent (aptitude) and
+ * hunger (competitive intensity) set where an UNCULTIVATED player plateaus, and
+ * only cultivation pushes past it — an active rivalry ("iron sharpens iron") and
+ * the earned stage belief that comes from being featured. Reaching the very top
+ * is meant to be nearly impossible: it takes elite talent AND years of the right
+ * environment. Most of the roster stalls in the 40s–50s no matter what.
+ */
+export function skillCeiling(save, player, charId) {
+  const s = player.personal || {}
+  const apt = s.aptitude ?? 5
+  const mastery = s.mastery ?? 5
+  const intensity = competitiveIntensity(player) // 1..10
+  // Where a player stalls with NO cultivation — the comfort plateau.
+  let ceiling = 28 + apt * 2.3 + intensity * 2.0 + mastery * 0.8
+  // Iron sharpens iron: an active rival is the main way past the plateau.
+  if (hasActiveRival(save, player)) ceiling += 10
+  // Earned stage belief: battle-tested players realize more of their potential.
+  ceiling += (player.belief ?? 0) * 0.12
+  // Knowing the character's discovered tech lifts the very top a little.
+  ceiling += Math.min(6, techniqueBonus(save, player, charId) * 0.6)
+  return clamp(ceiling, 20, 100)
+}
+
+// Learning curve: gains asymptote toward the player's ceiling, so the last
+// stretch is a real grind and the very top is nearly unreachable. Aptitude
+// drives the early climb; mastery keeps the tap open near the top; character
+// difficulty slows everything.
 export function skillGainMultiplier(save, player, charId) {
   const char = save.game.characters.find((c) => c.id === charId)
   const difficulty = char ? char.difficulty : 5
-  const skill = player.charSkill[charId] || 0
-  const aptitude = player.personal.aptitude
-  const mastery = player.personal.mastery
   const diffFactor = 1.3 - difficulty * 0.06 // 1.24 (easy) .. 0.7 (hard)
-  if (skill < 50) {
-    // Early game: aptitude dominates.
-    return diffFactor * (0.6 + aptitude * 0.12) * (1 - skill / 130)
-  }
-  // Mastery phase: much harder, mastery keeps the tap open.
-  const wall = (skill - 50) / 50 // 0..1
-  return diffFactor * (0.1 + mastery * 0.045) * (1 - wall * (0.96 - mastery * 0.04))
+  const ceiling = skillCeiling(save, player, charId)
+  const skill = player.charSkill[charId] || 0
+  if (skill >= ceiling) return 0
+  const apt = player.personal.aptitude ?? 5
+  const mastery = player.personal.mastery ?? 5
+  const rate = 0.5 + apt * 0.09 + mastery * 0.045
+  // Asymptote: shrinks to nothing as skill nears the ceiling.
+  const prox = (ceiling - skill) / Math.max(30, ceiling)
+  return diffFactor * rate * Math.pow(prox, 1.15)
 }
 
 export function gainSkill(save, player, charId, baseAmount) {
   if (!charId) return 0
   const cur = player.charSkill[charId] || 0
-  const cap = skillCap(save, player, charId)
+  const cap = skillCeiling(save, player, charId)
   const gain = Math.max(0, baseAmount * skillGainMultiplier(save, player, charId))
   const next = clamp(cur + gain, 0, cap)
   player.charSkill[charId] = Math.round(next * 100) / 100
@@ -48,12 +76,12 @@ export function gainSkill(save, player, charId, baseAmount) {
     if (char && cur < 100 && next >= 100) {
       save.charMilestones.push({
         charId, day: save.day, year: save.year,
-        text: `${displayName(player, save)} achieved complete mastery of ${char.name} — every innovation, skill 100`,
+        text: `${displayName(player, save)} reached the summit — skill 100 on ${char.name}, a once-in-a-generation feat`,
       })
       if (save.chronicle) {
         save.chronicle.unshift({
           day: save.day, year: save.year, icon: '🌕',
-          text: `${displayName(player, save)} achieved complete mastery of ${char.name} — skill 100, every innovation known`,
+          text: `${displayName(player, save)} hit a PERFECT 100 on ${char.name} — almost nobody ever does`,
         })
       }
     }
@@ -63,12 +91,9 @@ export function gainSkill(save, player, charId, baseAmount) {
 
 // ---------- Performance & match resolution ----------
 
+// Designed techniques are retired — discovered innovations are the tech.
 export function techniqueBonus(save, player, charId) {
   let bonus = 0
-  for (const tId of player.knownTechniques) {
-    const t = save.game.techniques.find((x) => x.id === tId)
-    if (t && (t.charId === null || t.charId === charId)) bonus += 1.5
-  }
   for (const iId of player.knownInnovations) {
     const innov = save.innovations.find((x) => x.id === iId)
     if (innov && (innov.charId === null || innov.charId === charId)) bonus += 1
@@ -163,21 +188,46 @@ export function recordCharResult(player, charId, won) {
 }
 
 /**
- * Resolve a match between two live players. Mutates elo, mood, W/L, respect.
- * Skill gains are handled by the caller (sim/tournament) so watching etc. can share logic.
+ * Which character a player brings to THIS match. Usually their main — but if
+ * the main is at a real matchup disadvantage and they have a pocket pick they
+ * genuinely know that fares better, they counterpick. Both players read the
+ * opponent's MAIN (blind to the counterpick), which keeps selection stable.
  */
-export function resolveMatch(save, a, b) {
-  const aCharId = a.mainCharId
-  const bCharId = b.mainCharId
+export function pickMatchChar(save, player, oppCharId) {
+  const main = player.mainCharId
+  if (!main || !oppCharId || !(player.pocketPicks || []).length) return main
+  const mainMU = getMatchup(save.game, main, oppCharId)
+  if (mainMU >= 44) return main // the main is fine — no reason to switch
+  let best = main
+  let bestScore = mainMU + (player.charSkill[main] || 0) * 0.35
+  for (const pid of player.pocketPicks) {
+    if (pid === main) continue
+    const skill = player.charSkill[pid] || 0
+    if (skill < 25) continue // you need real reps before you'll pull it out
+    const score = getMatchup(save.game, pid, oppCharId) + skill * 0.35
+    if (score > bestScore + 6) { bestScore = score; best = pid } // meaningfully better
+  }
+  return best
+}
+
+/**
+ * Resolve a match between two live players. Mutates elo, mood, W/L, respect.
+ * Char ids default to each player's main but may be overridden (counterpicks,
+ * pocket-pick labbing). Skill gains are handled by the caller so watching etc.
+ * can share logic.
+ */
+export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mainCharId) {
   const probA = winProbability(save, a, aCharId, b, bCharId)
   const aWins = rand() < probA
   const winner = aWins ? a : b
   const loser = aWins ? b : a
+  const winnerChar = aWins ? aCharId : bCharId
+  const loserChar = aWins ? bCharId : aCharId
   const eloDelta = updateElo(winner, loser)
   winner.wins += 1
   loser.losses += 1
-  recordCharResult(winner, winner.mainCharId, true)
-  recordCharResult(loser, loser.mainCharId, false)
+  recordCharResult(winner, winnerChar, true)
+  recordCharResult(loser, loserChar, false)
   recordH2H(winner, loser)
   save.patchGames = (save.patchGames || 0) + 1 // every set is balance data
 
@@ -186,11 +236,18 @@ export function resolveMatch(save, a, b) {
   loser.mood = clamp(loser.mood - swing, 0, 10)
   winner.mood = clamp(winner.mood + (10 - winner.personal.temperance) * 0.2, 0, 10)
 
-  // Skill growth: dominance for the winner, determination for the loser.
-  const wGain = gainSkill(save, winner, winner.mainCharId, 0.1 + winner.personal.dominance * 0.03)
-  const lGain = gainSkill(save, loser, loser.mainCharId, 0.1 + loser.personal.determination * 0.035)
+  // Skill growth: dominance for the winner, determination for the loser — on the
+  // character they actually played this set.
+  let wGain = gainSkill(save, winner, winnerChar, 0.1 + winner.personal.dominance * 0.03)
+  let lGain = gainSkill(save, loser, loserChar, 0.1 + loser.personal.determination * 0.035)
+  // Iron sharpens iron: a real rivalry pushes both to another level. Losing to
+  // your rival especially lights a fire under you.
+  if (areRivals(save, winner, loser)) {
+    wGain += gainSkill(save, winner, winnerChar, 0.14)
+    lGain += gainSkill(save, loser, loserChar, 0.2)
+  }
 
   winner.respect += probA > 0.5 === aWins ? 1 : 3 // upsets earn extra respect
 
-  return { aWins, probA, eloDelta, winner, loser, wGain, lGain }
+  return { aWins, probA, eloDelta, winner, loser, wGain, lGain, winnerChar, loserChar, aCharId, bCharId }
 }

@@ -1,23 +1,39 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf } from './constants.js'
-import { generatePlayer, driftEvoRoster } from './generate.js'
-import { newInnovation, remember, chronicle } from './model.js'
-import { daysSincePatch, releasePatch } from './patch.js'
+import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
+import { driftEvoRoster } from './generate.js'
+import { newInnovation, remember, chronicle, pushVod } from './model.js'
+import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
-import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf } from './match.js'
+import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
 import { narrateSet } from './fight.js'
-import { buildStream, personalityOf } from './stream.js'
-import { econLog, weeklyRent } from './economy.js'
-import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList } from './socialmedia.js'
+import { buildStream, personalityOf, applyStageReps } from './stream.js'
+import {
+  staffDaily, playerSpending, settleRecurring,
+  landlordDaily, tokenDeterrence, arcadeClosed, isStaffed,
+  adAwarenessBoost, adHypePerDay, playerStaffAppeal,
+} from './economy.js'
+import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand } from './socialmedia.js'
 import { speak } from './dialogue.js'
 import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
+  sceneHealth, rivalOf,
 } from './social.js'
+import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
+import { areSeparated, pruneSeparations } from './discipline.js'
+import { relevanceDaily } from './relevance.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
 
 const pName = (save, p) => displayName(p, save)
+
+// How hard it is to draw a crowd, per difficulty. On master the arcade is an
+// unknown quantity nobody's heard of; on easy the line's out the door. Sandbox
+// is neutral. Feeds both attendance and how fast new faces discover the place.
+function popularityFactor(save) {
+  if (save.settings.mode === 'sandbox') return 1
+  return difficultyOf(save).popularityMult
+}
 
 // ---------- Main character selection ----------
 
@@ -115,10 +131,28 @@ function maybeSettleMain(save, player, events) {
   if (!best) return
   player.mainCharId = best.id
   player.settledMain = true
+  // The couple of other characters they got a feel for during exploration
+  // become their pocket picks — counterpick options for bad matchups.
+  player.pocketPicks = player.exploredChars
+    .filter((id) => id !== best.id)
+    .sort((x, y) => (player.charSkill[y] || 0) - (player.charSkill[x] || 0))
+    .slice(0, 2)
   events.push({
     type: 'main',
     text: `${pName(save, player)} has settled on ${best.name} as their main after trying ${player.exploredChars.length} character${player.exploredChars.length === 1 ? '' : 's'}.`,
   })
+}
+
+// A curious, adaptable player picks up a new pocket character now and then —
+// something to fall back on when the meta turns against their main.
+function maybePocketPickup(save, player) {
+  if (!player.settledMain || !player.mainCharId) return
+  if ((player.pocketPicks || []).length >= 3) return
+  if (!chance(0.0008 * (player.personal.learning + player.personal.innovation))) return
+  const options = save.game.characters.filter(
+    (ch) => ch.id !== player.mainCharId && !(player.pocketPicks || []).includes(ch.id))
+  if (!options.length) return
+  player.pocketPicks = [...(player.pocketPicks || []), choice(options).id]
 }
 
 function maybeSwitchMain(save, player, events) {
@@ -143,7 +177,13 @@ function maybeSwitchMain(save, player, events) {
 // ---------- Attendance ----------
 
 function attendChance(save, player) {
-  let p = 0.2 + player.personal.spark * 0.055 + (player.mood - 5) * 0.02
+  // Nobody goes to the arcade every single day — weekends are the draw,
+  // weekdays are for the truly committed, and the habit builds slowly.
+  // That's what makes "regular" mean something.
+  let p = 0.08 + player.personal.spark * 0.038 + (player.mood - 5) * 0.02
+  p += Math.min(0.12, player.daysAttended * 0.0015) // dedication compounds
+  const wd = weekdayOf(save.day)
+  p += wd === 0 || wd === 6 ? 0.16 : -0.02
   // A hated (or beloved) patch changes how much anyone wants to play.
   if (save.settings.mode !== 'sandbox') p += (save.patchMorale || 0) * 0.004
   for (const f of player.foods) if (save.arcade.foods.includes(f)) p += 0.03
@@ -155,7 +195,49 @@ function attendChance(save, player) {
       if (player.repelledTags.includes(t)) p -= 0.05
     }
   }
-  return clamp(p, 0.05, 0.95)
+  // A grimy floor and miserable staff make the whole place unpleasant to be
+  // in — a real drag on turnout. A spotless, well-run room is a genuine draw.
+  // (This is what makes staffing pay off once you're busy enough to need it.)
+  p *= clamp(0.68 + (save.arcade.cleanliness ?? 80) / 250, 0.68, 1.1)
+  p *= clamp(0.86 + (save.staffing?.morale ?? 70) / 500, 0.86, 1.08)
+  // A familiar face behind the counter is its own draw — regulars turn up to
+  // hang out where their friend (or the local star) works. This is the payoff
+  // for staffing a PLAYER instead of an anonymous outside hire.
+  p += playerStaffAppeal(save) * 0.015
+  // A brand-new arcade nobody's heard of is hard to DISCOVER: first-timers
+  // barely trickle in until word spreads. Once someone's a regular, they come
+  // regardless — so those early discoverers are what seeds the whole scene.
+  if (!player.isRegular) p *= 0.55 * awarenessFactor(save)
+  // A hard-difficulty arcade is a struggling unknown — thinner crowds.
+  p *= 0.45 + 0.55 * popularityFactor(save)
+  // Passion: a player losing the fire for the game turns up less and less.
+  p *= passionAttendanceFactor(player)
+  // Relevance: a game the world has moved on from empties the room over time.
+  p *= clamp(0.65 + (save.relevance ?? 55) / 100 * 0.45, 0.65, 1.05)
+  // Toxicity: a scene full of bad blood empties a room. A great venue (clean,
+  // well-staffed) softens it, but only so much — left unchecked, toxicity drives
+  // attendance into the floor, and with a finite cast that never refills, that's
+  // a death spiral: fewer people → the bad blood among who's left dominates →
+  // fewer still → the scene collapses and you lose. Warn/separate/ban is the way out.
+  const tox = save.scene?.toxicity || 0
+  if (tox > 0) {
+    const comfort = clamp((((save.arcade.cleanliness ?? 80) + (save.staffing?.morale ?? 70)) / 200), 0, 1)
+    p *= clamp(1 - tox * 0.85 * (1 - comfort * 0.35), 0.22, 1)
+  }
+  return clamp(p, 0.02, 0.9)
+}
+
+// 0.3..1 — how well-known the arcade is. Low on opening day, climbs with days
+// open, followers, and channel hype. Gates discovery (first-timers and new
+// generated faces), not the loyalty of existing regulars. Resets on a fresh
+// run (day and followers both reset).
+function awarenessFactor(save) {
+  const daysOpen = absDayOf(save.day, save.year) - 1
+  const followers = save.stream?.followers || 0
+  const hype = save.stream?.hype || 0
+  // Advertising is the deliberate lever here — the main way to fill the room
+  // early, before there's a scene or a following to speak of.
+  return clamp(0.3 + daysOpen / 30 + followers / 1000 + hype / 100 + adAwarenessBoost(save), 0.3, 1)
 }
 
 // ---------- Innovations & techniques ----------
@@ -224,25 +306,6 @@ function maybeLearnInnovation(save, learner, teacher, events, viaWatching = fals
     type: 'innovation',
     text: `${pName(save, learner)} learned "${innov.name}" from ${viaWatching ? 'watching' : ''} ${pName(save, teacher)}. (+${leap.toFixed(1)} skill)`,
   })
-}
-
-function maybeUnlockTechnique(save, player, events) {
-  const skill = player.charSkill[player.mainCharId] || 0
-  const candidates = save.game.techniques.filter((t) =>
-    !player.knownTechniques.includes(t.id) &&
-    (t.charId === null || t.charId === player.mainCharId))
-  for (const t of candidates) {
-    const p = clamp(0.015 + (skill - t.difficulty * 8) / 500, 0, 0.12)
-    if (chance(p)) {
-      player.knownTechniques.push(t.id)
-      const leap = gainSkill(save, player, player.mainCharId, t.xp)
-      events.push({
-        type: 'technique',
-        text: `${pName(save, player)} unlocked ${t.name}! (+${leap.toFixed(1)} skill)`,
-      })
-      break
-    }
-  }
 }
 
 // ---------- Interactions ----------
@@ -322,6 +385,15 @@ function makeBeats(save, group, where, results) {
     say(storyteller, 'memoryRetell', { mem: mem.text })
   }
 
+  // At the counter, the game falls away for a beat — someone says something
+  // human. This is what makes the cast feel like people, not stat blocks.
+  if (where === 'at the concession stand' && chance(0.5)) {
+    const talker = choice(group)
+    const other = group.find((p) => p !== talker)
+    const line = speak(talker, 'lifeChat', { self: pName(save, talker), t: other ? pName(save, other) : 'someone' })
+    if (line) beats.push({ speaker: pName(save, talker), text: line })
+  }
+
   if (where === 'at the concession stand' && save.arcade.foods.length && group.length >= 2 && chance(0.4)) {
     const food = choice(save.arcade.foods)
     const fans = group.filter((p) => p.foods.includes(food))
@@ -351,7 +423,7 @@ function moneyMatchToday(save) {
 function maybeScheduleMoneyMatch(save, events) {
   if (!save.moneyMatches || scheduledMoneyMatch(save)) return
   if (!chance(0.07)) return
-  const regs = Object.values(save.players).filter((p) => p.isRegular && p.mainCharId)
+  const regs = Object.values(save.players).filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
   const pairs = []
   for (const a of regs) {
     for (const b of regs) {
@@ -388,18 +460,22 @@ function runMoneyMatch(save, mm, present, events) {
   const b = save.players[mm.bId]
   if (!a || !b || !a.mainCharId || !b.mainCharId) { mm.status = 'done'; return }
   const watchers = present.filter((p) => p.id !== a.id && p.id !== b.id)
-  const probA = winProbability(save, a, a.mainCharId, b, b.mainCharId)
-  const result = resolveMatch(save, a, b)
+  // Money is on the line — both scout the matchup and counterpick if their main
+  // is at a disadvantage and they've got a pocket that swings it.
+  const aCharId = pickMatchChar(save, a, b.mainCharId)
+  const bCharId = pickMatchChar(save, b, a.mainCharId)
+  const probA = winProbability(save, a, aCharId, b, bCharId)
+  const result = resolveMatch(save, a, b, aCharId, bCharId)
   const winner = result.winner
   const loser = result.loser
-  const charA = save.game.characters.find((c) => c.id === a.mainCharId)
-  const charB = save.game.characters.find((c) => c.id === b.mainCharId)
+  const charA = save.game.characters.find((c) => c.id === aCharId)
+  const charB = save.game.characters.find((c) => c.id === bCharId)
   const mmStage = save.game.stages.length ? choice(save.game.stages) : null
   // Money matches are marquee: several seeds, keep the most dramatic cut.
   const nar = narrateSet({
     aName: pName(save, a), bName: pName(save, b),
     charA, charB, probA, winnerIsA: result.aWins, long: true,
-    skillA: a.charSkill[a.mainCharId] || 0, skillB: b.charSkill[b.mainCharId] || 0,
+    skillA: a.charSkill[aCharId] || 0, skillB: b.charSkill[bCharId] || 0,
     statsA: a.personal, statsB: b.personal,
     stageName: mmStage?.name,
     winnerPhrase: winner.catchphrase,
@@ -445,17 +521,21 @@ function runMoneyMatch(save, mm, present, events) {
   // A money match is an event: it goes on stream automatically and the
   // stakes juice the broadcast.
   ev.stream = buildStream(save, {
-    level: ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200,
+    level: ((a.charSkill[aCharId] || 0) + (b.charSkill[bCharId] || 0)) / 200,
     personality: Math.min(1, (personalityOf(a) + personalityOf(b)) / 2 + 0.25),
     probA, aWins: result.aWins, narration: nar.lines, meta: nar.meta,
     aName: ev.aName, bName: ev.bName, winnerName: ev.winnerName,
     context: 'daily',
   })
+  // A money match under the lights is real stage experience for both principals.
+  applyStageReps(save, [a, b], ev.stream, 'moneymatch')
   // Stakes: pride, glory, and the story everyone will tell.
   winner.respect += 6
   winner.glory += 3
   winner.mood = clamp(winner.mood + 1.5, 0, 10)
   loser.mood = clamp(loser.mood - 1.5, 0, 10)
+  bumpPassion(winner, 8) // a marquee win reminds you why you play
+  bumpPassion(loser, 2) // even losing one this big is a story worth staying for
   remember(save, winner, 'moneymatch', `winning the money match against ${pName(save, loser)}`)
   remember(save, loser, 'moneymatch', `losing the money match to ${pName(save, winner)}`)
   chronicle(save, '💸', `${pName(save, winner)} beat ${pName(save, loser)} ${nar.score} in the money match everyone still talks about`)
@@ -473,6 +553,22 @@ function runMoneyMatch(save, mm, present, events) {
   mm.status = 'done'
   mm.winnerId = winner.id
   events.push(ev)
+  // Money matches are broadcast events — they get a VOD like any tournament,
+  // spoiler-free until played back.
+  pushVod(save, {
+    id: uid('vod'),
+    type: 'moneymatch',
+    name: `Money Match: ${ev.aName} vs ${ev.bName}`,
+    day: save.day,
+    year: save.year,
+    dateLabel: formatDay(save.day, save.year),
+    champion: ev.winnerName,
+    entrantCount: 2,
+    channelName: save.stream.channelName,
+    peakViewers: ev.stream?.viewers || 0,
+    revealed: 0,
+    match: ev,
+  })
 }
 
 function pickTopic(save, where) {
@@ -514,6 +610,7 @@ function runInteraction(save, group, where, events, results = {}) {
     let totalDelta = 0
     for (const b of group) {
       if (a.id === b.id) continue
+      if (areSeparated(save, a.id, b.id)) continue // kept apart — they don't engage
       const before = getRel(a, b)
       const delta = socialDelta(a, b)
       shiftRel(a, b, delta)
@@ -521,6 +618,10 @@ function runInteraction(save, group, where, events, results = {}) {
       const after = getRel(a, b)
       if (before < 20 && after >= 20) outcomes.push(`${pName(save, a)} and ${pName(save, b)} are becoming real friends.`)
       if (before > -50 && after <= -50) outcomes.push(`${pName(save, a)} now considers ${pName(save, b)} an enemy.`)
+      if (before > -80 && after <= -80 && getRel(b, a) <= -50) {
+        outcomes.push(`${pName(save, a)} and ${pName(save, b)} are past rivalry now. This is a feud.`)
+        chronicle(save, '⚔️', `${pName(save, a)} and ${pName(save, b)} became mortal enemies — the arcade quietly picks sides`)
+      }
       // Innovations spread through conversation.
       maybeLearnInnovation(save, a, b, events)
     }
@@ -553,7 +654,7 @@ function runInteraction(save, group, where, events, results = {}) {
   const fullTeams = allTeams.filter((t) => t.memberIds.length >= 4).length
   const struggling = allTeams.filter((t) => t.memberIds.length < 4).length
   const foundingPressure = Math.max(0.25, 1 + fullTeams * 0.5 - struggling * 0.35)
-  const freeAgents = Object.values(save.players).filter((p) => p.isRegular && !p.teamId).length
+  const freeAgents = Object.values(save.players).filter((p) => p.isRegular && !p.teamId && !p.retired && !p.banished).length
   for (const a of group) {
     const team = teamOf(save, a)
     if (team) {
@@ -609,25 +710,59 @@ export function startDay(save) {
     }
   }
 
-  // A new generated player may wander in.
-  const cpuCount = Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
-  if (save.settings.allowGeneratedPlayers && cpuCount < save.settings.maxGeneratedPlayers && chance(0.12)) {
-    const p = generatePlayer(save)
-    save.players[p.id] = p
-    events.push({ type: 'arrival', text: `A new face walks in: ${p.firstName} "${p.alias}" ${p.lastName}.` })
+  // Shut down by the health department: the doors stay locked, the day
+  // still passes. (EVO and the patch pipeline don't care about your mop.)
+  if (arcadeClosed(save)) {
+    events.push({
+      type: 'economy',
+      text: '🚧 The arcade is shuttered by health-department order. A few regulars press their faces to the glass and leave.',
+    })
+    save.hour = 0
+    save.dayInProgress = {
+      day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
+      attendeeIds: [], newcomers: [], staysUntil: {}, results: {}, gamesToday: {},
+      openingEvents: events, hours: [], closed: true,
+    }
+    return
   }
+
+  // Read the scene's competitive temperature once, up front — it feeds
+  // attendance (toxicity thins the crowd) and the day's rivalry development.
+  save.scene = sceneHealth(save)
+
+  // The cast is FINITE and fixed: the whole roster was seeded at save start and
+  // discovers the arcade over time (below). Nobody new is ever generated — once
+  // these people retire, they're gone, and running out of them ends the run.
 
   const everyone = Object.values(save.players)
   const attendees = []
   const newcomers = []
   for (const p of everyone) {
+    if (p.retired || p.banished) continue // hung up the sticks for good
+    if (isStaffed(save, p.id)) continue // on shift — can't work and play
     if (chance(attendChance(save, p))) {
+      const prevStatus = statusOf(p)?.key
       attendees.push(p)
       p.daysAttended += 1
       if (!p.isRegular) {
         p.isRegular = true
         newcomers.push(p.id)
         events.push({ type: 'arrival', text: `${p.firstName} "${p.alias || '—'}" ${p.lastName} came to ${save.arcade.name} for the first time.` })
+      }
+      // Climbing the status ladder is an event — being a regular here
+      // MEANS something now.
+      const nowStatus = statusOf(p)
+      if (nowStatus && nowStatus.key !== prevStatus && prevStatus != null) {
+        const line = {
+          casual: `${pName(save, p)} keeps finding excuses to come back — a casual now.`,
+          regular: `${pName(save, p)} is officially a regular. They have a spot, and everyone knows it's theirs.`,
+          veteran: `${pName(save, p)} hit veteran status — they've seen metas come and go.`,
+          star: `⭐ ${pName(save, p)} is a star of ${save.arcade.name}. People come just to watch them.`,
+          legend: `👑 ${pName(save, p)} is an arcade LEGEND. Their name is basically on the building.`,
+        }[nowStatus.key]
+        if (line) events.push({ type: 'arrival', text: line })
+        if (nowStatus.key === 'star') chronicle(save, '⭐', `${pName(save, p)} became a star of ${save.arcade.name}`)
+        if (nowStatus.key === 'legend') chronicle(save, '👑', `${pName(save, p)} reached legend status at ${save.arcade.name}`)
       }
       if (p.mainCharId && (p.lockedMain || p.exploredChars.length === 0)) {
         // A main chosen at creation counts as already settled.
@@ -716,11 +851,13 @@ export function simHour(save) {
 
   if (present.length > 0) {
     // Only some players are itching to play this hour — and fatigue builds
-    // with every game played today. Stamina is how long the tank lasts.
+    // with every game played today. Stamina is how long the tank lasts,
+    // and steep token prices make the wallet-conscious sit a few out.
     const wantsToPlay = present.filter((p) => {
       const played = dip.gamesToday[p.id] || 0
       const fatigue = played * Math.max(0.02, 0.16 - p.personal.stamina * 0.013)
-      return chance(clamp(0.3 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue, 0.02, 0.9))
+      const priceHesitation = tokenDeterrence(save, p)
+      return chance(clamp(0.3 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue - priceHesitation, 0.02, 0.9))
     })
     const matches = []
     const pool = [...wantsToPlay]
@@ -736,6 +873,7 @@ export function simHour(save) {
         const rel = getRel(a, b)
         if (rel < -40) s += 2 // grudge matches happen
         if (rel > 40) s += 1.5 // friendlies too
+        if (areSeparated(save, a.id, b.id)) s -= 1000 // owner is keeping these two apart
         if (s > bestScore) { bestScore = s; bIdx = i }
       }
       const b = pool.splice(bIdx, 1)[0]
@@ -755,16 +893,22 @@ export function simHour(save) {
     // Resolve matches with watchers attached.
     matches.forEach(([a, b], mi) => {
       const watcherGroup = watchers.filter((_, wi) => wi % matches.length === mi)
-      const probA = winProbability(save, a, a.mainCharId, b, b.mainCharId)
-      const result = resolveMatch(save, a, b)
-      const charA = save.game.characters.find((c) => c.id === a.mainCharId)
-      const charB = save.game.characters.find((c) => c.id === b.mainCharId)
+      // Each brings a character to the set: their main, a counterpick vs a bad
+      // matchup, or (settled players) an occasional pocket run to keep it sharp.
+      let aCharId = pickMatchChar(save, a, b.mainCharId)
+      let bCharId = pickMatchChar(save, b, a.mainCharId)
+      if (aCharId === a.mainCharId && a.settledMain && (a.pocketPicks || []).length && chance(0.08)) aCharId = choice(a.pocketPicks)
+      if (bCharId === b.mainCharId && b.settledMain && (b.pocketPicks || []).length && chance(0.08)) bCharId = choice(b.pocketPicks)
+      const probA = winProbability(save, a, aCharId, b, bCharId)
+      const result = resolveMatch(save, a, b, aCharId, bCharId)
+      const charA = save.game.characters.find((c) => c.id === aCharId)
+      const charB = save.game.characters.find((c) => c.id === bCharId)
       const grudge = getRel(a, b) < -40 || getRel(b, a) < -40
       const stage = save.game.stages.length ? choice(save.game.stages) : null
       const nar = narrateSet({
         aName: pName(save, a), bName: pName(save, b),
         charA, charB, probA, winnerIsA: result.aWins,
-        skillA: a.charSkill[a.mainCharId] || 0, skillB: b.charSkill[b.mainCharId] || 0,
+        skillA: a.charSkill[aCharId] || 0, skillB: b.charSkill[bCharId] || 0,
         statsA: a.personal, statsB: b.personal,
         winnerPhrase: result.winner.catchphrase,
         seriesNote: seriesNoteFor(a, b, pName(save, a), pName(save, b)),
@@ -787,7 +931,12 @@ export function simHour(save) {
         remember(save, winner, 'upset', `the upset win over ${pName(save, loser)}`)
         remember(save, loser, 'upset', `that loss to ${pName(save, winner)}`)
       }
-      const d = socialDelta(loser, winner, { justLostTo: true })
+      // A frustrating, unbalanced meta makes every loss feel unfair — bad
+      // blood spreads, and a healthy rivalry can curdle into real toxicity.
+      // Keeping the game balanced (patch morale up) is how the owner keeps the
+      // competition productive instead of poisonous.
+      const frustration = save.settings.mode !== 'sandbox' ? clamp(-(save.patchMorale || 0) * 0.26, 0, 2.2) : 0
+      const d = socialDelta(loser, winner, { justLostTo: true }) - frustration
       shiftRel(loser, winner, d)
       shiftRel(winner, loser, socialDelta(winner, loser) * 0.6)
 
@@ -829,7 +978,7 @@ export function simHour(save) {
       // What makes this match look promising as a broadcast — observations,
       // not verdicts. A tagged match can still flop; an untagged one can
       // still deliver. The risk is the game.
-      const skillAvg = ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 2
+      const skillAvg = ((a.charSkill[aCharId] || 0) + (b.charSkill[bCharId] || 0)) / 2
       const fameA = personalityOf(a)
       const fameB = personalityOf(b)
       const series = a.h2h?.[b.id]
@@ -867,9 +1016,6 @@ export function simHour(save) {
         chatter,
         postMatch,
       })
-
-      maybeUnlockTechnique(save, winner, events)
-      maybeUnlockTechnique(save, loser, events)
     })
 
     // Socializers gather in small groups at the concession stand / other cabinets.
@@ -926,29 +1072,67 @@ export function endDay(save) {
   const events = []
   const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
 
+  // How pleasant the venue itself is today — a clean floor and happy staff
+  // are part of why people enjoy being here (or don't). Nudges every
+  // attendee's mood, so a well-run arcade keeps its regulars in good spirits.
+  const venueVibe = (((save.arcade.cleanliness ?? 80) - 65) / 100 + ((save.staffing?.morale ?? 70) - 60) / 160) * 0.35
+
   // Once-per-day per attendee checks.
   for (const p of attendees) {
+    if (venueVibe) p.mood = clamp(p.mood + venueVibe, 0, 10)
+    // A player with a rival hits the lab harder — chasing (or holding) the edge
+    // is what turns a comfortable regular into a real competitor. A scene of
+    // only friends never gets this push and quietly plateaus.
+    if (p.mainCharId && rivalOf(save, p)) {
+      gainSkill(save, p, p.mainCharId, 0.07 + p.personal.determination * 0.012)
+    }
     maybeInnovate(save, p, events)
-    if (p.settledMain) maybeSwitchMain(save, p, events)
+    if (p.settledMain) { maybeSwitchMain(save, p, events); maybePocketPickup(save, p) }
     else maybeSettleMain(save, p, events)
     checkFallingOut(save, p, events)
   }
   dailyTeamDynamics(save, events)
   maybeScheduleMoneyMatch(save, events)
 
-  // The books: door quarters, concession sales, weekly rent.
+  // Careers: passion drifts for every active regular (attendees get the day's
+  // refreshers), then anyone truly burnt out may retire. This is the slow
+  // engine of the late game — the veterans you built up start moving on.
+  const attendeeIdSet = new Set(dip.attendeeIds)
+  const staleDays = daysSincePatch(save)
+  for (const p of Object.values(save.players)) {
+    if (p.retired || p.banished || !p.isRegular) continue
+    passionDaily(save, p, {
+      attendedToday: attendeeIdSet.has(p.id),
+      wonToday: dip.results?.[p.id] === 'won',
+      staleDays,
+    })
+    checkRetirement(save, p, events)
+  }
+
+  // The finite cast never refills. When the last of the 48 has retired or been
+  // banished, there's no scene left to run — the whole enterprise has run its
+  // course. (Only fires once the roster genuinely existed, so a fresh save with
+  // everyone still a stranger can't trip it.)
+  const roster = Object.values(save.players)
+  if (roster.length > 0 && !roster.some((p) => !p.retired && !p.banished)) {
+    save.rosterCollapsed = true
+  }
+
+  // The books: tokens and food the players actually bought, then payroll and
+  // cleaning (daily). Weekly upkeep and monthly rent are settled from a ledger
+  // in advanceDay (so a tournament landing on the due day can't skip them) —
+  // here we just surface any resulting "in the red" note in the recap.
   if (save.economy) {
     const totalGames = Object.values(dip.gamesToday || {}).reduce((s, n) => s + n, 0) / 2
-    let income = attendees.length * 1.5 + totalGames * 0.4
-    if (save.arcade.foods.length) income += attendees.length * 1.2
-    if (income > 0) econLog(save, income, 'daily takings')
-    if (weekdayOf(dip.day) === 6) {
-      const rent = weeklyRent(save)
-      econLog(save, -rent, 'weekly rent')
-      if (save.economy.money < 0) {
-        events.push({ type: 'economy', text: `💸 Rent cleared the account — you're $${Math.abs(Math.round(save.economy.money))} in the red. The landlord "checked in."` })
-      }
-    }
+    playerSpending(save, attendees, dip.gamesToday || {}, events)
+    staffDaily(save, attendees.length, totalGames, events)
+    settleRecurring(save, events)
+    landlordDaily(save, events)
+    // How many came through the door today — read by the Manage-tab foot-traffic
+    // count. advanceDay folds it into the daily economy history and clears it.
+    save.economy.todayAttendance = attendees.length
+    // (A staffer used to occasionally "quit the counter to become a player" —
+    // retired now, since the cast is finite and never grows past the seed.)
   }
 
   // Active mentorships pay out when both parties attended.
@@ -982,9 +1166,25 @@ export function endDay(save) {
   for (const p of Object.values(save.players)) {
     p.mood = clamp(p.mood + (p.defaultMood - p.mood) * 0.25, 0, 10)
     p.respect = Math.round(p.respect * 10) / 10
+    // Fame fades: a public profile slips a little every day it isn't fed by the
+    // spotlight, so keeping a star relevant means keeping the camera on them.
+    // (Belief doesn't fade — earned stage composure is yours for good.)
+    if (p.popularity) p.popularity = Math.max(0, p.popularity * 0.996 - 0.05)
+    // Dormant grudges soften with time — bad blood fades toward mere rivalry
+    // unless the players keep clashing (an active feud loses to fresh losses).
+    // This is what lets a scene HEAL: ease the friction and toxicity recedes.
+    for (const id in p.relationships) {
+      const v = p.relationships[id]
+      if (v < -30) p.relationships[id] = Math.min(v + 0.22, -30)
+    }
   }
   if (save.stream) {
-    save.stream.hype = clamp(save.stream.hype - 0.08, 0, 100)
+    // Audience fatigue recovers overnight — yesterday's overexposure fades, so
+    // the follower penalty only bites while you're actively flooding the channel.
+    save.stream.fatigue = (save.stream.fatigue || 0) * 0.5
+    // Advertising steers public opinion: active channels push channel hype up
+    // daily, offsetting (or reversing) the natural fade.
+    save.stream.hype = clamp(save.stream.hype - 0.08 + adHypePerDay(save), 0, 100)
     // Word of mouth: a channel with real hype picks up followers organically
     // even on days nothing was streamed. Saturates like stream growth does.
     if (save.stream.hype > 8) {
@@ -1014,6 +1214,15 @@ export function endDay(save) {
       })
       postTierList(save, list, topNames)
     }
+  }
+
+  // The community voices what it wants patched — nerf this, buff that — and the
+  // occasional trap demand (a loud complaint about a character who isn't really
+  // strong). Reading these is how you decide what to change; caving to the trap
+  // is a lose/lose. Fires sparingly so the feed stays varied.
+  if (save.settings.mode !== 'sandbox' && chance(0.06)) {
+    const demands = communityDemands(save)
+    if (demands.length) postCommunityDemand(save, choice(demands.slice(0, 3)))
   }
 
   // Patch pressure: morale drifts back to neutral, but a fossilized meta
@@ -1049,9 +1258,11 @@ export function simDay(save) {
   endDay(save)
 }
 
-// What fires today: 'evo' | schedule entry | null.
+// What fires today: 'evo' | schedule entry | null. A health-department
+// shutdown cancels your local events — EVO is the world's stage, not yours.
 export function whatHappensToday(save) {
   if (save.day === EVO_DAY) return 'evo'
+  if (arcadeClosed(save)) return null
   const t = save.arcade.schedule.find((s) => {
     if (s.done) return false
     if (s.cadence === 'weekly') return weekdayOf(save.day) === (s.weekday || 0)
@@ -1062,6 +1273,32 @@ export function whatHappensToday(save) {
 }
 
 export function advanceDay(save) {
+  // Settle recurring bills AND drift national relevance for the day now
+  // closing — BEFORE the calendar ticks. This is the one path every day flows
+  // through (normal, tournament, EVO, idle catch-up), so neither can be skipped
+  // by a tournament day. Both are guarded against running twice in a day.
+  settleRecurring(save)
+  pruneSeparations(save)
+  relevanceDaily(save)
+  // Daily economic snapshot for the Manage-tab income graph and foot-traffic
+  // count: net cash change and how many people came through the door. Recorded
+  // here — the single tick EVERY day flows through (normal, tournament, EVO,
+  // idle catch-up) — so no day is ever missed. absDayOf reads the day that's
+  // closing, before the calendar ticks below.
+  if (save.economy) {
+    const money = Math.round(save.economy.money * 100) / 100
+    const prev = save.economy.lastDayMoney ?? money
+    save.economy.history ??= []
+    save.economy.history.push({
+      absDay: absDayOf(save.day, save.year),
+      money,
+      net: Math.round((money - prev) * 100) / 100,
+      attendance: save.economy.todayAttendance ?? null, // null on tournament/EVO days
+    })
+    if (save.economy.history.length > 180) save.economy.history.shift()
+    save.economy.lastDayMoney = money
+    save.economy.todayAttendance = null
+  }
   save.day += 1
   if (save.day > DAYS_PER_YEAR) {
     save.day = 1

@@ -1,5 +1,5 @@
-import { uid, rollStat } from './util.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS } from './constants.js'
+import { uid, rollStat, clamp } from './util.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { computeMatchups } from './balance.js'
@@ -36,17 +36,9 @@ export function newStage(partial = {}) {
   return { id: uid('stage'), name: 'New Stage', description: '', vibe: 'hype', bgKey: null, ...partial }
 }
 
-export function newTechnique(partial = {}) {
-  return {
-    id: uid('tech'),
-    name: 'New Technique',
-    charId: null, // null = general technique
-    difficulty: 5, // 1-10 how hard to unlock
-    xp: 5, // skill points granted when unlocked
-    description: '',
-    ...partial,
-  }
-}
+// Designed techniques are retired for now — all tech is discovered by the
+// community (save.innovations). game.techniques survives in the schema so old
+// saves load, but nothing authors or unlocks them anymore.
 
 export function blankStats(keys, value = 5) {
   return Object.fromEntries(keys.map((k) => [k, value]))
@@ -64,13 +56,14 @@ export function newPlayer(partial = {}) {
     spriteKey: null, // pixel-art sprite name (null = auto-pick from id)
     createdBy: 'user', // 'user' | 'cpu'
     personal: blankStats(PERSONAL_KEYS),
-    social: blankStats(SOCIAL_KEYS),
+    social: blankStats(SOCIAL_KEYS), // includes `income` — spending money they walk in with
     defaultMood: 5,
     mood: 5,
     elo: 1200,
     glory: 0,
     respect: 0,
     mainCharId: null, // current character (rotates daily while exploring)
+    pocketPicks: [], // secondary charIds they'll counterpick with in bad matchups
     settledMain: false, // false = still trying characters out before committing
     exploredChars: [], // charIds tried during the exploration phase
     lockedMain: false, // user pinned the main; sim won't switch it
@@ -90,11 +83,24 @@ export function newPlayer(partial = {}) {
     charRecord: {}, // charId -> {w, l} lifetime record on that character
     otherGames: [],
     foods: [],
+    tasteRoll: null, // {foods, otherGames} snapshot of the random roll — changing tastes off this costs points
+    tasteRerolled: false, // has the one free "mulligan" re-roll of tastes been used?
     wins: 0,
     losses: 0,
     tournamentWins: 0,
+    evoTitles: 0, // EVO championships — the mark of a legend
     isRegular: false, // has discovered the arcade yet
     daysAttended: 0,
+    passion: 80, // 0-100 love for the game; erodes with tenure, refilled by wins/content
+    belief: 0, // 0-100 earned stage composure — grows from streamed/marquee reps; the EVO "choke" factor
+    popularity: 0, // 0-100 public profile — grows from being featured on stream; feeds passion
+    warnings: [], // {absDay, behavior:'toxicity'|'hygiene', backfired} — disciplinary history
+    banished: false, // kicked out for good — gone from the scene, not coming back
+    banishedDay: null,
+    banishedYear: null,
+    retired: false, // burned out and walked away — inactive, kept for history
+    retiredDay: null,
+    retiredYear: null,
     ...partial,
   }
 }
@@ -117,6 +123,7 @@ export function newTournamentEntry(partial = {}) {
     id: uid('tourney'),
     name: 'Weekly Rumble',
     type: 'singles', // 'singles' | 'teams'
+    format: 'single', // singles only: 'single' | 'roundrobin' | 'doubleelim'
     cadence: 'weekly', // 'weekly' | 'monthly' | 'yearly'
     weekday: 0, // 0=Sunday .. 6=Saturday (weekly cadence)
     dayOfMonth: 1, // 1..28 (monthly cadence)
@@ -139,9 +146,10 @@ export function newSave(partial = {}) {
     settings: {
       allowGeneratedPlayers: true,
       maxGeneratedPlayers: 12,
-      setups: 4,
+      setups: 2,
       nameDisplay: 'alias', // 'alias' | 'fullname'
       mode: 'consequential', // 'consequential' (locked-in, costs, patch fallout) | 'sandbox' (adjust freely)
+      difficulty: 'normal', // key into constants.DIFFICULTIES (consequential runs)
     },
     game: {
       name: 'Untitled Fighter',
@@ -157,6 +165,9 @@ export function newSave(partial = {}) {
     scheduledPatch: null, // {absDay, version, announcedAbs} — announced release date for the draft
     patches: [], // released patches: {id, version, day, year, notes, score, reception}
     patchMorale: 0, // -10..10 community feeling about the game's balance/freshness
+    relevance: 55, // 0-100 national interest in the game+scene — the late-game master variable
+    lastRelevanceAbs: 0, // guard so relevance drifts exactly once per day
+    scene: { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [] }, // daily scene-health read
     lastPatch: { day: 1, year: 1 },
     patchGames: 0, // sets played on the current build — balance data accrues from these
     chronicle: [], // the collective memory: {day, year, icon, text} — capped
@@ -168,19 +179,39 @@ export function newSave(partial = {}) {
       foods: [],
       otherGames: [],
       schedule: [], // newTournamentEntry()
+      prices: { token: 1 }, // global $/token; players balk when too high for their income
+      foodPrices: {}, // per-food $ price — set when stocked
+      gameTokens: {}, // per-side-cabinet token cost to play — set when installed
+      ads: [], // active advertising channel keys (constants.AD_CHANNELS) — weekly upkeep
+      cleanliness: 80, // 0-100 — dirt accrues with traffic, staff clean it back
+      closedUntilAbs: null, // absolute day the health-department shutdown lifts (null = open)
     },
+    staffing: newStaffing(),
     stream: {
       channelName: 'ArcadeTV',
       followers: 0,
       hype: 0, // 0-100 channel popularity; grows with good streams
       totalStreams: 0,
       peakViewers: 0,
+      fatigue: 0, // audience overexposure — climbs per daily stream, decays nightly
     },
     economy: {
-      money: 500, // starting float
+      money: 500, // starting float (overridden by difficulty at save start)
       log: [], // {day, year, amount, label} — newest first, capped
+      history: [], // {absDay, money, net, attendance} — one per day, capped (Manage graphs)
+      lastDayMoney: null, // cash at the previous day tick (for daily net)
+      todayAttendance: null, // door count for the day currently open (folded into history)
+      redDays: 0, // consecutive days in the negative — the landlord is counting
+      foreclosed: false, // consequential: the landlord took the keys; reset to continue
+      lastRentMonth: 0, // month index rent was last settled through (0 = opening month grace)
+      lastUpkeepWeek: 0, // week index upkeep was last settled through
     },
+    rosterCollapsed: false, // finite cast: once every player has retired/banished, the run is over
+    separations: [], // {key, aId, bId, untilAbs} — pairs the owner is keeping apart to cool a feud
+    prestige: { points: 0, runs: 0 }, // earned at foreclosure/reset from arcade fame; spent on player creation
+    archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
     socialFeed: [], // fake posts about the scene — newest first, capped
+    dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
     moneyMatches: [], // {id, aId, bId, dayOfYear, year, status, winnerId}
     players: {}, // id -> player
     teams: {}, // id -> team
@@ -192,10 +223,22 @@ export function newSave(partial = {}) {
     evoLegacy: {}, // eliteId -> {titles}
     lastDayReport: null, // events from the most recent simulated day
     lastTournament: null, // full bracket/narration of most recent tournament
+    tournamentInProgress: null, // record id while idle mode reveals a bracket match by match
     vods: [], // full tournament/EVO records kept for spoiler-free replay, newest first
     idle: newIdleState(), // idle-mode config + runtime clock
-    origin: null, // snapshot of the world at creation, for "reset to first created"
     ...partial,
+  }
+}
+
+// The payroll: one wage per role (per day, per person). Individual staffers
+// are lightweight — a name, a role, and possibly a player who took the job
+// (working players don't play; the register doesn't watch itself).
+export function newStaffing() {
+  return {
+    employeeWage: 10, // $/day per employee
+    managerWage: 16, // $/day per manager
+    morale: 70, // 0-100 — pay and management coverage move it
+    staff: [], // {id, name, role: 'employee'|'manager', playerId|null, hiredAbs}
   }
 }
 
@@ -217,7 +260,39 @@ export function newIdleState() {
   }
 }
 
-const VOD_CAP = 40 // keep replays bounded so saves stay ~100KB, not unbounded
+// VODs store full per-match narration + baked chat, so a single 16-player
+// tournament replay is 50-80KB — the old "40 replays ≈ 100KB" assumption was
+// off by ~30x and could push a save past the ~5MB localStorage quota. Bound by
+// BYTES (newest kept) rather than count, with a hard ceiling as a backstop.
+const VOD_CAP = 40 // hard ceiling regardless of size
+const VOD_BUDGET_BYTES = 1_500_000 // keep newest replays under ~1.5MB total
+
+// Rough serialized byte size of a JSON-able value. Good enough for budgeting —
+// mostly-ASCII content means one char ≈ one byte.
+function roughSize(value) {
+  try {
+    return JSON.stringify(value).length
+  } catch {
+    return 0
+  }
+}
+
+// Drop the oldest VODs until the list fits both the count ceiling and the byte
+// budget. The newest VOD is always kept even if it alone exceeds the budget, so
+// a just-finished tournament is never discarded on the spot.
+export function trimVods(save) {
+  const vods = save.vods
+  if (!Array.isArray(vods)) return
+  if (vods.length > VOD_CAP) vods.length = VOD_CAP
+  let total = 0
+  for (let i = 0; i < vods.length; i++) {
+    total += roughSize(vods[i])
+    if (i >= 1 && total > VOD_BUDGET_BYTES) {
+      vods.length = i
+      break
+    }
+  }
+}
 
 // Record a finished tournament for spoiler-free replay. Pushes the SAME object
 // reference that becomes save.lastTournament, so watching it in the Tournament
@@ -225,7 +300,7 @@ const VOD_CAP = 40 // keep replays bounded so saves stay ~100KB, not unbounded
 export function pushVod(save, record) {
   if (!save.vods) save.vods = []
   save.vods.unshift(record)
-  if (save.vods.length > VOD_CAP) save.vods.length = VOD_CAP
+  trimVods(save)
 }
 
 // Total non-bye matches in a tournament record — used to tell whether a VOD has
@@ -239,6 +314,10 @@ export function tournamentMatchCount(record) {
 }
 
 export function isVodWatched(record) {
+  // Money-match VODs are a single set: watched once every line has played.
+  if (record.type === 'moneymatch') {
+    return (record.revealed ?? 0) >= (record.match?.narration?.length || 1)
+  }
   return (record.revealed ?? 0) >= tournamentMatchCount(record)
 }
 
@@ -297,15 +376,50 @@ export function migrateSave(save) {
   save.dayInProgress ??= null
   save.charMilestones ??= []
   save.stream ??= { channelName: 'ArcadeTV', followers: 0, hype: 0, totalStreams: 0, peakViewers: 0 }
+  save.stream.fatigue ??= 0
   save.economy ??= { money: 500, log: [] }
+  save.economy.history ??= []
+  save.economy.lastDayMoney ??= save.economy.money
+  save.economy.todayAttendance ??= null
+  save.economy.redDays ??= 0
+  save.economy.foreclosed ??= false
+  // Start the recurring-bill ledgers at the CURRENT week/month so existing
+  // saves aren't retroactively billed for every month they've already played.
+  save.economy.lastRentMonth ??= Math.floor((absDayOf(save.day, save.year) - 1) / DAYS_PER_MONTH)
+  save.economy.lastUpkeepWeek ??= Math.floor((absDayOf(save.day, save.year) - 1) / 7)
   save.socialFeed ??= []
+  save.dismissedRumors ??= {}
   save.moneyMatches ??= []
   save.settings.mode ??= 'consequential'
+  save.settings.difficulty ??= 'normal'
+  save.arcade.prices ??= { token: 1 }
+  // Per-item pricing: migrate the old single food price to per-food, default
+  // side-cabinet token costs, then retire the flat food price.
+  save.arcade.foodPrices ??= {}
+  const legacyFoodPrice = save.arcade.prices.food ?? DEFAULT_FOOD_PRICE
+  for (const f of save.arcade.foods) save.arcade.foodPrices[f] ??= legacyFoodPrice
+  save.arcade.gameTokens ??= {}
+  for (const g of save.arcade.otherGames) save.arcade.gameTokens[g] ??= DEFAULT_GAME_TOKENS
+  save.arcade.ads ??= []
+  delete save.arcade.prices.food
+  save.arcade.cleanliness ??= 80
+  save.arcade.closedUntilAbs ??= null
+  save.staffing ??= newStaffing()
+  save.prestige ??= { points: 0, runs: 0 }
+  save.rosterCollapsed ??= false
+  save.separations ??= []
+  save.archives ??= []
+  // The origin snapshot (old "reset to first created") is retired — reset now
+  // keeps the design and roster instead. Reclaim the space it doubled.
+  delete save.origin
   save.game.version ??= '1.0'
   save.gameDraft ??= null
   save.scheduledPatch ??= null
   save.patches ??= []
   save.patchMorale ??= 0
+  save.relevance ??= 55
+  save.lastRelevanceAbs ??= 0
+  save.scene ??= { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [] }
   save.lastPatch ??= { day: save.day, year: save.year }
   save.chronicle ??= []
   save.tierLists ??= []
@@ -321,6 +435,11 @@ export function migrateSave(save) {
     p.personal.stamina ??= rollStat() // stats added later; varied, not uniform
     p.personal.composure ??= rollStat()
     p.social.hygiene ??= rollStat()
+    // Income moved from a standalone field into the social stats (so it's
+    // point-bought and capped like the rest) — carry over the old value.
+    p.social.income ??= (p.income != null ? p.income : rollStat())
+    delete p.income
+    p.tasteRerolled ??= false
     p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
     p.memories ??= []
     p.voice ??= deriveVoice(p)
@@ -329,6 +448,21 @@ export function migrateSave(save) {
     p.attractedPlayerTags ??= []
     p.repelledPlayerTags ??= []
     p.charRecord ??= {}
+    p.tasteRoll ??= { foods: [...(p.foods || [])], otherGames: [...(p.otherGames || [])] }
+    // Existing veterans start a little worn — passion reflects their tenure.
+    p.passion ??= clamp(88 - (p.daysAttended || 0) * 0.04, 40, 90)
+    p.retired ??= false
+    p.retiredDay ??= null
+    p.retiredYear ??= null
+    // Mid-game overhaul fields.
+    p.pocketPicks ??= []
+    p.evoTitles ??= 0
+    p.belief ??= 0
+    p.popularity ??= 0
+    p.warnings ??= []
+    p.banished ??= false
+    p.banishedDay ??= null
+    p.banishedYear ??= null
   }
   for (const t of Object.values(save.teams)) {
     t.history ??= []
@@ -351,11 +485,10 @@ export function migrateSave(save) {
     }
     computeMatchups(game)
   }
-  for (const t of save.game.techniques) {
-    t.description ??= ''
-  }
+  save.game.techniques ??= [] // dormant — designed techniques are retired
   for (const t of save.arcade.schedule) {
     t.cadence ??= 'yearly' // old entries were yearly by construction
+    t.format ??= 'single'
     t.weekday ??= 0
     t.dayOfMonth ??= 1
     t.dayOfYear ??= 28
@@ -368,6 +501,8 @@ export function migrateSave(save) {
   }
   save.arcade.location ??= { city: '', state: '', country: '' }
   save.vods ??= []
+  trimVods(save) // existing saves may hold far more replay data than fits localStorage
+  save.tournamentInProgress ??= null
   save.idle ??= newIdleState()
   save.idle.autoStream ??= newIdleState().autoStream
   return save

@@ -26,19 +26,21 @@ export default function App() {
 
   const newVods = (save.vods || []).filter((v) => !isVodWatched(v)).length
 
+  // The Tournament screen lost its tab (VODs cover replays) but still shows
+  // live events — reached from the Arcade on event days, and from VODs.
   const tabs = [
     ['arcade', '🕹 Arcade'],
     ['players', '👥 Players'],
     ['teams', '🛡 Teams'],
-    ['tournament', '🏆 Tournament'],
     ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs'],
     ['halloffame', '🏛 Hall of Fame'],
     ['codex', '📖 Codex'],
     ['tiers', '📊 Tiers'],
     ['feed', '📱 Feed'],
     ['studio', '🛠 Studio'],
-    ['manage', '⚙ Manage'],
+    ['manage', '🏪 Manage'],
   ]
+  const activeTab = screen.name === 'tournament' ? (screen.vodId ? 'vods' : 'arcade') : screen.name
 
   return (
     <div>
@@ -46,7 +48,7 @@ export default function App() {
         <span className="brand">FIGHT NIGHT</span>
         {tabs.map(([k, label]) => (
           <button key={k}
-            style={screen.name === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' } : {}}
+            style={activeTab === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' } : {}}
             onClick={() => nav(k)}>
             {label}
           </button>
@@ -73,7 +75,65 @@ export default function App() {
       {screen.name === 'studio' && <GameStudio />}
       {screen.name === 'manage' && <Manage />}
 
+      <ForeclosureModal />
+      <RosterCollapseModal />
       <AwayModal />
+    </div>
+  )
+}
+
+// Consequential mode's fail state: too long in the red and the landlord
+// takes the keys. The only way forward is a new run — the design and the
+// roster survive, fame converts to prestige.
+function ForeclosureModal() {
+  const { save, resetCurrentRun, closeSave } = useStore()
+  if (!save?.economy?.foreclosed) return null
+  const prestige = save.prestige?.points || 0
+  return (
+    <div className="modal-backdrop">
+      <div className="modal card" style={{ borderColor: 'var(--red)' }}>
+        <h3 style={{ marginTop: 0 }} className="red">🔒 Foreclosed</h3>
+        <p>
+          The account stayed in the red too long. The landlord changed the locks on {save.arcade.name} —
+          this run is over.
+        </p>
+        <p className="small dim">
+          A new run keeps your game design and player roster (progress wiped), archives this run's
+          chronicle, hall of fame, and VODs, and converts your arcade's fame into prestige points for
+          player creation{prestige > 0 ? ` (${prestige} banked so far)` : ''}.
+        </p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="primary" onClick={resetCurrentRun}>♻ Start a new run</button>
+          <button onClick={closeSave}>Back to the main menu</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// The finite-cast fail state: the roster is fixed the day the run begins and
+// never refills, so once the last of them has retired or been banished there's
+// no scene left to run. A new run reseeds the cast from the same identities.
+function RosterCollapseModal() {
+  const { save, resetCurrentRun, closeSave } = useStore()
+  if (!save?.rosterCollapsed || save?.economy?.foreclosed) return null
+  return (
+    <div className="modal-backdrop">
+      <div className="modal card" style={{ borderColor: 'var(--red)' }}>
+        <h3 style={{ marginTop: 0 }} className="red">🏁 The scene has run its course</h3>
+        <p>
+          Every last regular of {save.arcade.name} has hung it up. The cabinets still hum, but there's
+          nobody left to play — a scene has a lifespan, and this one reached the end of its. This run is over.
+        </p>
+        <p className="small dim">
+          A new run keeps your game design and player roster (progress wiped), archives this run's
+          chronicle, hall of fame, and VODs, and converts your arcade's fame into prestige points.
+        </p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="primary" onClick={resetCurrentRun}>♻ Start a new run</button>
+          <button onClick={closeSave}>Back to the main menu</button>
+        </div>
+      </div>
     </div>
   )
 }

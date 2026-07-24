@@ -2,17 +2,66 @@
 // patch commits it, generates patch notes from the real diff, and the
 // community reacts — to balance, to content, to boredom, and to cadence.
 
-import { uid, clamp } from './util.js'
+import { uid, clamp, hash01, displayName } from './util.js'
 import { getMatchup, chronicle } from './model.js'
-import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay } from './constants.js'
+import { bumpPassion } from './career.js'
+import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance.js'
+import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf } from './constants.js'
 import { postPatchReaction, postPatchAnnouncement } from './socialmedia.js'
-import { computeMatchups } from './balance.js'
+import { computeMatchups, observedPower } from './balance.js'
 
 // A character's power level: average matchup win% against the rest of the cast.
 export function charPower(game, charId) {
   const others = game.characters.filter((c) => c.id !== charId)
   if (!others.length) return 50
   return others.reduce((s, o) => s + getMatchup(game, charId, o.id), 0) / others.length
+}
+
+// ---------- Community demands ----------
+// What the community is LOUDLY asking for — the thing you have to read the feed
+// to gauge. Most demands are legit (an actually-overpowered character everyone
+// wants nerfed, a struggling one they want buffed). But some are TRAPS: a
+// perfectly fine character the mob has decided is broken (usually because a
+// strong PLAYER mains them). Caving on a trap is a lose/lose — you please the
+// crowd today and break the balance tomorrow.
+export function communityDemands(save) {
+  const out = []
+  for (const c of save.game.characters) {
+    const power = observedPower(save, save.game, c)
+    if (power >= 58) out.push({ charId: c.id, name: c.name, kind: 'nerf', legit: true, heat: 40 + (power - 58) * 4 })
+    else if (power <= 43) out.push({ charId: c.id, name: c.name, kind: 'buff', legit: true, heat: 30 + (43 - power) * 3 })
+  }
+  // A trap: a mid-tier character the mob has irrationally decided is busted —
+  // usually because a dominant player carries them. Nerfing them would be a
+  // mistake, but the pressure to "do something" is real.
+  const mids = save.game.characters.filter((c) => { const p = observedPower(save, save.game, c); return p >= 47 && p < 56 })
+  if (mids.length) {
+    const c = mids[Math.floor(hash01(`${save.game.version}:trapdemand`) * mids.length)]
+    const topMain = Object.values(save.players)
+      .filter((p) => p.isRegular && !p.retired && !p.banished && p.mainCharId === c.id)
+      .sort((a, b) => b.elo - a.elo)[0]
+    if (topMain && topMain.elo > 1380) {
+      out.push({ charId: c.id, name: c.name, kind: 'nerf', legit: false, heat: 55, blame: displayName(topMain, save) })
+    }
+  }
+  return out.sort((a, b) => b.heat - a.heat)
+}
+
+// How the loudest demands shift a patch's reception: giving people the (legit)
+// change they begged for lands well; ignoring a screaming legit demand stings;
+// caving to a trap wins the day but plants a time bomb (the character will be
+// broken and its mains will be back demanding a buff next cycle).
+export function demandAdjustment(oldGame, draft, demands) {
+  let delta = 0
+  const why = []
+  for (const d of demands) {
+    const moved = charPower(draft, d.charId) - charPower(oldGame, d.charId)
+    const addressed = d.kind === 'nerf' ? moved < -2 : moved > 2
+    if (addressed && d.legit) { delta += 8; why.push(`gave the people the ${d.name} ${d.kind} they'd begged for`) }
+    else if (addressed && !d.legit) { delta += 4; why.push(`caved on the ${d.name} ${d.kind} — the mob cheered (for now)`) }
+    else if (d.legit && d.heat >= 50) { delta -= 6; why.push(`ignored the ${d.name} ${d.kind} everyone's been screaming for`) }
+  }
+  return { delta: clamp(delta, -18, 18), why }
 }
 
 export function daysSincePatch(save) {
@@ -156,27 +205,6 @@ export function diffGame(oldGame, draft, observer = null) {
     if ((old.description || '') !== (s.description || '')) notes.push(`${s.name}: stage description updated`)
   }
 
-  // Techniques: adds, removals, retunes.
-  const oldTechMap = new Map(oldGame.techniques.map((t) => [t.id, t]))
-  const newTechMap = new Map(draft.techniques.map((t) => [t.id, t]))
-  const techAdds = draft.techniques.filter((t) => !oldTechMap.has(t.id))
-  for (const t of techAdds) notes.push(`New technique to discover: ${t.name}`)
-  for (const t of oldGame.techniques) {
-    if (!newTechMap.has(t.id)) notes.push(`Removed technique: ${t.name}`)
-  }
-  const techCharName = (game, id) => (id ? game.characters.find((c) => c.id === id)?.name || '???' : 'universal')
-  for (const t of draft.techniques) {
-    const old = oldTechMap.get(t.id)
-    if (!old) continue
-    const clauses = []
-    if (old.name !== t.name) clauses.push(`renamed to ${t.name}`)
-    if (old.difficulty !== t.difficulty) clauses.push(`difficulty ${old.difficulty} → ${t.difficulty}`)
-    if (old.xp !== t.xp) clauses.push(`xp ${old.xp} → ${t.xp}`)
-    if ((old.charId || null) !== (t.charId || null)) clauses.push(`now ${techCharName(draft, t.charId)}`)
-    if ((old.description || '') !== (t.description || '')) clauses.push('description updated')
-    if (clauses.length) notes.push(`Technique ${old.name}: ${clauses.join(', ')}`)
-  }
-
   // Tag pools.
   const charTagDiff = listDiff(oldGame.tags, draft.tags)
   for (const t of charTagDiff.added) notes.push(`New character tag: "${t}"`)
@@ -203,15 +231,21 @@ export function diffGame(oldGame, draft, observer = null) {
 
   return {
     notes, added, removed, buffed, nerfed, moveChanges,
-    stageAdds: stageAdds.length, techAdds: techAdds.length,
+    stageAdds: stageAdds.length,
     overpowered, boring,
     // OP characters the patch actually fixed.
     fixedOp: oldGame.characters.filter((c) => newChars.has(c.id) &&
       powerOf(oldGame, c) > 58 && powerOf(draft, newChars.get(c.id)) <= 56),
+    // Characters who were ALREADY strong and got buffed anyway — the single
+    // fastest way to set the boards on fire.
+    buffedStrong: buffed.filter(({ char }) => {
+      const old = oldChars.get(char.id)
+      return old && powerOf(oldGame, old) > 54
+    }),
   }
 }
 
-function receptionLabel(score) {
+export function receptionLabel(score) {
   if (score >= 15) return 'beloved'
   if (score >= 5) return 'well received'
   if (score > -5) return 'mixed'
@@ -219,26 +253,59 @@ function receptionLabel(score) {
   return 'despised'
 }
 
-export function computeReception(diff, daysSince, anticipationDays = 0) {
+/**
+ * `bias` shifts the whole community's disposition (difficulty knob:
+ * a forgiving crowd on easy, an unpleasable one on master).
+ *
+ * The score nets out, but positives and negatives are tracked separately —
+ * a patch with loud reasons to love it AND loud reasons to riot doesn't
+ * read as "mixed", it reads as CONTROVERSIAL.
+ */
+export function computeReception(diff, daysSince, anticipationDays = 0, bias = 0) {
   let score = 0
+  let pos = 0
+  let neg = 0
   const why = []
+  const add = (delta, reason) => {
+    score += delta
+    if (delta > 0) pos += delta
+    else neg -= delta
+    if (reason) why.push(reason)
+  }
   // A dated announcement gives the community something to count down to.
   if (anticipationDays >= 3) {
-    score += Math.min(8, 3 + anticipationDays * 0.4)
-    why.push('the countdown had everyone refreshing the patch notes')
+    add(Math.min(8, 3 + anticipationDays * 0.4), 'the countdown had everyone refreshing the patch notes')
   }
-  const content = Math.min(30, diff.added.length * 12 + diff.stageAdds * 4 + diff.techAdds * 3 + diff.moveChanges * 2)
-  if (content > 0) { score += content; why.push('fresh content') }
-  if (diff.fixedOp.length) { score += diff.fixedOp.length * 8; why.push(`finally addressed ${diff.fixedOp.map((c) => c.name).join(', ')}`) }
-  if (diff.overpowered.length) { score -= diff.overpowered.length * 12; why.push(`${diff.overpowered.map((c) => c.name).join(', ')} looks busted`) }
-  if (diff.boring) { score -= 15; why.push('every matchup is a 50-50 — the meta is a bowl of plain rice') }
-  if (diff.removed.length) { score -= diff.removed.length * 8; why.push(`${diff.removed.map((c) => c.name).join(', ')} mains are in mourning`) }
-  if (!diff.notes.length) { score -= 5; why.push('the patch notes say... nothing?') }
-  if (daysSince < 14) { score -= 12; why.push('patch fatigue — the meta never gets to breathe') }
-  else if (daysSince > 120) { score += 10; why.push('long-awaited') }
-  else if (daysSince > 60) { score += 5 }
-  score = clamp(score, -40, 40)
-  return { score, label: receptionLabel(score), why }
+  const content = Math.min(30, diff.added.length * 12 + diff.stageAdds * 4 + diff.moveChanges * 2)
+  if (content > 0) add(content, 'fresh content')
+  if (diff.fixedOp.length) add(diff.fixedOp.length * 8, `finally addressed ${diff.fixedOp.map((c) => c.name).join(', ')}`)
+  if (diff.buffedStrong?.length) {
+    add(-diff.buffedStrong.length * 12,
+      `${diff.buffedStrong.map((b) => b.char.name).join(', ')} was ALREADY strong — and the patch made them stronger?!`)
+  }
+  if (diff.overpowered.length) add(-diff.overpowered.length * 12, `${diff.overpowered.map((c) => c.name).join(', ')} looks busted`)
+  if (diff.boring) add(-15, 'every matchup is a 50-50 — the meta is a bowl of plain rice')
+  if (diff.removed.length) add(-diff.removed.length * 8, `${diff.removed.map((c) => c.name).join(', ')} mains are in mourning`)
+  if (!diff.notes.length) add(-5, 'the patch notes say... nothing?')
+  if (daysSince < 14) add(-12, 'patch fatigue — the meta never gets to breathe')
+  else if (daysSince > 120) add(10, 'long-awaited')
+  else if (daysSince > 60) add(5)
+  score = clamp(score + bias, -40, 40)
+  const divisive = pos >= 12 && neg >= 12
+  return { score, label: divisive ? 'controversial' : receptionLabel(score), why, divisive }
+}
+
+/**
+ * How much you can TRUST the Studio's forecast. Early on your read of the
+ * community is sharp; years deep, a jaded fanbase is genuinely unpredictable and
+ * the forecast can be flat wrong. Returns a seeded ± offset (stable per draft
+ * state) plus the uncertainty band for the UI. Applied to the DISPLAYED forecast
+ * only — the actual reception at release is the real thing.
+ */
+export function forecastNoise(save, seed) {
+  const uncertainty = clamp(gameAgeYears(save) * 5.5, 0, 24)
+  const offset = (hash01(`${save.game.version}:${seed}:forecast`) - 0.5) * 2 * uncertainty
+  return { offset, uncertainty: Math.round(uncertainty) }
 }
 
 /**
@@ -254,7 +321,18 @@ export function releasePatch(save) {
   const anticipationDays = save.scheduledPatch
     ? clamp(absDayOf(save.day, save.year) - save.scheduledPatch.announcedAbs, 0, 28)
     : 0
-  const { score, label, why } = computeReception(diff, daysSince, anticipationDays)
+  const consequentialRun = save.settings.mode !== 'sandbox'
+  // A jaded, years-old community is harder to please — franchise fatigue makes
+  // late patches genuinely tougher to land, which is what makes them a gamble.
+  const bias = consequentialRun ? difficultyOf(save).receptionBias - franchiseFatigue(save) : 0
+  const base = computeReception(diff, daysSince, anticipationDays, bias)
+  // Did the patch answer (or ignore, or fall for) what the community was
+  // loudly demanding? This is why reading the feed matters.
+  const dem = consequentialRun ? demandAdjustment(save.game, save.gameDraft, communityDemands(save)) : { delta: 0, why: [] }
+  const score = clamp(base.score + dem.delta, -40, 40)
+  const why = [...base.why, ...dem.why]
+  const divisive = base.divisive
+  const label = receptionLabel(score)
   const version = bumpVersion(save.game.version)
   save.gameDraft.version = version
   save.game = save.gameDraft
@@ -273,24 +351,45 @@ export function releasePatch(save) {
     score,
     reception: label,
     why,
+    divisive,
   }
   save.patches.unshift(patch)
 
-  const consequential = save.settings.mode !== 'sandbox'
+  const consequential = consequentialRun
   if (consequential) {
     save.patchMorale = clamp(score / 4, -10, 10)
     save.stream.hype = clamp(save.stream.hype + score / 10, 0, 100)
+    // Controversy is still engagement — everyone tunes in to argue.
+    if (divisive) save.stream.hype = clamp(save.stream.hype + 3, 0, 100)
+    // Fresh content is a shot of life for a scene grinding the same build for
+    // months — it rekindles passion (and keeps veterans from burning out).
+    const contentRefresh = clamp(diff.added.length * 5 + diff.stageAdds * 2 + diff.moveChanges * 0.6, 0, 12)
     for (const p of Object.values(save.players)) {
-      if (!p.isRegular) continue
+      if (!p.isRegular || p.retired || p.banished) continue
       p.mood = clamp(p.mood + clamp(score / 30, -1.5, 1.5), 0, 10)
+      bumpPassion(p, contentRefresh)
       // Your main getting gutted is personal.
-      if (diff.nerfed.some((n) => n.char.id === p.mainCharId)) p.mood = clamp(p.mood - 1, 0, 10)
-      if (diff.buffed.some((b) => b.char.id === p.mainCharId)) p.mood = clamp(p.mood + 0.7, 0, 10)
+      if (diff.nerfed.some((n) => n.char.id === p.mainCharId)) { p.mood = clamp(p.mood - 1, 0, 10); bumpPassion(p, -4) }
+      if (diff.buffed.some((b) => b.char.id === p.mainCharId)) { p.mood = clamp(p.mood + 0.7, 0, 10); bumpPassion(p, 6) }
       if (diff.removed.some((c) => c.id === p.mainCharId)) {
         p.mood = clamp(p.mood - 2, 0, 10)
+        bumpPassion(p, -12) // your whole character, gone — some never come back
         p.mainCharId = null
         p.settledMain = false // back to the lab to find a new main
       }
+    }
+  }
+
+  // The gamble: a patch is a huge relevance event. Its swing scales with how
+  // fragile the game already is — a hit revives a fading scene, a miss buries
+  // it. This is where late-game patching becomes genuinely dangerous.
+  if (consequentialRun) {
+    const relDelta = applyPatchRelevance(save, score, divisive)
+    patch.relevanceDelta = relDelta
+    if (relDelta <= -6) {
+      chronicle(save, '📉', `Patch v${version} did real damage — interest in ${save.game.name} took a hit the scene may not recover from`)
+    } else if (relDelta >= 6) {
+      chronicle(save, '📈', `Patch v${version} landed — ${save.game.name} is back in the conversation`)
     }
   }
 

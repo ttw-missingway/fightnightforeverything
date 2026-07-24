@@ -1,5 +1,5 @@
 import { clamp, hash01, chance, choice } from './util.js'
-import { newTeam, remember } from './model.js'
+import { newTeam, remember, chronicle, getMatchup } from './model.js'
 import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR } from './constants.js'
 
@@ -163,6 +163,8 @@ export function checkFallingOut(save, player, events) {
       type: 'team',
       text: `${player.alias || player.firstName} had a falling out with ${team.name} and left the team.`,
     })
+    // Storming out of your crew is the kind of thing the arcade retells.
+    chronicle(save, '💥', `${player.alias || player.firstName} stormed out of ${team.name} after a falling out`)
   }
 }
 
@@ -192,7 +194,60 @@ function disbandTeam(save, team, events, reason) {
     if (p) { p.teamId = null; p.mood = clamp(p.mood - 0.5, 0, 10) }
   }
   events.push({ type: 'team', text: `${team.name} [${team.acronym}] ${reason}` })
+  chronicle(save, '🪦', `${team.name} [${team.acronym}] is no more — ${reason}`)
   delete save.teams[team.id]
+}
+
+/**
+ * Betrayal: a low-loyalty player with a big ego — or a real friend on a
+ * better crew — walks across the arcade and joins the other team. Rare.
+ * Remembered forever, by everyone.
+ */
+function maybeBetrayal(save, events) {
+  const teams = Object.values(save.teams)
+  if (teams.length < 2) return
+  const avgElo = (team) => {
+    const ms = team.memberIds.map((id) => save.players[id]).filter(Boolean)
+    return ms.length ? ms.reduce((s, p) => s + p.elo, 0) / ms.length : 0
+  }
+  for (const p of Object.values(save.players)) {
+    const team = p.teamId ? save.teams[p.teamId] : null
+    if (!team) continue
+    // Who'd have them? A crew with room, where a friend vouches — or one
+    // clearly winning more than home ever will.
+    const suitors = teams.filter((t) =>
+      t.id !== team.id && t.memberIds.length < 6 &&
+      (t.memberIds.some((id) => {
+        const m = save.players[id]
+        return m && getRel(p, m) > 30 && getRel(m, p) > 20
+      }) || avgElo(t) > avgElo(team) + 80))
+    if (!suitors.length) continue
+    let c = 0.0012 * Math.max(0.2, (10 - p.personal.loyalty) / 6)
+    if (p.social.persona >= 7) c *= 1.5 // big egos chase bigger stages
+    if (!chance(c)) continue
+
+    const dest = suitors.reduce((a, b) => (avgElo(a) >= avgElo(b) ? a : b))
+    const name = p.alias || p.firstName
+    team.memberIds = team.memberIds.filter((id) => id !== p.id)
+    dest.memberIds.push(p.id)
+    p.teamId = dest.id
+    dest.lastGrowth = (save.year - 1) * DAYS_PER_YEAR + save.day
+    for (const id of team.memberIds) {
+      const mate = save.players[id]
+      if (!mate) continue
+      shiftRel(mate, p, -35)
+      mate.mood = clamp(mate.mood - 1, 0, 10)
+    }
+    teamLog(save, team, `${name} defected to ${dest.name}`)
+    teamLog(save, dest, `${name} joined — walking out on ${team.name} to do it`)
+    remember(save, p, 'team', `leaving ${team.name} for ${dest.name}`)
+    events.push({
+      type: 'team',
+      text: `🗡 ${name} LEFT ${team.name} [${team.acronym}] for ${dest.name} [${dest.acronym}]. Mid-session. The room went silent.`,
+    })
+    chronicle(save, '🗡', `The day ${name} betrayed ${team.name} and walked across the arcade to join ${dest.name}`)
+    return // one betrayal a day is plenty of drama
+  }
 }
 
 /**
@@ -205,7 +260,7 @@ function disbandTeam(save, team, events, reason) {
  */
 export function dailyTeamDynamics(save, events) {
   const abs = (save.year - 1) * DAYS_PER_YEAR + save.day
-  const regs = Object.values(save.players).filter((p) => p.isRegular)
+  const regs = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !p.banished)
   const teamless = regs.filter((p) => !p.teamId)
 
   for (const team of Object.values(save.teams)) {
@@ -260,5 +315,174 @@ export function dailyTeamDynamics(save, events) {
     }
   }
 
+  maybeBetrayal(save, events)
   dissolveTinyTeams(save, events)
+}
+
+// ---------- Opinions ----------
+// What a player actually thinks — of the GAME (the thing you patch) and of
+// the ARCADE (the room you run). Both are 0..10, derived live.
+
+export function opinionLabel(v) {
+  if (v >= 8.5) return 'obsessed'
+  if (v >= 7) return 'loves it'
+  if (v >= 5.5) return 'enjoying it'
+  if (v >= 4) return 'lukewarm'
+  if (v >= 2.5) return 'frustrated'
+  return 'checked out'
+}
+
+export function gameOpinionOf(save, p) {
+  let score = 5
+  // Winning is fun. Getting farmed is not.
+  if (p.wins + p.losses >= 10) score += (p.wins / (p.wins + p.losses) - 0.5) * 4
+  const chars = save.game.characters
+  const main = chars.find((c) => c.id === p.mainCharId)
+  if (main) {
+    const others = chars.filter((c) => c.id !== main.id)
+    const power = others.length
+      ? others.reduce((s, o) => s + getMatchup(save.game, main.id, o.id), 0) / others.length
+      : 50
+    if (power < 45) score -= 1.2 // maining a bottom-tier is a lifestyle of pain
+    else if (power > 55) score += 0.6 // winning cheap is still winning
+    for (const t of main.tags || []) if (p.attractedTags.includes(t)) score += 0.3
+  }
+  score += (save.patchMorale || 0) * 0.12
+  const invested = Math.max(0, ...Object.values(p.charSkill || {}))
+  score += Math.min(1, invested / 100) // sunk cost reads as love
+  return clamp(score, 0, 10)
+}
+
+export function arcadeOpinionOf(save, p) {
+  let score = 5
+  score += save.arcade.foods.filter((f) => p.foods.includes(f)).length * 0.4
+  score += save.arcade.otherGames.filter((g) => p.otherGames.includes(g)).length * 0.35
+  const rels = Object.values(p.relationships || {})
+  score += Math.min(2, rels.filter((v) => v >= 20).length * 0.35)
+  score -= Math.min(1.5, rels.filter((v) => v <= -50).length * 0.4)
+  score += ((save.arcade.cleanliness ?? 80) - 60) * 0.02
+  score += ((save.staffing?.morale ?? 70) - 60) * 0.012
+  const tokenPrice = save.arcade.prices?.token ?? 1
+  score -= Math.max(0, tokenPrice - (0.6 + (p.social?.income ?? 5) * 0.16)) * 0.8
+  // A room full of bad blood is miserable to be in — a toxic scene poisons how
+  // everyone feels about the ARCADE itself, not just each other. This is what
+  // makes the internet stop loving your place when the vibe curdles.
+  score -= (save.scene?.toxicity || 0) * 4
+  return clamp(score, 0, 10)
+}
+
+// The room's consensus: averaged over everyone who actually shows up.
+function communityAvg(save, fn) {
+  const regs = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !p.banished)
+  if (!regs.length) return null
+  return regs.reduce((s, p) => s + fn(save, p), 0) / regs.length
+}
+
+export function communityGameOpinion(save) {
+  const avg = communityAvg(save, gameOpinionOf)
+  if (avg == null) return null
+  return clamp(avg + (save.patchMorale || 0) * 0.1, 0, 10)
+}
+
+export function communityArcadeOpinion(save) {
+  const avg = communityAvg(save, arcadeOpinionOf)
+  if (avg == null) return null
+  return clamp(avg + Math.min(1, (save.stream?.hype || 0) / 100), 0, 10)
+}
+
+// How the room feels about a player — averaged over what everyone ELSE thinks
+// of them (incoming relationships). The fast read on who's beloved and, more
+// usefully, who's the problem: a deeply-negative standing is a player souring
+// the scene around them.
+export function standingOf(save, p) {
+  let sum = 0
+  let n = 0
+  for (const other of Object.values(save.players)) {
+    if (other.id === p.id || !other.isRegular || other.retired || other.banished) continue
+    const v = other.relationships?.[p.id]
+    if (v == null) continue
+    sum += v
+    n += 1
+  }
+  return n ? sum / n : 0
+}
+
+export function standingLabel(v) {
+  if (v >= 28) return { label: 'beloved', color: 'var(--green)' }
+  if (v >= 8) return { label: 'well-liked', color: 'var(--green)' }
+  if (v > -8) return { label: 'neutral', color: 'var(--dim)' }
+  if (v > -28) return { label: 'disliked', color: 'var(--gold)' }
+  return { label: 'resented', color: 'var(--red)' }
+}
+
+// ---------- Scene health: rivalry vs toxicity ----------
+// The mid-game's central tension. A fierce rivalry — two players close in
+// skill who've traded blows many times, with a competitive edge but not open
+// hatred — pushes both to improve ("iron sharpens iron"). A scene of all
+// friends plateaus; a scene of mutual hatred turns toxic and empties out. The
+// owner's job is to cultivate the competition without letting it curdle.
+
+const RIVAL_MIN_GAMES = 6
+
+// Are these two an active rivalry? Close in elo, real head-to-head history,
+// and a relationship in the competitive band — spiky, but short of hatred.
+export function areRivals(save, a, b) {
+  if (!a || !b || a.id === b.id) return false
+  const h = a.h2h?.[b.id]
+  const games = h ? h.w + h.l : 0
+  if (games < RIVAL_MIN_GAMES) return false
+  if (Math.abs(a.elo - b.elo) > 170) return false
+  const rel = Math.min(getRel(a, b), getRel(b, a))
+  return rel <= 10 && rel > -50 // competitive tension, short of real hostility
+}
+
+// The first active rival this player has among the regulars (or null).
+export function rivalOf(save, player) {
+  if (!player.isRegular || player.retired || player.banished) return null
+  for (const p of Object.values(save.players)) {
+    if (!p.isRegular || p.retired || p.id === player.id) continue
+    if (areRivals(save, player, p)) return p
+  }
+  return null
+}
+
+// A read on the whole scene: how many productive rivalries burn, how many
+// relationships have curdled into mutual hatred, normalized to scene size.
+export function sceneHealth(save) {
+  const regs = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !p.banished)
+  let rivalries = 0
+  let toxic = 0
+  // Normalize by how many PEOPLE are caught up in rivalries / feuds, not raw
+  // pair counts — a scene feels competitive or poisonous based on how much of
+  // the room is involved, and this stays stable as the scene grows.
+  const inRivalry = new Set()
+  const inFeud = new Set()
+  for (let i = 0; i < regs.length; i++) {
+    for (let j = i + 1; j < regs.length; j++) {
+      const a = regs[i]
+      const b = regs[j]
+      const rel = Math.min(getRel(a, b), getRel(b, a))
+      if (rel <= -60) { toxic++; inFeud.add(a.id); inFeud.add(b.id) }
+      else if (areRivals(save, a, b)) { rivalries++; inRivalry.add(a.id); inRivalry.add(b.id) }
+    }
+  }
+  const n = Math.max(1, regs.length)
+  return {
+    rivalries,
+    toxic,
+    regulars: regs.length,
+    rivalryIndex: clamp((inRivalry.size / n) * 1.15, 0, 1), // share of the room with a rival
+    toxicity: clamp((inFeud.size / n) * 1.4, 0, 1), // share of the room caught in real bad blood
+    rivalIds: [...inRivalry], // who currently has an active rival — read by skillCeiling (cheap lookup)
+    feudIds: [...inFeud], // who's caught in real bad blood — read by discipline/reputation
+  }
+}
+
+export function sceneVerdict(scene) {
+  if (!scene || scene.regulars < 6) return { label: 'the scene is still forming', color: 'dim' }
+  if (scene.toxicity >= 0.5) return { label: 'turning toxic — regulars are drifting away', color: 'red' }
+  if (scene.toxicity >= 0.25) return { label: 'bad blood is brewing', color: 'gold' }
+  if (scene.rivalryIndex >= 0.4) return { label: 'a fierce, healthy competitive scene', color: 'green' }
+  if (scene.rivalryIndex >= 0.18) return { label: 'rivalries are taking shape', color: 'cyan' }
+  return { label: 'too friendly — players are plateauing', color: 'gold' }
 }
