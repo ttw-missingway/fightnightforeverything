@@ -17,7 +17,10 @@ import { econLog } from './economy.js'
 // growing public profile (popularity, earned from being featured) adds to it —
 // so pointing the camera at someone genuinely makes them a bigger draw.
 export function personalityOf(player) {
-  return clamp((player.respect + player.glory * 1.2 + (player.popularity || 0) * 0.4) / 100, 0, 1)
+  // Presence is innate screen-magnetism — the walk-on nobody can look away
+  // from. Fame (respect/glory/popularity) is EARNED draw stacked on top of it.
+  return clamp((player.respect + player.glory * 1.2 + (player.popularity || 0) * 0.4
+    + (player.personal?.presence ?? 5) * 3) / 100, 0, 1)
 }
 
 // Being featured under the lights is how a player becomes battle-tested. Every
@@ -116,7 +119,8 @@ export function applyStageReps(save, players, stream, context = 'daily', weight 
     ref.belief = clamp(belief + delta, 0, 100)
     noteBeliefSwing(save, ref, delta, viewers)
     // Popularity climbs with eyeballs (fades slowly without them, in endDay).
-    ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * (1 - (ref.popularity ?? 0) / 120), 0, 100)
+    const shine = 0.55 + (ref.personal?.presence ?? 5) * 0.09 // the camera finds some people
+    ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * shine * (1 - (ref.popularity ?? 0) / 120), 0, 100)
     // Recognition rekindles the fire — being seen is why a lot of people play.
     bumpPassion(ref, Math.min(2.5, 0.25 + viewers / 100))
   }

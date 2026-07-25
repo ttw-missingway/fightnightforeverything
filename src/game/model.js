@@ -1,5 +1,5 @@
 import { uid, rollStat, clamp } from './util.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf } from './constants.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { computeMatchups } from './balance.js'
@@ -61,8 +61,14 @@ export function newPlayer(partial = {}) {
     // and out: stop showing up for long enough and they're gone for good.
     npc: false,
     npcLastSeenAbs: null, // absolute day they last walked in — drives churn
-    personal: blankStats(PERSONAL_KEYS),
-    social: blankStats(SOCIAL_KEYS), // includes `income` — spending money they walk in with
+    // Disco-style creation: every stat starts EMPTY. A temperament row (one
+    // competitive, one social) grants its stats a point each, and the rest is
+    // point-buy. An unspent stat is a real flaw, not "average".
+    personal: blankStats(PERSONAL_KEYS, 0),
+    social: blankStats(SOCIAL_KEYS, 0), // includes `income` — spending money they walk in with
+    temperament: null, // TEMPERAMENTS key — the competitive row they lead with
+    socialTemperament: null, // SOCIAL_TEMPERAMENTS key
+    slob: false, // the rare filler quirk: the arcade is a small room, people notice
     defaultMood: 5,
     mood: 5,
     elo: 1200,
@@ -143,6 +149,63 @@ export function resetPlayerForNewRun(p) {
     otherGames: [...(p.otherGames || [])],
     foods: [...(p.foods || [])],
   })
+}
+
+/**
+ * Make any stat spread legal under the temperament point-buy: snap internal
+ * values to the 0–5 point grid, adopt the rows the build already leans toward
+ * as its temperaments (their stats get the free point), then shave the highest
+ * stats until the spend fits the budget. Used for imported casts, generated
+ * players, and anything else that didn't come through the creation form.
+ */
+export function legalizeBuild(player, budgetUi) {
+  const toUi = (v) => clamp(Math.round((v || 0) / STAT_UNIT), 0, STAT_MAX_POINTS)
+  const pu = {}, su = {}
+  for (const k of PERSONAL_KEYS) pu[k] = toUi(player.personal?.[k])
+  for (const k of SOCIAL_KEYS) su[k] = toUi(player.social?.[k])
+
+  const rowSum = (t, bag) => t.stats.reduce((s, k) => s + (bag[k] || 0), 0)
+  const best = (list, bag) => list.reduce((a, b) => (rowSum(b, bag) > rowSum(a, bag) ? b : a))
+  const temp = best(TEMPERAMENTS, pu)
+  const soc = best(SOCIAL_TEMPERAMENTS, su)
+  for (const k of temp.stats) pu[k] = Math.max(1, pu[k]) // the free row point
+  for (const k of soc.stats) su[k] = Math.max(1, su[k])
+
+  const granted = (k, bag) => (bag === pu ? temp : soc).stats.includes(k)
+  const spent = () =>
+    PERSONAL_KEYS.reduce((s, k) => s + pu[k], 0) + SOCIAL_KEYS.reduce((s, k) => s + su[k], 0)
+    - temp.stats.length - soc.stats.length
+  if (budgetUi != null) {
+    let guard = 400
+    while (spent() > budgetUi && guard-- > 0) {
+      let bag = null, key = null, val = -1
+      for (const k of PERSONAL_KEYS) { const floor = granted(k, pu) ? 1 : 0; if (pu[k] > floor && pu[k] > val) { val = pu[k]; bag = pu; key = k } }
+      for (const k of SOCIAL_KEYS) { const floor = granted(k, su) ? 1 : 0; if (su[k] > floor && su[k] > val) { val = su[k]; bag = su; key = k } }
+      if (!bag) break
+      bag[key] -= 1
+    }
+  }
+  player.temperament = temp.key
+  player.socialTemperament = soc.key
+  for (const k of PERSONAL_KEYS) player.personal[k] = pu[k] * STAT_UNIT
+  for (const k of SOCIAL_KEYS) player.social[k] = su[k] * STAT_UNIT
+  return player
+}
+
+/**
+ * The roguelike spine: legacy points are earned by HITTING MILESTONES, not by
+ * existing — a run that starts and dies banks nothing. Each key awards once per
+ * run, lands a chronicle beat so the earn is felt, and pays out into prestige
+ * when the run ends. Deeper runs → more points → stronger created players next
+ * run. Losing is expected; the cast you can build grows anyway.
+ */
+export function awardMilestone(save, key, points, text) {
+  save.milestones ??= {}
+  if (save.milestones[key]) return false
+  save.milestones[key] = true
+  save.prestigePending = (save.prestigePending || 0) + points
+  chronicle(save, '🏅', `${text} (+${points} legacy point${points === 1 ? '' : 's'})`)
+  return true
 }
 
 // Deep-clone a character under entirely fresh ids (character, moves, and the
@@ -279,7 +342,9 @@ export function newSave(partial = {}) {
     quietDays: 0, // consecutive days the floor was effectively empty — the dynamics funnel
     fadedDays: 0, // consecutive days nobody outside cares anymore — the opinion funnel
     separations: [], // {key, aId, bId, untilAbs} — pairs the owner is keeping apart to cool a feud
-    prestige: { points: 0, runs: 0 }, // earned at foreclosure/reset from arcade fame; spent on player creation
+    prestige: { points: 0, runs: 0 }, // legacy points banked across runs; spent on player creation
+    milestones: {}, // milestone keys already earned this run (each awards once)
+    prestigePending: 0, // legacy points earned THIS run — banked when the run ends
     archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
     socialFeed: [], // fake posts about the scene — newest first, capped
     dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
@@ -477,6 +542,8 @@ export function migrateSave(save) {
   save.arcade.closedUntilAbs ??= null
   save.staffing ??= newStaffing()
   save.prestige ??= { points: 0, runs: 0 }
+  save.milestones ??= {}
+  save.prestigePending ??= 0
   save.rosterCollapsed ??= false
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   save.attentionDrift ??= { untilAbs: 0, value: 0 }
@@ -495,6 +562,20 @@ export function migrateSave(save) {
   for (const p of Object.values(save.players)) {
     p.npc ??= false
     p.npcLastSeenAbs ??= null
+    p.temperament ??= null
+    p.socialTemperament ??= null
+    p.slob ??= false
+    // Hygiene grew up into reliability (same slot, new meaning); the old joke
+    // lives on as the `slob` quirk on the rare gross passer-through.
+    if (p.social && p.social.reliability == null) {
+      p.social.reliability = p.social.hygiene ?? 5
+      delete p.social.hygiene
+    }
+    // Stats added after this player was made land at neutral.
+    if (p.personal) {
+      p.personal.adaptation ??= 5
+      p.personal.presence ??= 5
+    }
   }
   save.separations ??= []
   save.archives ??= []

@@ -107,7 +107,7 @@ export function monthlyRent(save) {
   // (not the per-cabinet part) is what makes low attendance fatal — so it
   // punishes coasting, not building.
   const diff = difficultyOf(save)
-  const base = (diff.rentBase ?? 300) + save.settings.setups * 38 + save.arcade.otherGames.length * 18
+  const base = (diff.rentBase ?? 220) + save.settings.setups * 30 + save.arcade.otherGames.length * 15
   // The lease gets renegotiated every year, and never in your favour. This is
   // what makes a hands-off arcade lose: an operation that was comfortably in
   // the black on day one is underwater by year three unless the owner has
@@ -358,8 +358,12 @@ export function arcadeClosed(save) {
 // 0 = happily feeding the machine; up to ~0.35 = thinking real hard.
 export function tokenDeterrence(save, p) {
   const price = save.arcade.prices?.token ?? 1
-  const comfort = 0.6 + (p.social?.income ?? 5) * 0.16 // $/game they don't think about
-  return clamp((price - comfort) * 0.25, 0, 0.35)
+  // Every player has a price they stop thinking about — and a broke regular
+  // thinks HARD about a $2 token. Pricing against your actual room's wallets
+  // is the early game: squeeze past what your crowd carries and the machines
+  // sit quiet no matter how much they love the place.
+  const comfort = 0.9 + (p.social?.income ?? 5) * 0.18 // $/game they don't think about
+  return clamp((price - comfort) * 0.38, 0, 0.6)
 }
 
 /**
@@ -394,8 +398,10 @@ export function playerSpending(save, attendees, gamesToday, events) {
     const food = choice(pool)
     const price = foodPriceOf(save, food)
     const appetite = liked.length ? 0.75 : 0.3
-    const priceFactor = price / (1.5 + wallet * 0.8)
-    const buyChance = clamp(appetite - Math.max(0, priceFactor - 1) * 0.7, 0.02, 0.9)
+    // The $2 hot dog a broke kid buys every night is a $4 hot dog they never
+    // buy again. Wallet decides the ceiling; your price list has to respect it.
+    const priceFactor = price / (1.8 + wallet * 0.5)
+    const buyChance = clamp(appetite - Math.max(0, priceFactor - 1) * 0.85, 0.02, 0.9)
     if (chance(buyChance)) {
       foodRevenue += price
       foodSales += 1
@@ -447,7 +453,7 @@ export function landlordDaily(save, events) {
  * storied chronicle all count.
  */
 export function prestigeEarned(save) {
-  const totalGlory = Object.values(save.players).reduce((s, p) => s + (p.glory || 0), 0)
-  const fame = save.stream.followers / 40 + save.stream.hype / 4 + totalGlory / 60 + (save.chronicle?.length || 0) / 12
-  return Math.max(1, Math.round(fame))
+  // Legacy points come from milestones hit during the run (model.awardMilestone)
+  // — never from merely existing. Start a run and die immediately: bank nothing.
+  return Math.round(save.prestigePending || 0)
 }

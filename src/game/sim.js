@@ -1,8 +1,8 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
-import { newInnovation, remember, chronicle, pushVod } from './model.js'
-import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
+import { newInnovation, remember, chronicle, pushVod, awardMilestone } from './model.js'
+import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
 import { narrateSet } from './fight.js'
@@ -50,6 +50,9 @@ function charAppeal(save, player, char) {
     if (player.repelledTags.includes(t)) score -= 5
   }
   score += (player.charSkill[char.id] || 0) * 0.15 // sunk cost is real
+  // The analytical read the chart before they commit: strong characters PULL
+  // them, weak ones repel. Low-analysis players pick with their heart.
+  score += (charPower(save.game, char.id) - 50) * player.personal.analysis * 0.09
   // Nothing sells a character like winning with them.
   const rec = player.charRecord?.[char.id]
   if (rec && rec.w + rec.l >= 8) {
@@ -149,7 +152,7 @@ function maybeSettleMain(save, player, events) {
 function maybePocketPickup(save, player) {
   if (!player.settledMain || !player.mainCharId) return
   if ((player.pocketPicks || []).length >= 3) return
-  if (!chance(0.0008 * (player.personal.learning + player.personal.innovation))) return
+  if (!chance(0.0004 * (player.personal.learning + player.personal.innovation) + (player.personal.adaptation ?? 5) * 0.0011)) return
   const options = save.game.characters.filter(
     (ch) => ch.id !== player.mainCharId && !(player.pocketPicks || []).includes(ch.id))
   if (!options.length) return
@@ -181,10 +184,12 @@ function attendChance(save, player) {
   // Nobody goes to the arcade every single day — weekends are the draw,
   // weekdays are for the truly committed, and the habit builds slowly.
   // That's what makes "regular" mean something.
-  let p = 0.08 + player.personal.spark * 0.038 + (player.mood - 5) * 0.02
+  let p = 0.21 + player.personal.spark * 0.030 + (player.mood - 5) * 0.02
   p += Math.min(0.12, player.daysAttended * 0.0015) // dedication compounds
   const wd = weekdayOf(save.day)
-  p += wd === 0 || wd === 6 ? 0.16 : -0.02
+  // Weekends draw everyone; weekdays belong to the RELIABLE — the put-together
+  // player is the one keeping your Tuesday room alive.
+  p += wd === 0 || wd === 6 ? 0.16 : (-0.05 + (player.social?.reliability ?? 5) * 0.006)
   // A hated (or beloved) patch changes how much anyone wants to play.
   if (save.settings.mode !== 'sandbox') p += (save.patchMorale || 0) * 0.004
   for (const f of player.foods) if (save.arcade.foods.includes(f)) p += 0.03
@@ -383,7 +388,7 @@ function makeBeats(save, group, where, results) {
   }
 
   // Hygiene. Nobody says anything. Everybody notices.
-  const ripe = group.find((p) => (p.social.hygiene ?? 5) <= 2)
+  const ripe = group.find((p) => p.slob)
   if (ripe && group.length >= 2 && chance(0.25)) {
     beats.push(choice([
       `${pName(save, ripe)} joins the circle. The circle widens slightly.`,
@@ -564,7 +569,7 @@ function runMoneyMatch(save, mm, present, events) {
     shiftRel(loser, winner, -4)
   }
   for (const w of watchers) {
-    gainSkill(save, w, w.mainCharId, 0.03 + w.personal.analysis * 0.018)
+    gainSkill(save, w, w.mainCharId, 0.02 + w.personal.analysis * 0.045)
     applySocialMood(w, 0.8)
   }
   mm.status = 'done'
@@ -783,8 +788,14 @@ export function startDay(save) {
           legend: `👑 ${pName(save, p)} is an arcade LEGEND. Their name is basically on the building.`,
         }[nowStatus.key]
         if (line) events.push({ type: 'arrival', text: line })
-        if (nowStatus.key === 'star') chronicle(save, '⭐', `${pName(save, p)} became a star of ${save.arcade.name}`)
-        if (nowStatus.key === 'legend') chronicle(save, '👑', `${pName(save, p)} reached legend status at ${save.arcade.name}`)
+        if (nowStatus.key === 'star') {
+          chronicle(save, '⭐', `${pName(save, p)} became a star of ${save.arcade.name}`)
+          awardMilestone(save, 'first-star', 2, `${save.arcade.name} produced its first star`)
+        }
+        if (nowStatus.key === 'legend') {
+          chronicle(save, '👑', `${pName(save, p)} reached legend status at ${save.arcade.name}`)
+          awardMilestone(save, 'first-legend', 5, 'An arcade LEGEND came up under this roof')
+        }
       }
       if (p.mainCharId && (p.lockedMain || p.exploredChars.length === 0)) {
         // A main chosen at creation counts as already settled.
@@ -818,7 +829,7 @@ export function startDay(save) {
   // How long each attendee sticks around (spark = stays longer).
   const staysUntil = {}
   for (const p of attendees) {
-    staysUntil[p.id] = clamp(2 + Math.round(p.personal.spark * 0.45 + rand() * 2 - 1), 1, HOURS_PER_DAY)
+    staysUntil[p.id] = clamp(2 + Math.round(2 + p.personal.spark * 0.32 + rand() * 2 - 1), 1, HOURS_PER_DAY)
   }
   if (mmToday) {
     // The principals (and their audience) stay through the 7 PM showdown.
@@ -877,9 +888,9 @@ export function simHour(save) {
     // and steep token prices make the wallet-conscious sit a few out.
     const wantsToPlay = present.filter((p) => {
       const played = dip.gamesToday[p.id] || 0
-      const fatigue = played * Math.max(0.02, 0.16 - p.personal.stamina * 0.013)
+      const fatigue = played * Math.max(0.015, 0.12 - p.personal.stamina * 0.0105)
       const priceHesitation = tokenDeterrence(save, p)
-      return chance(clamp(0.3 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue - priceHesitation, 0.02, 0.9))
+      return chance(clamp(0.38 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue - priceHesitation, 0.02, 0.9))
     })
     const matches = []
     const pool = [...wantsToPlay]
@@ -970,7 +981,7 @@ export function simHour(save) {
 
       // Watchers learn by analysis, and can pick up tech by observation.
       for (const w of watcherGroup) {
-        gainSkill(save, w, w.mainCharId, 0.03 + w.personal.analysis * 0.018)
+        gainSkill(save, w, w.mainCharId, 0.02 + w.personal.analysis * 0.045)
         maybeLearnInnovation(save, w, winner, events, true)
         shiftRel(w, winner, 0.5)
         applySocialMood(w, 0.5)
@@ -1394,11 +1405,19 @@ export function advanceDay(save) {
     save.economy.lastDayMoney = money
     save.economy.todayAttendance = null
   }
+  // Legacy milestones: making it matters, growing matters — existing doesn't.
+  if (save.settings.mode !== 'sandbox') {
+    if ((save.stream?.followers || 0) >= 1000) awardMilestone(save, 'followers-1k', 2, 'A thousand people follow the channel now')
+    if ((save.economy?.money ?? 0) >= 3000) awardMilestone(save, 'bank-3k', 2, 'Three grand in the register — the arcade is a real business')
+  }
   save.day += 1
   if (save.day > DAYS_PER_YEAR) {
     save.day = 1
     save.year += 1
     driftEvoRoster(save)
+    if (save.settings.mode !== 'sandbox' && save.year >= 2 && save.year <= 6) {
+      awardMilestone(save, `year-${save.year}`, save.year, `${save.arcade.name} made it to Year ${save.year}`)
+    }
   }
 }
 

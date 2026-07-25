@@ -59,10 +59,8 @@ export function socialDelta(a, b, context = {}) {
     if ((a.repelledPlayerTags || []).includes(t)) delta -= 1.5
   }
 
-  // Hygiene. The arcade is a small room in summer. People notice.
-  const hyg = b.social.hygiene ?? 5
-  if (hyg <= 3) delta -= (4 - hyg) * 0.5
-  else if (hyg >= 9) delta += 0.2
+  // The slob quirk. The arcade is a small room in summer. People notice.
+  if (b.slob) delta -= 1.6
 
   if (context.justLostTo) {
     // b beat a recently; b's sportsmanship decides how it lands.
@@ -379,7 +377,7 @@ export function arcadeOpinionOf(save, p) {
   score -= Math.max(0, (save.arcade.crowding || 0) - 0.45) * 6
   score += ((save.staffing?.morale ?? 70) - 60) * 0.012
   const tokenPrice = save.arcade.prices?.token ?? 1
-  score -= Math.max(0, tokenPrice - (0.6 + (p.social?.income ?? 5) * 0.16)) * 0.8
+  score -= Math.max(0, tokenPrice - (0.9 + (p.social?.income ?? 5) * 0.18)) * 0.8
   // A room full of bad blood is miserable to be in — a toxic scene poisons how
   // everyone feels about the ARCADE itself, not just each other. This is what
   // makes the internet stop loving your place when the vibe curdles.

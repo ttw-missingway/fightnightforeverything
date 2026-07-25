@@ -7,7 +7,7 @@
 // temperamental star is a genuine gamble — and doing nothing lets toxicity
 // spiral. Pure engine, node-runnable.
 
-import { clamp, randInt, displayName } from './util.js'
+import { clamp, displayName } from './util.js'
 import { absDayOf } from './constants.js'
 import { chronicle } from './model.js'
 import { getRel, shiftRel } from './social.js'
@@ -43,7 +43,7 @@ export function chiefInstigator(save) {
 }
 
 export function isUnhygienic(player) {
-  return (player.social?.hygiene ?? 5) <= 3
+  return !!player.slob
 }
 
 // What, if anything, is this player warnable FOR right now?
@@ -89,7 +89,7 @@ export function warnPlayer(save, player, behavior) {
   let text
   if (outcome === 'reform') {
     if (behavior === 'hygiene') {
-      player.social.hygiene = clamp((player.social.hygiene ?? 5) + randInt(2, 4), 1, 10)
+      player.slob = false
       text = `${name} took the hint — showed up clean the next day. Nobody's edging away from the circle anymore.`
     } else {
       // Dial back the hostility: their worst grudges soften.

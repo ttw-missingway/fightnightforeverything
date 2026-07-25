@@ -8,7 +8,7 @@
 
 import { clamp, hash01, rand } from './util.js'
 import { absDayOf, DAYS_PER_YEAR, difficultyOf } from './constants.js'
-import { chronicle } from './model.js'
+import { chronicle, awardMilestone } from './model.js'
 import { communityGameOpinion } from './social.js'
 
 export function relevanceLabel(v) {
@@ -163,7 +163,10 @@ function markMilestones(save, before, after) {
   const name = save.game.name
   const crossedDown = (th) => before >= th && after < th
   const crossedUp = (th) => before < th && after >= th
-  if (crossedUp(82)) chronicle(save, '📈', `${name} has become a national phenomenon — the whole scene is buzzing`)
+  if (crossedUp(82)) {
+    chronicle(save, '📈', `${name} has become a national phenomenon — the whole scene is buzzing`)
+    if (save.settings?.mode !== 'sandbox') awardMilestone(save, 'phenomenon', 3, `${name} became a national phenomenon`)
+  }
   else if (crossedUp(62)) chronicle(save, '📈', `${name} is thriving again — interest is on the rise`)
   if (crossedDown(42)) chronicle(save, '📉', `${name} is slipping out of the national conversation`)
   else if (crossedDown(24)) chronicle(save, '📉', `Interest in ${name} is fading fast — the golden age is ending`)

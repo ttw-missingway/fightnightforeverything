@@ -1,6 +1,6 @@
 import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
 import { newPlayer, newCharacter } from './model.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS } from './constants.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
   ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES, CATCHPHRASES,
@@ -92,13 +92,18 @@ export function generateCharacter(usedNames = new Set()) {
 // handful roll "talent" — the raw material a cultivated run turns into an EVO
 // threat. Everyone else plateaus no matter what. Target over 48: ~40 forgettable
 // or casual, ~8 with real competitive potential, of whom 1–3 might ever win.
+// Everyone lives in the same sparse stat economy as created players now: a
+// temperament row, a social row, and a tier-sized budget of points. Filler
+// budgets sit below a created cast's, filler never rolls "talent", and no
+// filler stat exceeds 3 points — the user's players are the only people in
+// the world built past that.
 const CEILING_TIERS = [
-  { key: 'spectator', weight: 46, range: [1, 4] },
-  { key: 'regular', weight: 32, range: [3, 6] },
-  { key: 'prospect', weight: 15, range: [5, 8] },
-  { key: 'talent', weight: 7, range: [7, 10] },
+  { key: 'spectator', weight: 46, budget: [4, 8] },
+  { key: 'regular', weight: 32, budget: [8, 12] },
+  { key: 'prospect', weight: 15, budget: [12, 16] },
+  { key: 'talent', weight: 7, budget: [16, 20] },
 ]
-const CEILING_STATS = ['spark', 'determination', 'dominance', 'mojo', 'xfactor', 'aptitude', 'mastery', 'composure']
+const NPC_STAT_CAP = 3 // points per stat — a created specialist always outclasses
 
 function rollCeilingTier(isNpc) {
   // Filler never rolls "talent" — the raw material of a world champion only
@@ -112,16 +117,37 @@ function rollCeilingTier(isNpc) {
 }
 
 export function generatePlayer(save, overrides = {}) {
-  const personal = rollStatBlock(PERSONAL_KEYS)
-  const social = rollStatBlock(SOCIAL_KEYS)
-  // Skew the ceiling stats by tier so the roster is top-light (see above). The
-  // rest of the stats stay freely rolled, so personalities still vary within a
-  // tier — a talented player can still be a slob with no sportsmanship.
-  const tier = rollCeilingTier(!!overrides.npc)
-  for (const k of CEILING_STATS) personal[k] = randInt(tier.range[0], tier.range[1])
-  // A created player is point-buy capped by difficulty; filler must never be
-  // built BETTER than anything the user is allowed to make.
-  if (overrides.npc) for (const k of CEILING_STATS) personal[k] = Math.min(personal[k], 7)
+  // Sparse temperament build: pick rows, then spend the tier's budget — most
+  // of it leaning into the temperament, the rest scattered. Same economy the
+  // user builds in, so filler and cast are commensurable opponents.
+  const isNpc = !!overrides.npc
+  const tier = rollCeilingTier(isNpc)
+  const trow = choice(TEMPERAMENTS)
+  const srow = choice(SOCIAL_TEMPERAMENTS)
+  const pu = {}, su = {}
+  for (const k of PERSONAL_KEYS) pu[k] = 0
+  for (const k of SOCIAL_KEYS) su[k] = 0
+  for (const k of trow.stats) pu[k] = 1 // the free temperament points
+  for (const k of srow.stats) su[k] = 1
+  const cap = isNpc ? NPC_STAT_CAP : 5
+  let budget = randInt(tier.budget[0], tier.budget[1])
+  let guard = 200
+  while (budget > 0 && guard-- > 0) {
+    // Lean into who they are: most points chase the temperament rows.
+    const roll = rand()
+    let bag, key
+    if (roll < 0.5) { bag = pu; key = choice(trow.stats) }
+    else if (roll < 0.65) { bag = su; key = choice(srow.stats) }
+    else if (roll < 0.9) { bag = pu; key = choice(PERSONAL_KEYS) }
+    else { bag = su; key = choice(SOCIAL_KEYS) }
+    if (bag[key] < cap) { bag[key]++; budget-- }
+  }
+  const personal = {}, social = {}
+  for (const k of PERSONAL_KEYS) personal[k] = pu[k] * STAT_UNIT
+  for (const k of SOCIAL_KEYS) social[k] = su[k] * STAT_UNIT
+  // The old hygiene joke lives here now: the rare passer-through who makes the
+  // whole room edge toward the door. Warnable, fixable, never one of YOURS.
+  const slob = isNpc ? chance(0.07) : false
   const first = choice(FIRST_NAMES)
   const last = choice(LAST_NAMES)
   const taken = new Set(Object.values(save.players).map((p) => p.alias))
@@ -145,8 +171,10 @@ export function generatePlayer(save, overrides = {}) {
     gender: choice(GENDERS),
     description: choice(APPEARANCES),
     createdBy: 'cpu',
+    temperament: trow.key,
+    socialTemperament: srow.key,
     personal,
-    social, // rollStatBlock(SOCIAL_KEYS) now rolls `income` too
+    social,
     voice: deriveVoice({ personal, social }),
     defaultMood: randInt(4, 7),
     mood: randInt(4, 7),
@@ -159,6 +187,7 @@ export function generatePlayer(save, overrides = {}) {
     // Tastes span the whole catalog, not just what's stocked (see randomPreferences).
     otherGames: sample(OTHER_GAMES, randInt(1, 3)),
     foods: sample(FOODS, randInt(1, 3)),
+    slob,
     ...overrides,
   })
 }
@@ -247,7 +276,7 @@ export function generateEvoRoster(save, count = 20) {
     const char = save.game.characters.length ? choice(save.game.characters) : null
     // Elites are strong but tiered: a few gods, many killers.
     const tier = i < 3 ? 'god' : i < 10 ? 'legend' : 'killer'
-    const skill = tier === 'god' ? randInt(92, 100) : tier === 'legend' ? randInt(82, 93) : randInt(72, 85)
+    const skill = tier === 'god' ? randInt(76, 86) : tier === 'legend' ? randInt(66, 78) : randInt(56, 70)
     const elo = tier === 'god' ? randInt(2200, 2450) : tier === 'legend' ? randInt(2000, 2250) : randInt(1800, 2050)
     roster.push({
       id: uid('elite'),
@@ -269,7 +298,7 @@ export function generateEvoRoster(save, count = 20) {
 // character switch — but the same people show up, which keeps EVO believable.
 export function driftEvoRoster(save) {
   for (const e of save.evoRoster) {
-    e.skill = Math.max(60, Math.min(100, e.skill + randInt(-3, 3)))
+    e.skill = Math.max(48, Math.min(90, e.skill + randInt(-3, 3)))
     e.elo = Math.max(1700, e.elo + randInt(-40, 50))
     if (chance(0.08) && save.game.characters.length) {
       e.mainCharId = choice(save.game.characters).id

@@ -209,7 +209,7 @@ export function BasicsEditor({ save, update }) {
               {difficultyOf(save).blurb}{' '}
               Starting budget <strong className="green">${difficultyOf(save).startingMoney}</strong> (spent building your
               arcade; the rest is opening cash) · {difficultyOf(save).statPoints} stat points per created
-              player (cap {difficultyOf(save).statCap}/stat) · rent ×{difficultyOf(save).rentMult} ·
+              player (max 5/stat) · rent ×{difficultyOf(save).rentMult} ·
               popularity gain ×{difficultyOf(save).popularityMult}.
             </p>
           </>

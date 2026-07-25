@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import PlayerForm, { capAndFit } from './PlayerForm.jsx'
+import PlayerForm from './PlayerForm.jsx'
 import { Field, NumField } from './ui.jsx'
-import { newPlayer, resetPlayerForNewRun } from '../game/model.js'
+import { newPlayer, resetPlayerForNewRun, legalizeBuild } from '../game/model.js'
 import { uid } from '../game/util.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import { generatePlayer, randomPreferences } from '../game/generate.js'
@@ -35,9 +35,7 @@ export default function RosterEditor({ save, update }) {
     p.tasteRoll = { foods: [...(p.foods || [])], otherGames: [...(p.otherGames || [])] }
     if (consequential) {
       const d = difficultyOf(s)
-      const fitted = capAndFit(p.personal, p.social, d.statCap, d.statPoints + (s.prestige?.points || 0))
-      p.personal = fitted.personal
-      p.social = fitted.social
+      legalizeBuild(p, d.statPoints + (s.prestige?.points || 0))
     }
     s.players[p.id] = p
   })

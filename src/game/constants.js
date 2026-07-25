@@ -1,6 +1,6 @@
 export const PERSONAL_STATS = [
   ['spark', 'How likely they are to go to the arcade and stay around'],
-  ['analysis', 'How much better they get from watching a game'],
+  ['analysis', 'Learns by watching, and turns matchup knowledge into wins'],
   ['determination', 'How much better they get from losing'],
   ['dominance', 'How much better they get from winning'],
   ['temperance', 'How much winning/losing impacts their mood'],
@@ -13,6 +13,8 @@ export const PERSONAL_STATS = [
   ['mastery', 'How skilled they are at mastering a character'],
   ['stamina', 'How many games they can play in a day before fatigue sets in'],
   ['composure', 'Nerves on the big stage — tournaments and EVO punish the shaky'],
+  ['adaptation', 'Counterpicking and pocket characters — thrives off their main'],
+  ['presence', 'The camera loves them — draws viewers and builds a public profile'],
 ]
 
 export const SOCIAL_STATS = [
@@ -22,12 +24,71 @@ export const SOCIAL_STATS = [
   ['persona', 'Polarizing — people either love or hate them'],
   ['community', 'Mentors weaker players, builds teams'],
   ['sensitivity', 'How much social interactions swing their mood'],
-  ['hygiene', 'Self-explanatory. The arcade is a small room. People notice.'],
+  ['reliability', 'Shows up when it counts — steady weekday turnout, never drops from a bracket'],
   ['income', 'Spending money they walk in with — buys tokens and food, resists high prices'],
 ]
 
 export const PERSONAL_KEYS = PERSONAL_STATS.map(([k]) => k)
 export const SOCIAL_KEYS = SOCIAL_STATS.map(([k]) => k)
+
+// ---------- Temperaments ----------
+// Creation is a Disco-style build now: every stat starts EMPTY, you pick one
+// competitive temperament and one social temperament (a point in each of that
+// row's stats, free), then spend your difficulty's creation points wherever you
+// like, capped at 5 per stat. An unspent stat isn't "average" — it's a flaw,
+// and flaws are where the stories come from.
+export const TEMPERAMENTS = [
+  {
+    key: 'killer', label: 'The Killer', emoji: '🔥',
+    stats: ['determination', 'dominance', 'mojo', 'xfactor'],
+    blurb: 'Winning is the point. Losing is fuel. They run hotter than everyone in the room and the room can feel it — keep one leashed and they drag your whole scene up; leave one alone and they burn it down.',
+  },
+  {
+    key: 'scholar', label: 'The Scholar', emoji: '💨',
+    stats: ['analysis', 'innovation', 'learning', 'mastery'],
+    blurb: "They watch three sets for every one they play, and they remember all of it. The chart is a weapon, the lab is home, and the tech everyone runs next month has their name on it — whether anyone says so or not.",
+  },
+  {
+    key: 'natural', label: 'The Natural', emoji: '💧',
+    stats: ['spark', 'aptitude', 'adaptation', 'presence'],
+    blurb: "Some people just have it. They're at the arcade every night like water finding its level, they pick up a new character over a weekend, and when the camera swings their way the chat wakes up.",
+  },
+  {
+    key: 'stoic', label: 'The Stoic', emoji: '🪨',
+    stats: ['temperance', 'loyalty', 'stamina', 'composure'],
+    blurb: "Nothing moves them. Not a bad loss, not a hot streak, not ten thousand people watching a grand final. They pick a character, play a thousand hours, and outlast every prodigy who ever laughed at their neutral.",
+  },
+]
+
+export const SOCIAL_TEMPERAMENTS = [
+  {
+    key: 'warm', label: 'Warm', emoji: '💛',
+    stats: ['charisma', 'community'],
+    blurb: 'The glue. Learns your name the first night, introduces newcomers around, ends up godparent to half the scene.',
+  },
+  {
+    key: 'gracious', label: 'Gracious', emoji: '🤝',
+    stats: ['politeness', 'sportsmanship'],
+    blurb: "Runs the set back, says good games and means it. The kind of loss you don't mind taking — and the kind of player a warning actually reaches.",
+  },
+  {
+    key: 'dramatic', label: 'Dramatic', emoji: '🎭',
+    stats: ['persona', 'sensitivity'],
+    blurb: 'Feels everything, at volume. Half the arcade would run through a wall for them; the other half leaves when they arrive. Nobody plateaus with one of these around.',
+  },
+  {
+    key: 'puttogether', label: 'Put-together', emoji: '🧾',
+    stats: ['reliability', 'income'],
+    blurb: "Has their life in order, which around here makes them exotic. Shows up when they said they would, never drops from a bracket, and actually buys the food.",
+  },
+]
+export const temperamentOf = (key, list = TEMPERAMENTS) => list.find((t) => t.key === key) || null
+
+// Stats are stored internally on the same 0–10 scale the engine has always
+// used; creation works in 0–5 display points (1 point = 2 internal). This is
+// why old saves, exports, and every formula keep working untouched.
+export const STAT_UNIT = 2 // internal per creation point
+export const STAT_MAX_POINTS = 5 // per-stat cap, every difficulty
 
 export const ARCHETYPES = [
   'Shoto', 'Grappler', 'Zoner', 'Rushdown', 'Charge', 'Puppet',
@@ -118,26 +179,26 @@ export const AUTO_STREAM_CADENCES = [
 // that makes standing still a losing move.
 export const DIFFICULTIES = [
   {
-    key: 'easy', label: 'Easy', statPoints: 127, statCap: 9,
-    startingMoney: 2200, rentMult: 0.7, rentBase: 170, popularityMult: 1.35, receptionBias: 4,
+    key: 'easy', label: 'Easy', statPoints: 10,
+    startingMoney: 2200, rentMult: 0.7, rentBase: 120, popularityMult: 1.35, receptionBias: 4,
     collapseGrace: 60, fadeGrace: 120, rentEscalation: 0, relevanceDecayMult: 0.6,
     blurb: 'Generous funds, cheap rent, a forgiving community.',
   },
   {
-    key: 'normal', label: 'Normal', statPoints: 113, statCap: 8,
-    startingMoney: 1500, rentMult: 1, rentBase: 220, popularityMult: 0.95, receptionBias: -1,
+    key: 'normal', label: 'Normal', statPoints: 5,
+    startingMoney: 1500, rentMult: 1, rentBase: 150, popularityMult: 0.95, receptionBias: -1,
     collapseGrace: 30, fadeGrace: 50, rentEscalation: 0.12, relevanceDecayMult: 1.32,
     blurb: 'The intended experience: a scene you have to keep alive on purpose.',
   },
   {
-    key: 'difficult', label: 'Difficult', statPoints: 100, statCap: 8,
-    startingMoney: 850, rentMult: 1.15, rentBase: 250, popularityMult: 0.6, receptionBias: -5,
+    key: 'difficult', label: 'Difficult', statPoints: 3,
+    startingMoney: 850, rentMult: 1.15, rentBase: 175, popularityMult: 0.6, receptionBias: -5,
     collapseGrace: 21, fadeGrace: 38, rentEscalation: 0.16, relevanceDecayMult: 1.35,
     blurb: 'Thin margins, a skeptical internet, a hungry landlord.',
   },
   {
-    key: 'master', label: 'Master', statPoints: 87, statCap: 7,
-    startingMoney: 1050, rentMult: 1.2, rentBase: 235, popularityMult: 0.95, receptionBias: -9,
+    key: 'master', label: 'Master', statPoints: 0,
+    startingMoney: 1050, rentMult: 1.2, rentBase: 170, popularityMult: 0.95, receptionBias: -9,
     collapseGrace: 16, fadeGrace: 30, rentEscalation: 0.16, relevanceDecayMult: 1.7,
     blurb: 'Nearly impossible. The landlord is already drafting the notice.',
   },
@@ -150,7 +211,7 @@ export const DEFAULT_FOOD_PRICE = 4 // dollars per serving
 export const DEFAULT_GAME_TOKENS = 2 // tokens to play a side cabinet once
 // Changing a created player's rolled food/arcade tastes costs stat points —
 // tastes come free from the random roll; curating them is a real tradeoff.
-export const TASTE_CHANGE_COST = 2
+export const TASTE_CHANGE_COST = 1
 
 // Advertising channels. Each you run adds `cost` to the weekly upkeep bill.
 // `awareness` lifts how easily first-timers discover the arcade; `arrivals`
@@ -257,37 +318,3 @@ export const GOSSIP_TOPICS = [
 ]
 
 // Preset stat spreads for quick player creation. Every key 1-10.
-export const STAT_PRESETS = {
-  'The Prodigy': {
-    personal: { spark: 6, analysis: 5, determination: 3, dominance: 7, temperance: 4, mojo: 8, innovation: 5, learning: 6, xfactor: 9, loyalty: 4, aptitude: 9, mastery: 7, stamina: 5 , composure: 4 },
-    social: { politeness: 4, charisma: 7, sportsmanship: 4, persona: 8, community: 3, sensitivity: 6 , hygiene: 5, income: 7 },
-  },
-  'The Grinder': {
-    personal: { spark: 8, analysis: 5, determination: 9, dominance: 4, temperance: 8, mojo: 3, innovation: 3, learning: 5, xfactor: 2, loyalty: 9, aptitude: 4, mastery: 8, stamina: 9 , composure: 8 },
-    social: { politeness: 6, charisma: 3, sportsmanship: 7, persona: 2, community: 4, sensitivity: 3 , hygiene: 4, income: 4 },
-  },
-  'The Lab Monster': {
-    personal: { spark: 5, analysis: 9, determination: 6, dominance: 4, temperance: 6, mojo: 3, innovation: 9, learning: 8, xfactor: 4, loyalty: 6, aptitude: 6, mastery: 7, stamina: 6 , composure: 6 },
-    social: { politeness: 5, charisma: 3, sportsmanship: 6, persona: 4, community: 5, sensitivity: 4 , hygiene: 2, income: 5 },
-  },
-  'The Showman': {
-    personal: { spark: 8, analysis: 3, determination: 4, dominance: 7, temperance: 3, mojo: 9, innovation: 4, learning: 4, xfactor: 8, loyalty: 5, aptitude: 5, mastery: 4, stamina: 6 , composure: 7 },
-    social: { politeness: 4, charisma: 9, sportsmanship: 3, persona: 9, community: 4, sensitivity: 7 , hygiene: 8, income: 8 },
-  },
-  'The Mentor': {
-    personal: { spark: 6, analysis: 7, determination: 5, dominance: 3, temperance: 8, mojo: 4, innovation: 5, learning: 6, xfactor: 3, loyalty: 8, aptitude: 5, mastery: 7, stamina: 5 , composure: 8 },
-    social: { politeness: 8, charisma: 6, sportsmanship: 9, persona: 3, community: 9, sensitivity: 5 , hygiene: 7, income: 6 },
-  },
-  'The Hothead': {
-    personal: { spark: 7, analysis: 3, determination: 7, dominance: 9, temperance: 2, mojo: 6, innovation: 3, learning: 3, xfactor: 7, loyalty: 6, aptitude: 5, mastery: 5, stamina: 7 , composure: 2 },
-    social: { politeness: 2, charisma: 5, sportsmanship: 2, persona: 8, community: 2, sensitivity: 8 , hygiene: 5, income: 4 },
-  },
-  'The Wildcard': {
-    personal: { spark: 5, analysis: 4, determination: 4, dominance: 5, temperance: 5, mojo: 6, innovation: 8, learning: 5, xfactor: 10, loyalty: 2, aptitude: 7, mastery: 3, stamina: 5 , composure: 5 },
-    social: { politeness: 5, charisma: 6, sportsmanship: 5, persona: 7, community: 3, sensitivity: 5 , hygiene: 3, income: 3 },
-  },
-  'The Journeyman': {
-    personal: { spark: 6, analysis: 6, determination: 6, dominance: 5, temperance: 7, mojo: 5, innovation: 4, learning: 6, xfactor: 4, loyalty: 8, aptitude: 5, mastery: 6, stamina: 7 , composure: 7 },
-    social: { politeness: 7, charisma: 5, sportsmanship: 7, persona: 3, community: 6, sensitivity: 4 , hygiene: 6, income: 6 },
-  },
-}

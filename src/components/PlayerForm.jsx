@@ -1,16 +1,31 @@
-import { useState } from 'react'
 import { Field, NumField, PillPicker } from './ui.jsx'
-import { PERSONAL_STATS, SOCIAL_STATS, GENDERS, STAT_PRESETS, difficultyOf, TASTE_CHANGE_COST } from '../game/constants.js'
-import { rollStat, clamp } from '../game/util.js'
+import {
+  PERSONAL_STATS, SOCIAL_STATS, GENDERS, difficultyOf, TASTE_CHANGE_COST,
+  TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS,
+} from '../game/constants.js'
+import { clamp } from '../game/util.js'
 import { FOODS, OTHER_GAMES } from '../game/names.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
 import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHES, VOICE_QUIRKS } from '../game/dialogue.js'
 import { SpritePicker } from './SpritePicker.jsx'
 import { PLAYER_SPRITE_CATALOG, playerArtFor } from './art.js'
 
-const statSum = (player) =>
-  PERSONAL_STATS.reduce((s, [k]) => s + (player.personal[k] || 0), 0) +
-  SOCIAL_STATS.reduce((s, [k]) => s + (player.social[k] || 0), 0)
+const STAT_DESC = Object.fromEntries([...PERSONAL_STATS, ...SOCIAL_STATS])
+const uiVal = (v) => Math.round((v || 0) / STAT_UNIT)
+
+// Creation points spent: every point across every stat, minus the free point a
+// chosen temperament grants each of its stats (only where a point actually sits).
+function pointsSpent(player) {
+  let total = 0
+  for (const [k] of PERSONAL_STATS) total += uiVal(player.personal[k])
+  for (const [k] of SOCIAL_STATS) total += uiVal(player.social[k])
+  let free = 0
+  const row = TEMPERAMENTS.find((t) => t.key === player.temperament)
+  const srow = SOCIAL_TEMPERAMENTS.find((t) => t.key === player.socialTemperament)
+  if (row) for (const k of row.stats) free += Math.min(1, uiVal(player.personal[k]))
+  if (srow) for (const k of srow.stats) free += Math.min(1, uiVal(player.social[k]))
+  return total - free
+}
 
 // How many of a player's food/arcade tastes differ from their free random
 // roll (added or removed). Each difference costs stat points to keep.
@@ -19,32 +34,6 @@ const symDiff = (a = [], b = []) =>
 const tasteEdits = (player) => {
   const roll = player.tasteRoll || { foods: player.foods || [], otherGames: player.otherGames || [] }
   return symDiff(player.foods, roll.foods) + symDiff(player.otherGames, roll.otherGames)
-}
-
-// Clamp a stat spread to the per-stat cap, then shave the highest stats
-// until the total fits the budget. Used when applying presets in
-// consequential mode — presets work, they're just capped. (Also used by
-// RosterEditor to make freshly added players legal.)
-export function capAndFit(personal, social, cap, budget) {
-  const p = { ...personal }
-  const so = { ...social }
-  for (const [k] of PERSONAL_STATS) p[k] = clamp(p[k] || 5, 1, cap)
-  for (const [k] of SOCIAL_STATS) so[k] = clamp(so[k] || 5, 1, cap)
-  if (budget != null) {
-    const total = () =>
-      PERSONAL_STATS.reduce((s, [k]) => s + p[k], 0) + SOCIAL_STATS.reduce((s, [k]) => s + so[k], 0)
-    let guard = 500
-    while (total() > budget && guard-- > 0) {
-      let bestGroup = null
-      let bestKey = null
-      let bestVal = 1
-      for (const [k] of PERSONAL_STATS) if (p[k] > bestVal) { bestVal = p[k]; bestGroup = p; bestKey = k }
-      for (const [k] of SOCIAL_STATS) if (so[k] > bestVal) { bestVal = so[k]; bestGroup = so; bestKey = k }
-      if (!bestGroup) break
-      bestGroup[bestKey] -= 1
-    }
-  }
-  return { personal: p, social: so }
 }
 
 /**
@@ -56,13 +45,12 @@ export function capAndFit(personal, social, cap, budget) {
  * prestige from past runs.
  */
 export default function PlayerForm({ save, player, patch }) {
-  const [statMode, setStatMode] = useState('direct') // 'direct' | 'roll'
   const consequential = save.settings.mode !== 'sandbox'
   const diff = difficultyOf(save)
-  const statCap = consequential ? diff.statCap : 10
-  const budget = consequential ? diff.statPoints + (save.prestige?.points || 0) : null
+  const prestigeBonus = save.prestige?.points || 0
+  const budget = consequential ? diff.statPoints + prestigeBonus : null
   const tasteCost = consequential ? tasteEdits(player) * TASTE_CHANGE_COST : 0
-  const spent = statSum(player) + tasteCost
+  const spent = pointsSpent(player) + tasteCost
 
   return (
     <div>
@@ -231,42 +219,36 @@ export default function PlayerForm({ save, player, patch }) {
       <div className="card sub">
         <div className="row spread">
           <h4>
-            Stats
+            Temperament & Stats
             {budget != null && (
               <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
-                {spent}/{budget} points · cap {statCap}/stat
+                {spent}/{budget} points · max {STAT_MAX_POINTS}/stat
                 {tasteCost > 0 && <span> · incl. {tasteCost} for taste changes</span>}
-                {(save.prestige?.points || 0) > 0 && <span className="gold"> · +{save.prestige.points} prestige included</span>}
+                {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
               </span>
             )}
           </h4>
-          <div className="tabs" style={{ margin: 0 }}>
-            <button className={`small ${statMode === 'direct' ? 'active' : ''}`} onClick={() => setStatMode('direct')}>Edit directly</button>
-            {!consequential && (
-              <button className={`small ${statMode === 'roll' ? 'active' : ''}`} onClick={() => setStatMode('roll')}>🎲 Roll & allocate</button>
-            )}
-          </div>
         </div>
+        <p className="dim small" style={{ marginTop: 0 }}>
+          Every stat starts empty — an unspent stat is a real weakness, not "average". Pick a
+          competitive temperament and a social one (a free point in each of that row's stats),
+          then spend your points wherever you like.
+        </p>
         {budget != null && spent > budget && (
           <p className="red small">Over budget — lower some stats before this player is tournament-legal.</p>
         )}
-        <div className="row" style={{ marginBottom: 8 }}>
-          <span className="dim small">preset:</span>
-          {Object.keys(STAT_PRESETS).map((name) => (
-            <span key={name} className="pill clickable"
-              title={consequential ? 'apply this spread, capped to your stat limits' : 'apply this stat spread'}
-              onClick={() => patch((p) => {
-                const fitted = capAndFit(STAT_PRESETS[name].personal, STAT_PRESETS[name].social, statCap, budget)
-                p.personal = fitted.personal
-                p.social = fitted.social
-              })}>
-              {name}
-            </span>
-          ))}
-        </div>
-        {statMode === 'direct' || consequential
-          ? <DirectStats player={player} patch={patch} statCap={statCap} budget={budget} spent={spent} />
-          : <RollAllocate player={player} patch={patch} />}
+        <TemperamentPicker
+          title="Competitive temperament" list={TEMPERAMENTS} group="personal"
+          chosen={player.temperament} field="temperament" patch={patch}
+        />
+        <PointStats player={player} patch={patch} group="personal" rows={TEMPERAMENTS}
+          budget={budget} spent={spent} chosenRow={player.temperament} />
+        <TemperamentPicker
+          title="Social temperament" list={SOCIAL_TEMPERAMENTS} group="social"
+          chosen={player.socialTemperament} field="socialTemperament" patch={patch}
+        />
+        <PointStats player={player} patch={patch} group="social" rows={SOCIAL_TEMPERAMENTS}
+          budget={budget} spent={spent} chosenRow={player.socialTemperament} />
       </div>
 
       <div className="card sub">
@@ -297,113 +279,74 @@ export default function PlayerForm({ save, player, patch }) {
   )
 }
 
-function DirectStats({ player, patch, statCap = 10, budget = null, spent = 0 }) {
-  const statRow = (group, [key, desc]) => (
-    <div className="row" key={key} title={desc} style={{ marginBottom: 4 }}>
-      <span className="small" style={{ width: 120, color: 'var(--dim)' }}>{key}</span>
-      <input type="range" min={1} max={10} value={player[group][key]} style={{ flex: 1 }}
-        onChange={(e) => patch((p) => {
-          const cur = p[group][key]
-          let next = Math.min(Number(e.target.value), statCap)
-          // Point-buy: raising a stat can't blow past the remaining budget.
-          if (budget != null && next > cur) next = Math.min(next, cur + Math.max(0, budget - spent))
-          p[group][key] = Math.max(1, next)
-        })} />
-      <span style={{ width: 22, textAlign: 'right' }}>{player[group][key]}</span>
-    </div>
-  )
+/**
+ * The temperament cards. Picking one grants a free point in each of its stats;
+ * switching moves the grant (each old row stat drops a point, floored at zero).
+ */
+function TemperamentPicker({ title, list, group, chosen, field, patch }) {
   return (
-    <div className="grid2">
-      <div>
-        <h4 className="cyan">Personal</h4>
-        {PERSONAL_STATS.map((s) => statRow('personal', s))}
-      </div>
-      <div>
-        <h4 className="pink">Social</h4>
-        {SOCIAL_STATS.map((s) => statRow('social', s))}
+    <div style={{ marginBottom: 10 }}>
+      <h4 className={group === 'personal' ? 'cyan' : 'pink'} style={{ marginBottom: 6 }}>{title}</h4>
+      <div className={group === 'personal' ? 'grid2' : 'grid2'}>
+        {list.map((t) => (
+          <div key={t.key}
+            className="card sub clickable"
+            style={{
+              cursor: 'pointer', margin: 0,
+              borderColor: chosen === t.key ? 'var(--pink)' : 'var(--border)',
+              opacity: chosen && chosen !== t.key ? 0.75 : 1,
+            }}
+            onClick={() => patch((p) => {
+              if (p[field] === t.key) return
+              const bag = group === 'personal' ? p.personal : p.social
+              const prev = list.find((x) => x.key === p[field])
+              if (prev) for (const k of prev.stats) bag[k] = Math.max(0, (bag[k] || 0) - STAT_UNIT)
+              p[field] = t.key
+              for (const k of t.stats) bag[k] = Math.min(STAT_MAX_POINTS * STAT_UNIT, (bag[k] || 0) + STAT_UNIT)
+            })}>
+            <div className="row spread">
+              <strong>{t.emoji} {t.label}</strong>
+              {chosen === t.key && <span className="pink small">✓ chosen</span>}
+            </div>
+            <p className="dim small" style={{ margin: '4px 0 6px' }}>{t.blurb}</p>
+            <div className="small" style={{ color: 'var(--cyan)' }}>{t.stats.join(' · ')}</div>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-/**
- * D&D-style stat allocation: roll a pool of numbers, every rolled value is
- * auto-assigned to a slot, and picking a value already used by another stat
- * swaps the two. Apply is always one click away.
- */
-function RollAllocate({ patch }) {
-  const [pools, setPools] = useState(null) // {personal: [...12], social: [...6]}
-  const [assign, setAssign] = useState(null) // {personal: {statKey: poolIdx}, social: {...}}
-  const [applied, setApplied] = useState(false)
-
-  const roll = () => {
-    setPools({
-      personal: Array.from({ length: PERSONAL_STATS.length }, rollStat),
-      social: Array.from({ length: SOCIAL_STATS.length }, rollStat),
-    })
-    // Start fully assigned (stat i gets rolled value i); the user swaps from there.
-    setAssign({
-      personal: Object.fromEntries(PERSONAL_STATS.map(([k], i) => [k, i])),
-      social: Object.fromEntries(SOCIAL_STATS.map(([k], i) => [k, i])),
-    })
-    setApplied(false)
-  }
-
-  // Assign poolIdx to key; whoever held poolIdx gets key's old value (a swap).
-  const setStat = (group, key, poolIdx) => {
-    setAssign((a) => {
-      const g = { ...a[group] }
-      const prevIdx = g[key]
-      const holder = Object.keys(g).find((k) => g[k] === poolIdx)
-      g[key] = poolIdx
-      if (holder && holder !== key) g[holder] = prevIdx
-      return { ...a, [group]: g }
-    })
-    setApplied(false)
-  }
-
-  const apply = () => {
-    patch((p) => {
-      for (const [k] of PERSONAL_STATS) p.personal[k] = pools.personal[assign.personal[k]]
-      for (const [k] of SOCIAL_STATS) p.social[k] = pools.social[assign.social[k]]
-    })
-    setApplied(true)
-  }
-
-  const groupUI = (group, stats) => (
-    <div>
-      <h4 className={group === 'personal' ? 'cyan' : 'pink'}>{group}</h4>
-      <div style={{ marginBottom: 6 }}>
-        {pools[group].map((v, i) => <span key={i} className="rollchip">{v}</span>)}
+// Point-buy grid, grouped by temperament row so the build reads as a shape.
+function PointStats({ player, patch, group, rows, budget, spent, chosenRow }) {
+  const chosen = rows.find((t) => t.key === chosenRow)
+  const statRow = (key) => {
+    const val = uiVal(player[group][key])
+    // A temperament isn't a suggestion: its granted point can't be traded away.
+    const floor = chosen && chosen.stats.includes(key) ? 1 : 0
+    return (
+      <div className="row" key={key} title={STAT_DESC[key]} style={{ marginBottom: 4 }}>
+        <span className="small" style={{ width: 110, color: val === 0 ? 'var(--dim)' : 'inherit' }}>{key}</span>
+        <input type="range" min={floor} max={STAT_MAX_POINTS} value={val} style={{ flex: 1 }}
+          onChange={(e) => patch((p) => {
+            let next = Math.max(floor, Number(e.target.value))
+            if (budget != null && next > val) next = Math.min(next, val + Math.max(0, budget - spent))
+            p[group][key] = clamp(next, floor, STAT_MAX_POINTS) * STAT_UNIT
+          })} />
+        <span style={{ width: 22, textAlign: 'right' }} className={val === 0 ? 'dim' : ''}>{val}</span>
       </div>
-      {stats.map(([key, desc]) => (
-        <div className="row" key={key} title={desc} style={{ marginBottom: 4 }}>
-          <span className="small" style={{ width: 120, color: 'var(--dim)' }}>{key}</span>
-          <select
-            value={assign[group][key]}
-            onChange={(e) => setStat(group, key, Number(e.target.value))}
-          >
-            {pools[group].map((v, i) => <option key={i} value={i}>{v}</option>)}
-          </select>
+    )
+  }
+  return (
+    <div className="grid2" style={{ marginBottom: 10 }}>
+      {rows.map((t) => (
+        <div key={t.key} style={{ opacity: chosenRow && chosenRow !== t.key ? 0.9 : 1 }}>
+          <h4 className="dim" style={{ margin: '4px 0' }}>
+            {t.emoji} {t.label}{chosenRow === t.key && <span className="pink small"> · your temperament</span>}
+          </h4>
+          {t.stats.map(statRow)}
         </div>
       ))}
-    </div>
-  )
-
-  return (
-    <div>
-      <div className="row">
-        <button onClick={roll}>🎲 {pools ? 'Re-roll' : 'Roll stats'}</button>
-        {pools && <button className="primary" onClick={apply}>Apply allocation</button>}
-        {pools && !applied && <span className="dim small">picking a number another stat holds swaps them</span>}
-        {applied && <span className="green small">✓ applied — check "Edit directly" to confirm</span>}
-      </div>
-      {pools && (
-        <div className="grid2" style={{ marginTop: 10 }}>
-          {groupUI('personal', PERSONAL_STATS)}
-          {groupUI('social', SOCIAL_STATS)}
-        </div>
-      )}
     </div>
   )
 }

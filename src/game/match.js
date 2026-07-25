@@ -1,5 +1,5 @@
 import { clamp, rand, displayName } from './util.js'
-import { getMatchup } from './model.js'
+import { getMatchup, awardMilestone } from './model.js'
 import { areRivals, rivalOf } from './social.js'
 import { competitiveIntensity } from './constants.js'
 
@@ -29,7 +29,9 @@ export function skillCeiling(save, player, charId) {
   const mastery = s.mastery ?? 5
   const intensity = competitiveIntensity(player) // 1..10
   // Where a player stalls with NO cultivation — the comfort plateau.
-  let ceiling = 28 + apt * 2.3 + intensity * 2.0 + mastery * 0.8
+  // Nerve is part of potential: the innate half (composure) sits alongside the
+  // earned half (belief) — the Stoic's slow-but-inevitable engine.
+  let ceiling = 28 + apt * 1.9 + intensity * 2.0 + mastery * 0.8 + (s.composure ?? 5) * 1.1
   // Iron sharpens iron: an active rival is the main way past the plateau.
   if (hasActiveRival(save, player)) ceiling += 10
   // Earned stage belief: battle-tested players realize more of their potential.
@@ -65,7 +67,9 @@ export function skillGainMultiplier(save, player, charId) {
   if (skill >= ceiling) return 0
   const apt = player.personal.aptitude ?? 5
   const mastery = player.personal.mastery ?? 5
-  const rate = 0.5 + apt * 0.09 + mastery * 0.045
+  // Volume is its own teacher: the thousand-hour grinder (stamina) keeps
+  // improving on reps alone — the Stoic's slow-but-inevitable engine.
+  const rate = 0.5 + apt * 0.09 + mastery * 0.045 + (player.personal.stamina ?? 5) * 0.022
   // Asymptote: shrinks to nothing as skill nears the ceiling.
   const prox = (ceiling - skill) / Math.max(30, ceiling)
   return diffFactor * rate * Math.pow(prox, 1.15)
@@ -80,6 +84,10 @@ export function gainSkill(save, player, charId, baseAmount) {
   // (Belief moves the ceiling now, so `cap` can legitimately sit below `cur`.)
   const next = Math.max(cur, clamp(cur + gain, 0, cap))
   player.charSkill[charId] = Math.round(next * 100) / 100
+  if (!player.npc && save.settings?.mode !== 'sandbox') {
+    if (cur < 50 && next >= 50) awardMilestone(save, 'skill-50', 2, `${displayName(player, save)} broke skill 50 — a genuinely strong player now`)
+    if (cur < 70 && next >= 70) awardMilestone(save, 'skill-70', 4, `${displayName(player, save)} broke skill 70 — among the best this scene has produced`)
+  }
   if (save.charMilestones) {
     const char = save.game.characters.find((c) => c.id === charId)
     if (char && cur < 90 && next >= 90) {
@@ -148,7 +156,12 @@ export function winProbability(save, a, aCharId, b, bCharId) {
   const perfB = performance(save, b, bCharId)
   const matchup = getMatchup(save.game, aCharId, bCharId) // 50 = even
   const weight = matchupWeight(a.charSkill[aCharId] || 0, b.charSkill[bCharId] || 0)
-  const matchupShift = (matchup - 50) * 0.35 * weight
+  // The chart only pays the player who STUDIED it: exploiting a favorable
+  // matchup takes analysis. A 6-4 in the hands of a lab monster is a real
+  // weapon; in the hands of a masher it's a stat on a wiki.
+  const edge = matchup - 50
+  const knowledge = 0.35 + ((edge > 0 ? a : b).personal?.analysis ?? 5) * 0.065
+  const matchupShift = edge * 0.35 * weight * knowledge
   const diff = perfA - perfB + matchupShift
   return 1 / (1 + Math.pow(10, -diff / 22))
 }
@@ -211,16 +224,21 @@ export function recordCharResult(player, charId, won) {
 export function pickMatchChar(save, player, oppCharId) {
   const main = player.mainCharId
   if (!main || !oppCharId || !(player.pocketPicks || []).length) return main
+  // Adaptation is the whole counterpicking temperament: how readily they reach
+  // for the pocket, how few reps they need before trusting it, and how small
+  // an edge justifies the switch. A one-trick (adaptation 0) rides the main
+  // into every 3-7 on the chart; a true flex player switches early and often.
+  const adapt = player.personal?.adaptation ?? 5
   const mainMU = getMatchup(save.game, main, oppCharId)
-  if (mainMU >= 44) return main // the main is fine — no reason to switch
+  if (mainMU >= 40 + adapt * 0.8) return main // the main is fine for THIS player
   let best = main
   let bestScore = mainMU + (player.charSkill[main] || 0) * 0.35
   for (const pid of player.pocketPicks) {
     if (pid === main) continue
     const skill = player.charSkill[pid] || 0
-    if (skill < 25) continue // you need real reps before you'll pull it out
+    if (skill < 32 - adapt * 1.4) continue // reps needed before they'll pull it out
     const score = getMatchup(save.game, pid, oppCharId) + skill * 0.35
-    if (score > bestScore + 6) { bestScore = score; best = pid } // meaningfully better
+    if (score > bestScore + (9 - adapt * 0.6)) { bestScore = score; best = pid }
   }
   return best
 }

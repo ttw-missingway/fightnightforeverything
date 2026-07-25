@@ -3,7 +3,7 @@ import { formatDay } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
 import { narrateSet } from './fight.js'
-import { getMatchup, remember, chronicle, pushVod } from './model.js'
+import { getMatchup, remember, chronicle, pushVod, awardMilestone } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { bumpPassion } from './career.js'
@@ -44,7 +44,7 @@ function entrantPerformance(save, e, context = 'tournament') {
   }
   // The elite field is genuinely elite — the best players on the planet. Beating
   // them takes a fully cultivated champion, not just the best kid in your arcade.
-  return e.ref.skill * 0.82 + (e.ref.elo - 1200) / 38 + rand() * 6
+  return e.ref.skill * 0.72 + (e.ref.elo - 1200) / 70 + rand() * 6
 }
 
 function entrantCharName(save, e) {
@@ -453,7 +453,9 @@ export function runExhibition(save) {
 }
 
 function dropoutChance(p) {
-  let c = 0.05 + (5 - p.mood) * 0.01 + (5 - p.personal.spark) * 0.008
+  // Life gets in the way of the UNRELIABLE. The put-together player has never
+  // missed a bracket in their life; the flake no-shows their own grudge match.
+  let c = 0.035 + (5 - p.mood) * 0.008 + Math.max(0, 8 - (p.social?.reliability ?? 5)) * 0.011
   return clamp(c, 0.01, 0.16)
 }
 
@@ -795,9 +797,12 @@ export function runEvo(save) {
     p.respect += Math.round(glory / 3)
     // The world stage reignites a career — the reason they grind another year.
     bumpPassion(p, place === 1 ? 30 : place <= 4 ? 18 : place <= 8 ? 12 : 6)
+    if (place <= 8) awardMilestone(save, 'evo-top8', 2, `${pName(save, p)} made EVO top 8 — the arcade is on the world map`)
+    if (place <= 4) awardMilestone(save, 'evo-top4', 3, `${pName(save, p)} made EVO top 4 — nobody laughs at this scene anymore`)
     if (place === 1) {
       p.tournamentWins += 1; p.evoTitles = (p.evoTitles || 0) + 1; p.mood = 10
       remember(save, p, 'evo', `WINNING EVO Year ${save.year}`)
+      awardMilestone(save, `evo-champion-y${save.year}`, 8, `EVO CHAMPION, Year ${save.year} — from this arcade`)
       // The Champion Dividend: a world title out of YOUR arcade changes
       // everything — the game roars back into the conversation (golden age),
       // and the prize/sponsor money flows through the venue that made them.
