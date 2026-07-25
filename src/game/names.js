@@ -223,6 +223,107 @@ export const MOVE_VERBS = {
   'super': ['cashes out the entire meter with {m}!', 'closes the round with a cinematic {m}!'],
 }
 
+/**
+ * Verbs keyed by the move's FORM, not just its type. This is what the
+ * descriptor overhaul bought: a burrowing projectile and a screen-filling beam
+ * are both "projectiles", and they should never describe themselves the same
+ * way. Falls back to MOVE_VERBS by type for anything not listed.
+ * {m} = move name, {o} = opponent.
+ */
+export const FORM_VERBS = {
+  // --- projectiles ---
+  'fireball': ['throws {m} and walks in right behind it', 'puts {m} between them and {o} and takes the ground for free'],
+  'arcing lob': ['lobs {m} over the top and makes {o} look up at exactly the wrong moment', 'floats {m} in an arc {o} has to walk under'],
+  'rolling': ['rolls {m} along the floor — {o} can\'t crouch under that one', 'sends {m} skidding low and {o} has to deal with it standing'],
+  'burrowing': ['sinks {m} into the ground and it comes up under {o}', 'buries {m} and {o} finds out where it went the hard way'],
+  'beam': ['fires {m} and the beam takes up half the screen', 'washes the screen with {m} and {o} has nowhere that isn\'t it'],
+  'boomerang': ['throws {m} out — and {o} forgets it has to come back', 'sends {m} past {o}, who blocks the wrong side of it on the return'],
+  'homing': ['releases {m} and it simply follows {o} wherever they go', 'lets {m} chase {o} into the corner all by itself'],
+  'multi-hit': ['strings {m} into a wall of hits {o} has to sit through', 'buries {o} under {m} one pellet at a time'],
+  // --- melee ---
+  'straight': ['drives {m} straight down the middle', 'sticks {m} out and {o} runs into it'],
+  'hooking': ['curls {m} around {o}\'s guard', 'hooks {m} in from an angle {o} isn\'t holding'],
+  'spinning': ['spins into {m} and catches {o} on the way round', 'whirls {m} through the space {o} was standing in'],
+  'lunging': ['closes the gap with {m} before {o} can react', 'lunges in with {m} from further out than {o} expected'],
+  'rekka': ['starts {m} and just keeps going', 'runs {m} into its follow-up, then the one after that'],
+  // --- lights ---
+  'jab': ['pops {m} out and takes the turn back', 'checks {o} with {m}'],
+  'poke': ['pecks at {o} with {m}', 'keeps {o} honest with {m}'],
+  'flurry': ['buries {o} under a flurry of {m}', 'rattles off {m} until something sticks'],
+  'stiff-arm': ['stiff-arms {o} away with {m}', 'shoves {m} into {o}\'s chest to make room'],
+  // --- heavies ---
+  'overhead smash': ['brings {m} down over the top of {o}\'s guard', 'drops {m} on {o} from above'],
+  'wind-up swing': ['winds up {m} and everyone in the room sees it coming — it lands anyway', 'loads up {m} and {o} still can\'t get out of the way'],
+  'body check': ['runs {m} straight through {o}', 'body-checks {o} with {m} like a door'],
+  'ground pound': ['slams {m} into the floor and the shockwave gets {o}', 'pounds {m} down and {o} eats the whole thing'],
+  // --- anti-airs ---
+  'rising uppercut': ['rises into {m} and takes {o} out of the air', 'answers the jump with {m} on pure reaction'],
+  'flip kick': ['flips into {m} and swats {o} down', 'kicks up into {m} the instant {o} leaves the ground'],
+  'shoulder charge': ['drives a shoulder up into {o} with {m}', 'meets {o} in the air with {m}'],
+  'air throw': ['plucks {o} out of the sky with {m}', 'catches {o} mid-jump with {m} and puts them down hard'],
+  // --- command grabs ---
+  'spinning piledriver': ['spins {o} into the floor with {m}', 'takes {o} up and drives them down with {m}'],
+  'chokeslam': ['lifts {o} by the throat and plants them with {m}', 'chokeslams {o} through the stage with {m}'],
+  'run-up snatch': ['runs {o} down and snatches them into {m}', 'closes half the screen and {m} does the rest'],
+  'air grab': ['catches {o} coming down and turns it into {m}', 'snatches {o} out of the air with {m}'],
+  // The universal throw is literally named "Throw", so its verbs must never
+  // insert the move name — "plants them with Throw" reads like a bug.
+  'basic throw': ['grabs {o} and puts them straight on the floor', 'throws {o} across the screen', 'snatches {o} up and slams them down', 'walks {o} into the corner and dumps them there'],
+  // --- counters ---
+  'parry': ['parries clean and answers with {m}', 'catches {o}\'s button on {m} and gives it straight back'],
+  'armour absorb': ['eats the hit on {m} and keeps walking', 'armours through with {m} like it never happened'],
+  'reversal throw': ['turns {o}\'s own momentum into {m}', 'reverses {o} into {m} before they finish the swing'],
+  'reflect': ['sends it straight back with {m}', 'reflects {o}\'s own attack into their face with {m}'],
+  // --- set ups ---
+  'minion summon': ['calls something in with {m} and now {o} is fighting two of them', 'summons help with {m}'],
+  'ground rune': ['burns {m} into the floor and dares {o} to step on it', 'marks the ground with {m}'],
+  'lingering orb': ['leaves {m} hanging in the air over {o}', 'parks {m} on screen and lets it work'],
+  'clone': ['leaves a copy behind with {m} and {o} blocks the wrong one', 'splits into {m} and {o} guesses'],
+  // --- traps ---
+  'bear trap': ['sets {m} and waits for {o} to forget about it', 'lays {m} exactly where {o} likes to stand'],
+  'landmine': ['plants {m} in {o}\'s escape route', 'buries {m} and lets {o} find it'],
+  'tripwire': ['strings {m} across the gap {o} needs', 'runs {m} through the one lane {o} had left'],
+  'delayed bomb': ['sticks {m} on and starts counting', 'tags {o} with {m} and lets the clock do the work'],
+  'web': ['tangles {o} up in {m}', 'webs the floor with {m} and {o} slows to a crawl'],
+  // --- installs ---
+  'power aura': ['lights up with {m} and the whole tempo changes', 'burns meter on {m} and becomes a problem'],
+  'weapon draw': ['draws with {m} — different character from here', 'pulls out {m} and the range doubles'],
+  'transformation': ['transforms with {m} and {o} is now fighting something else', 'triggers {m} and stops being the same fighter'],
+  'stance change': ['switches into {m} and every answer {o} had is wrong now', 'shifts stance with {m} mid-string'],
+  // --- movement ---
+  'dash': ['dashes through with {m}', 'steps in behind {m} before {o} can set'],
+  'teleport': ['blinks out with {m} and reappears behind {o}', 'teleports with {m} and {o} blocks empty air'],
+  'air dash': ['air-dashes in with {m} from an angle nobody blocks first try', 'crosses the screen with {m} without touching the ground'],
+  'roll': ['rolls through with {m} and comes up on the other side', 'rolls {m} straight past {o}\'s pressure'],
+  'wall jump': ['kicks off the wall with {m} and comes down somewhere else', 'uses {m} to leave and re-enter from the wrong side'],
+  // --- supers ---
+  'cinematic grab': ['grabs {o} and the screen goes dark for {m}!', 'catches {o} clean and {m} takes over the whole screen!'],
+  'screen-filling beam': ['fills the entire screen with {m}!', 'lets {m} go and there is nowhere on screen to be!'],
+  'rushdown barrage': ['unloads {m} in one long unbroken barrage!', 'runs {o} down and cashes the bar with {m}!'],
+  'unblockable slam': ['brings {m} down through the guard — blocking was never an option!', 'slams {m} home and {o} never had a button for it!'],
+}
+
+/**
+ * What a rider LOOKS like when it goes off. Appended to a beat when the move
+ * carries an effect clause, so a designer's choice shows up in the footage.
+ */
+export const EFFECT_CLAUSES = {
+  'explode': ['It goes off a beat later, right where {o} landed.', 'The delayed blast catches {o} getting up.'],
+  'stun the opponent': ['{o} is stood there stunned stiff — everything after that is free.', '{o}\'s eyes glaze and the next few seconds belong to somebody else.'],
+  'steal meter': ['Half of {o}\'s bar goes with it.', 'And the meter {o} spent all round building changes hands.'],
+  'launch into the air': ['{o} goes straight up, and the juggle starts.', 'That launches, and {o} isn\'t landing for a while.'],
+  'wall bounce': ['{o} comes off the wall and straight back into it.', 'The wall bounce gives them another whole route.'],
+  'break armour': ['The armour goes with it — {o} has nothing to hide behind now.', 'Armour broken. {o} is standing there open.'],
+  'drain health': ['And some of that comes straight back the other way.', 'The drain tops them right back up.'],
+  'teleport behind them': ['And they\'re behind {o} before the animation finishes.', '{o} turns around to find nobody there.'],
+  'summon a minion': ['The help arrives, and now {o} is blocking two things at once.', 'And it brought a friend.'],
+  'poison': ['{o} keeps ticking down long after the hit is over.', 'The poison sets in and {o}\'s bar keeps sliding.'],
+  'freeze them in place': ['{o} is frozen where they stand.', '{o} locks up solid, and there is nothing they can do about it.'],
+  'hard knockdown': ['{o} goes down hard — no quick rise from that.', 'Hard knockdown. {o} is getting up exactly when they\'re allowed to.'],
+  'build extra meter': ['And the bar jumps a full stock for it.', 'That paid for itself in meter alone.'],
+  'become invincible': ['They stroll through the counterattack untouched.', 'Whatever {o} threw back went straight through them.'],
+}
+
 // Stream chat: throwaway account names, assembled at random.
 export const CHAT_NAME_PARTS = {
   a: ['salt', 'frame', 'plink', 'wave', 'tech', 'oki', 'combo', 'fuzzy', 'mash', 'neutral', 'pixel', 'clutch', 'downback', 'crossup', 'meaty'],

@@ -51,7 +51,7 @@
 // UI derives a plain impact from the HUD delta instead.
 
 import { clamp } from './util.js'
-import { ARCHETYPE_FLAVOR, MOVE_VERBS } from './names.js'
+import { ARCHETYPE_FLAVOR, MOVE_VERBS, FORM_VERBS, EFFECT_CLAUSES } from './names.js'
 import { comboDamage, COMBO_SCALING, healthMultOf } from './design.js'
 import {
   defaultRules, gutsFactor, timeOverChance, chipCanKill, burstEnabled,
@@ -110,6 +110,22 @@ export function tickWeights(hits, curve = 'even') {
   return raw.map((w) => w / sum)
 }
 
+/**
+ * How a move describes itself. Prefers the FORM the designer chose — a
+ * burrowing projectile and a screen-filling beam are both "projectiles" and
+ * should never read the same — and falls back to the move's type, then melee.
+ */
+function verbsFor(move) {
+  return FORM_VERBS[move?.d?.form] || MOVE_VERBS[move?.type] || MOVE_VERBS['melee']
+}
+
+/** What the move's rider looks like when it goes off, if it has one. */
+function riderClausesFor(move) {
+  const fx = move?.d?.effects || []
+  if (!fx.length) return null
+  return EFFECT_CLAUSES[fx[0].effect] || null
+}
+
 // Missing player stats (EVO elites) read as seasoned pros.
 const DEFAULT_STATS = { composure: 7, analysis: 6, xfactor: 6, mastery: 7, dominance: 6 }
 
@@ -151,7 +167,10 @@ function kitOf(char, skill) {
     fastest: fastestMove?.startup ?? 8,
     avgRaw,
     // Moves an opponent can punish ON BLOCK — real frame data, real notes.
-    unsafe: mv.filter((m) => (m.onBlock ?? -5) <= -8 && (m.slot !== 'super')),
+    // Unblockables are excluded for the obvious reason: you cannot block a
+    // throw, so you cannot punish one on block either.
+    unsafe: mv.filter((m) => (m.onBlock ?? -5) <= -8 && m.slot !== 'super'
+      && m.d?.guard !== 'unblockable'),
     plus: mv.filter((m) => (m.onBlock ?? -5) >= 2),
     // Moves an opponent can punish ON WHIFF: long recovery is what makes
     // reaching for something at the wrong range genuinely cost you.
@@ -364,11 +383,13 @@ function simulateOnce({
       att.meter -= superCost
       drama.supers++
       // "Closes the round with a cinematic X" is a lie unless it's the kill.
-      const verbs = finisher || closing ? MOVE_VERBS['super'] : MOVE_VERBS['super'].slice(0, 1)
+      const verbs = verbsFor(superMove)
+      const sRiders = riderClausesFor(superMove)
+      const sRider = sRiders ? ' ' + pick(sRiders).replaceAll('{o}', def.name) : ''
       return {
         raw: superMove.damage ?? 250, hits: irnd(7, 13), curve: 'accel', fx: 'super',
         kind: 'beat', actor: att.name, move: superMove.name, cap: def.max * 0.46,
-        text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', superMove.name).replaceAll('{o}', def.name)} ${d} damage.`,
+        text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', superMove.name).replaceAll('{o}', def.name)} ${d} damage.${sRider}`,
       }
     }
 
@@ -484,7 +505,7 @@ function simulateOnce({
       const grab = pick(k.grabs)
       return {
         raw: grab.damage ?? k.avgRaw, hits: 1, fx: 'grab', kind: 'beat', actor: att.name, move: grab.name, momentum: 0.35,
-        text: (d) => `${pre}${att.name} ${pick(MOVE_VERBS['command grab']).replaceAll('{m}', grab.name).replaceAll('{o}', def.name)} — ${d}.`,
+        text: (d) => `${pre}${att.name} ${pick(verbsFor(grab)).replaceAll('{m}', grab.name).replaceAll('{o}', def.name)} — ${d}.`,
       }
     }
 
@@ -495,7 +516,7 @@ function simulateOnce({
       return {
         raw: Math.max(30, (proj.chip ?? 5) * throws + 40), hits: throws, curve: 'even', fx: 'projectile',
         kind: 'beat', actor: att.name, move: proj.name, momentum: 0.2,
-        text: (d) => `${att.name} ${pick(MOVE_VERBS['projectile']).replaceAll('{m}', proj.name).replaceAll('{o}', def.name)} — ${throws} of them, ${d} shaved off.`,
+        text: (d) => `${att.name} ${pick(verbsFor(proj)).replaceAll('{m}', proj.name).replaceAll('{o}', def.name)} — ${throws} of them, ${d} shaved off.`,
       }
     }
 
@@ -513,14 +534,17 @@ function simulateOnce({
     // --- a special with its move verb -------------------------------------
     if (k.specials.length && odds(0.68)) {
       const m = pick(k.specials)
-      const verbs = MOVE_VERBS[m.type] || MOVE_VERBS['melee']
+      const verbs = verbsFor(m)
       // Heavies and multi-hitting specials land in more than one piece.
       const hits = (m.type === 'heavy' || m.type === 'trap') && odds(0.5) ? irnd(2, 3) : 1
+      // If the designer hung a rider on this move, show it going off.
+      const riders = riderClausesFor(m)
+      const rider = riders && odds(0.65) ? ' ' + pick(riders).replaceAll('{o}', def.name) : ''
       return {
         raw: m.damage ?? k.avgRaw * 0.8, hits, curve: 'even',
         fx: m.type === 'projectile' ? 'projectile' : m.type === 'command grab' ? 'grab' : 'impact',
         kind: 'beat', actor: att.name, move: m.name, momentum: 0.25,
-        text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', m.name).replaceAll('{o}', def.name)} — ${d}.`,
+        text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', m.name).replaceAll('{o}', def.name)} — ${d}.${rider}`,
       }
     }
 

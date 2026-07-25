@@ -85,7 +85,7 @@ export const MOVE_FORMS = {
   'light': ['jab', 'poke', 'flurry', 'stiff-arm'],
   'heavy': ['overhead smash', 'wind-up swing', 'body check', 'ground pound'],
   'anti-air': ['rising uppercut', 'flip kick', 'shoulder charge', 'air throw'],
-  'command grab': ['spinning piledriver', 'chokeslam', 'run-up snatch', 'air grab'],
+  'command grab': ['spinning piledriver', 'chokeslam', 'run-up snatch', 'air grab', 'basic throw'],
   'counter': ['parry', 'armour absorb', 'reversal throw', 'reflect'],
   'set up': ['minion summon', 'ground rune', 'lingering orb', 'clone'],
   'trap': ['bear trap', 'landmine', 'tripwire', 'delayed bomb', 'web'],
@@ -292,7 +292,7 @@ const NORMALS = [
 
 // The throw is universal and deliberately weak — it exists to beat block, not
 // to win rounds, and it's what the `throwTech` rule acts on.
-const THROW_D = { damage: 'light', reach: 'point-blank', startup: 'fast', recovery: 'average' }
+const THROW_D = { damage: 'light', reach: 'point-blank', startup: 'fast', recovery: 'average', form: 'basic throw' }
 
 // How each archetype's body feels: startup shift and damage scale.
 const ARCHETYPE_PACE = {
