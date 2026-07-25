@@ -477,10 +477,18 @@ export function sceneHealth(save) {
     }
   }
   const n = Math.max(1, regs.length)
+  // The best your CREATED cast has ever been (daily cache) — filler development
+  // trails this, because the scene's story bends toward the people you made.
+  let castTopSkill = 0
+  for (const p of Object.values(save.players)) {
+    if (p.npc || p.retired || p.banished) continue
+    for (const v of Object.values(p.charSkill || {})) if (v > castTopSkill) castTopSkill = v
+  }
   return {
     rivalries,
     toxic,
     regulars: regs.length,
+    castTopSkill,
     rivalryIndex: clamp((inRivalry.size / n) * 1.15, 0, 1), // share of the room with a rival
     toxicity: clamp((inFeud.size / n) * 1.4, 0, 1), // share of the room caught in real bad blood
     rivalIds: [...inRivalry], // who currently has an active rival — read by skillCeiling (cheap lookup)

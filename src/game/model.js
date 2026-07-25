@@ -231,7 +231,7 @@ export function newSave(partial = {}) {
     lastWorldEventAbs: 0, // pacing guard so shocks feel like events, not weather
     freshMetaUntilAbs: 0, // a hit patch opens a window where everyone piles back in
     lastRelevanceAbs: 0, // guard so relevance drifts exactly once per day
-    scene: { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [] }, // daily scene-health read
+    scene: { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [], castTopSkill: 0 }, // daily scene-health read
     lastPatch: { day: 1, year: 1 },
     patchGames: 0, // sets played on the current build — balance data accrues from these
     chronicle: [], // the collective memory: {day, year, icon, text} — capped

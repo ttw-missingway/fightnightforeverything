@@ -100,11 +100,15 @@ const CEILING_TIERS = [
 ]
 const CEILING_STATS = ['spark', 'determination', 'dominance', 'mojo', 'xfactor', 'aptitude', 'mastery', 'composure']
 
-function rollCeilingTier() {
-  const total = CEILING_TIERS.reduce((s, t) => s + t.weight, 0)
+function rollCeilingTier(isNpc) {
+  // Filler never rolls "talent" — the raw material of a world champion only
+  // walks in as someone the user chose to create. Passers-through top out as
+  // solid prospects: real opponents, never the story.
+  const tiers = isNpc ? CEILING_TIERS.filter((t) => t.key !== 'talent') : CEILING_TIERS
+  const total = tiers.reduce((s, t) => s + t.weight, 0)
   let r = randInt(1, total)
-  for (const t of CEILING_TIERS) { r -= t.weight; if (r <= 0) return t }
-  return CEILING_TIERS[1]
+  for (const t of tiers) { r -= t.weight; if (r <= 0) return t }
+  return tiers[1]
 }
 
 export function generatePlayer(save, overrides = {}) {
@@ -113,8 +117,11 @@ export function generatePlayer(save, overrides = {}) {
   // Skew the ceiling stats by tier so the roster is top-light (see above). The
   // rest of the stats stay freely rolled, so personalities still vary within a
   // tier — a talented player can still be a slob with no sportsmanship.
-  const tier = rollCeilingTier()
+  const tier = rollCeilingTier(!!overrides.npc)
   for (const k of CEILING_STATS) personal[k] = randInt(tier.range[0], tier.range[1])
+  // A created player is point-buy capped by difficulty; filler must never be
+  // built BETTER than anything the user is allowed to make.
+  if (overrides.npc) for (const k of CEILING_STATS) personal[k] = Math.min(personal[k], 7)
   const first = choice(FIRST_NAMES)
   const last = choice(LAST_NAMES)
   const taken = new Set(Object.values(save.players).map((p) => p.alias))

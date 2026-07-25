@@ -69,7 +69,7 @@ function TeamCard({ team: t, save, nav }) {
                 ? others.reduce((s, m) => s + getRel(p, m), 0) / others.length : 0
               return (
                 <tr key={p.id} className="clickable" onClick={() => nav('players', { playerId: p.id })}>
-                  <td>{displayName(p, save)} {founder && <span className="gold small">★ founder</span>}
+                  <td><span className={p.npc ? 'npc-dim' : ''}>{displayName(p, save)}</span> {founder && <span className="gold small">★ founder</span>}
                     {i < 4 && <span className="cyan small"> (starter)</span>}</td>
                   <td className="dim">{Math.round(p.elo)}</td>
                   <td className={`small ${avgRel >= 10 ? 'green' : avgRel <= -10 ? 'red' : 'dim'}`}>

@@ -41,6 +41,14 @@ export function skillCeiling(save, player, charId) {
   ceiling += (player.belief ?? 0) * 0.24
   // Knowing the character's discovered tech lifts the very top a little.
   ceiling += Math.min(6, techniqueBonus(save, player, charId) * 0.6)
+  // Filler stays filler: a passer-through can be genuinely good — a real rival,
+  // a real weekly threat — but the story of this arcade belongs to the players
+  // the user MADE, so nobody who wandered in ever grows past a step behind the
+  // cast's best. (Already-earned skill is never clawed back; they just stall.)
+  if (player.npc) {
+    const castTop = save.scene?.castTopSkill ?? 0
+    ceiling = Math.min(ceiling, Math.max(42, castTop - 4))
+  }
   return clamp(ceiling, 20, 100)
 }
 

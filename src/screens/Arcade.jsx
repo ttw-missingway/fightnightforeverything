@@ -409,16 +409,21 @@ function LiveDay({ save, nav }) {
           <div className="card" style={{ marginTop: 12 }}>
             <h3>In the building</h3>
             <div className="row">
-              {hour.presentIds.map((id) => {
-                const p = save.players[id]
-                if (!p) return null
-                return (
-                  <span key={id} className="pill clickable" title={moodLabel(p.mood)}
-                    onClick={() => nav('players', { playerId: id })}>
+              {hour.presentIds
+                .map((id) => save.players[id])
+                .filter(Boolean)
+                // Your cast leads the room; the faces passing through trail it.
+                .sort((a, b) => (a.npc ? 1 : 0) - (b.npc ? 1 : 0))
+                .map((p) => p.npc ? (
+                  <span key={p.id} className="pill npc-dim" title="just someone passing through">
+                    {displayName(p, save)}
+                  </span>
+                ) : (
+                  <span key={p.id} className="pill clickable" title={moodLabel(p.mood)}
+                    onClick={() => nav('players', { playerId: p.id })}>
                     {moodFace(p.mood)} {displayName(p, save)}
                   </span>
-                )
-              })}
+                ))}
               {hour.presentIds.length === 0 && <p className="dim">Nobody around this hour.</p>}
             </div>
           </div>
@@ -701,20 +706,25 @@ function RecapView({ save, report, nav }) {
       </div>
       <div className="card">
         <h3>Who came in ({report.attendeeIds.length})</h3>
-        {report.attendeeIds.map((id) => {
-          const p = save.players[id]
-          if (!p) return null
-          return (
-            <div className="row spread" key={id} style={{ borderBottom: '1px solid var(--border)', padding: '4px 0' }}>
-              <span style={{ cursor: 'pointer' }} onClick={() => nav('players', { playerId: id })}>
-                {displayName(p, save)}
-              </span>
-              <span className="small dim" title={moodLabel(p.mood)}>
-                <span className="mood-face">{moodFace(p.mood)}</span> {Math.round(p.elo)}
+        {report.attendeeIds
+          .map((id) => save.players[id])
+          .filter(Boolean)
+          .sort((a, b) => (a.npc ? 1 : 0) - (b.npc ? 1 : 0))
+          .map((p) => (
+            <div className={`row spread ${p.npc ? 'npc-dim' : ''}`} key={p.id}
+              style={{ borderBottom: '1px solid var(--border)', padding: '4px 0' }}>
+              {p.npc ? (
+                <span>{displayName(p, save)}</span>
+              ) : (
+                <span style={{ cursor: 'pointer' }} onClick={() => nav('players', { playerId: p.id })}>
+                  {displayName(p, save)}
+                </span>
+              )}
+              <span className="small dim" title={p.npc ? undefined : moodLabel(p.mood)}>
+                {!p.npc && <><span className="mood-face">{moodFace(p.mood)}</span>{' '}</>}{Math.round(p.elo)}
               </span>
             </div>
-          )
-        })}
+          ))}
         {report.attendeeIds.length === 0 && <p className="dim">Empty arcade.</p>}
       </div>
       </div>
