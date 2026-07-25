@@ -32,7 +32,6 @@ export default function RosterEditor({ save, update }) {
       p.foods = prefs.foods
       p.otherGames = prefs.otherGames
     }
-    p.tasteRoll = { foods: [...(p.foods || [])], otherGames: [...(p.otherGames || [])] }
     if (consequential) {
       const d = difficultyOf(s)
       legalizeBuild(p, d.statPoints + (s.prestige?.points || 0))

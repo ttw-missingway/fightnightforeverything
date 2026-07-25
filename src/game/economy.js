@@ -372,6 +372,15 @@ export function tokenDeterrence(save, p) {
  * prices squeeze more per sale but lose sales and goodwill — higher-income
  * players barely notice.
  */
+// Every player has ONE favorite food and ONE favorite cabinet now, and both
+// are finite: a food sells so many servings a night, a cabinet seats so many
+// fans. Stock two crowd-pleasers for a big room and you get sellouts and
+// lines — SPREAD is what a well-run concession looks like. Nobody is upset
+// about a food you never carry; they are upset about the one you DO carry
+// being gone when they got in line.
+export const FOOD_SERVINGS_PER_DAY = 6
+export const CABINET_SEATS_PER_DAY = 6
+
 export function playerSpending(save, attendees, gamesToday, events) {
   if (!save.economy) return 0
   const tokenPrice = save.arcade.prices?.token ?? 1
@@ -379,25 +388,52 @@ export function playerSpending(save, attendees, gamesToday, events) {
   let foodRevenue = 0
   let foodSales = 0
   let grumbles = 0
+  let letdowns = 0 // sold-out favorites + full cabinets — the room remembers
+  const servings = {} // food -> sold tonight
+  const seats = {} // cabinet -> fans who got a turn tonight
+  const sellouts = {} // food -> how many walked away hungry
+  const lines = {} // cabinet -> how many never got a turn
   for (const p of attendees) {
     const wallet = p.social?.income ?? 5
     // Main-game matches: a token a game, paid at the change machine.
     tokens += gamesToday[p.id] || 0
-    // Side cabinets they like: they feed each its token cost a few times.
-    // Pricey cabinets get skipped by the budget-conscious.
-    for (const g of save.arcade.otherGames) {
-      if (!p.otherGames.includes(g)) continue
-      const cost = gameTokensOf(save, g)
-      const deter = clamp((cost - (1 + wallet * 0.3)) * 0.14, 0, 0.55)
-      if (chance(0.55 - deter)) tokens += cost * randInt(1, 3)
+    // Their favorite cabinet: one machine only seats so many a night. Coming
+    // in for Rhythm Storm and staring at a line all evening is a real letdown.
+    const favGame = (p.otherGames || [])[0]
+    if (favGame && save.arcade.otherGames.includes(favGame)) {
+      if ((seats[favGame] || 0) < CABINET_SEATS_PER_DAY) {
+        seats[favGame] = (seats[favGame] || 0) + 1
+        const cost = gameTokensOf(save, favGame)
+        const deter = clamp((cost - (1 + wallet * 0.3)) * 0.14, 0, 0.55)
+        if (chance(0.55 - deter)) tokens += cost * randInt(1, 3)
+      } else {
+        lines[favGame] = (lines[favGame] || 0) + 1
+        letdowns += 1
+        p.mood = clamp(p.mood - 0.25, 0, 10)
+      }
     }
-    // Food: buy one liked stocked item at its set price.
+    // Food: their favorite first — IF it is carried and has not sold out.
     if (!save.arcade.foods.length) continue
-    const liked = save.arcade.foods.filter((f) => p.foods.includes(f))
-    const pool = liked.length ? liked : save.arcade.foods
-    const food = choice(pool)
+    const favFood = (p.foods || [])[0]
+    const favCarried = favFood && save.arcade.foods.includes(favFood)
+    let food = null
+    let appetite = 0.3
+    if (favCarried && (servings[favFood] || 0) < FOOD_SERVINGS_PER_DAY) {
+      food = favFood
+      appetite = 0.75
+    } else if (favCarried) {
+      // The one thing they came in wanting, gone. (A food you never stock
+      // disappoints nobody — you cannot miss what was never on the counter.)
+      sellouts[favFood] = (sellouts[favFood] || 0) + 1
+      letdowns += 1
+      p.mood = clamp(p.mood - 0.25, 0, 10)
+      continue
+    } else {
+      const pool = save.arcade.foods.filter((f) => (servings[f] || 0) < FOOD_SERVINGS_PER_DAY)
+      if (!pool.length) continue
+      food = choice(pool)
+    }
     const price = foodPriceOf(save, food)
-    const appetite = liked.length ? 0.75 : 0.3
     // The $2 hot dog a broke kid buys every night is a $4 hot dog they never
     // buy again. Wallet decides the ceiling; your price list has to respect it.
     const priceFactor = price / (1.8 + wallet * 0.5)
@@ -405,11 +441,24 @@ export function playerSpending(save, attendees, gamesToday, events) {
     if (chance(buyChance)) {
       foodRevenue += price
       foodSales += 1
+      servings[food] = (servings[food] || 0) + 1
       p.mood = clamp(p.mood + 0.15, 0, 10)
     } else if (priceFactor > 1.25 && chance(0.25)) {
       grumbles += 1
       p.mood = clamp(p.mood - 0.1, 0, 10)
     }
+  }
+  // The room remembers being let down — a rolling share that drags the
+  // arcade's reputation until the stock and the floor plan catch up to demand.
+  save.arcade.letdowns = (save.arcade.letdowns ?? 0) * 0.75 +
+    (attendees.length ? letdowns / attendees.length : 0) * 0.25
+  const worstSellout = Object.entries(sellouts).sort((a, b) => b[1] - a[1])[0]
+  if (worstSellout && worstSellout[1] >= 2) {
+    events.push({ type: 'economy', text: `🌭 Sold out of ${worstSellout[0]} — ${worstSellout[1]} people left the counter empty-handed.` })
+  }
+  const worstLine = Object.entries(lines).sort((a, b) => b[1] - a[1])[0]
+  if (worstLine && worstLine[1] >= 2) {
+    events.push({ type: 'economy', text: `👾 The ${worstLine[0]} cabinet had a line all night — ${worstLine[1]} people never got a turn.` })
   }
   const income = Math.round((tokens * tokenPrice + foodRevenue) * 100) / 100
   if (income > 0) {

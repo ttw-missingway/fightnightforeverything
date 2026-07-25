@@ -375,6 +375,9 @@ export function arcadeOpinionOf(save, p) {
   // the penalty only starts where the wait becomes hopeless — and the cure is
   // buying setups, which makes expansion the answer to demand, not a rent trap.
   score -= Math.max(0, (save.arcade.crowding || 0) - 0.45) * 6
+  // Sold-out counters and cabinet lines: "that place never has what you came
+  // for" is exactly the reputation a too-concentrated stock list earns.
+  score -= (save.arcade.letdowns || 0) * 5
   score += ((save.staffing?.morale ?? 70) - 60) * 0.012
   const tokenPrice = save.arcade.prices?.token ?? 1
   score -= Math.max(0, tokenPrice - (0.9 + (p.social?.income ?? 5) * 0.18)) * 0.8

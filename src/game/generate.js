@@ -66,10 +66,9 @@ export function randomPreferences(save) {
     playerTags: pTags.length ? sample(pTags, randInt(0, Math.min(2, pTags.length))) : [],
     attractedPlayerTags: drawnTo,
     repelledPlayerTags: pTags.length ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1)) : [],
-    // Tastes span the whole catalog — a player can love a food/game whether or
-    // not you stock it. Stocking what they like is the separate design choice.
-    otherGames: sample(OTHER_GAMES, randInt(1, 3)),
-    foods: sample(FOODS, randInt(1, 3)),
+    // ONE favorite each, from the whole catalog — carrying it is your call.
+    otherGames: sample(OTHER_GAMES, 1),
+    foods: sample(FOODS, 1),
   }
 }
 
@@ -185,8 +184,8 @@ export function generatePlayer(save, overrides = {}) {
     attractedPlayerTags: drawnTo,
     repelledPlayerTags: putOffBy,
     // Tastes span the whole catalog, not just what's stocked (see randomPreferences).
-    otherGames: sample(OTHER_GAMES, randInt(1, 3)),
-    foods: sample(FOODS, randInt(1, 3)),
+    otherGames: sample(OTHER_GAMES, 1),
+    foods: sample(FOODS, 1),
     slob,
     ...overrides,
   })

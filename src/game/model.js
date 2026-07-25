@@ -95,8 +95,6 @@ export function newPlayer(partial = {}) {
     charRecord: {}, // charId -> {w, l} lifetime record on that character
     otherGames: [],
     foods: [],
-    tasteRoll: null, // {foods, otherGames} snapshot of the random roll — changing tastes off this costs points
-    tasteRerolled: false, // has the one free "mulligan" re-roll of tastes been used?
     wins: 0,
     losses: 0,
     tournamentWins: 0,
@@ -311,6 +309,7 @@ export function newSave(partial = {}) {
       gameTokens: {}, // per-side-cabinet token cost to play — set when installed
       ads: [], // active advertising channel keys (constants.AD_CHANNELS) — weekly upkeep
       cleanliness: 80, // 0-100 — dirt accrues with traffic, staff clean it back
+      letdowns: 0, // rolling share of the room let down by sellouts & cabinet lines
       closedUntilAbs: null, // absolute day the health-department shutdown lifts (null = open)
     },
     staffing: newStaffing(),
@@ -539,6 +538,7 @@ export function migrateSave(save) {
   save.arcade.ads ??= []
   delete save.arcade.prices.food
   save.arcade.cleanliness ??= 80
+  save.arcade.letdowns ??= 0
   save.arcade.closedUntilAbs ??= null
   save.staffing ??= newStaffing()
   save.prestige ??= { points: 0, runs: 0 }
@@ -576,6 +576,11 @@ export function migrateSave(save) {
       p.personal.adaptation ??= 5
       p.personal.presence ??= 5
     }
+    // One FAVORITE each now — tastes are identity, not a shopping list.
+    if (Array.isArray(p.foods) && p.foods.length > 1) p.foods = p.foods.slice(0, 1)
+    if (Array.isArray(p.otherGames) && p.otherGames.length > 1) p.otherGames = p.otherGames.slice(0, 1)
+    delete p.tasteRoll
+    delete p.tasteRerolled
   }
   save.separations ??= []
   save.archives ??= []
@@ -618,7 +623,6 @@ export function migrateSave(save) {
     p.attractedPlayerTags ??= []
     p.repelledPlayerTags ??= []
     p.charRecord ??= {}
-    p.tasteRoll ??= { foods: [...(p.foods || [])], otherGames: [...(p.otherGames || [])] }
     // Existing veterans start a little worn — passion reflects their tenure.
     p.passion ??= clamp(88 - (p.daysAttended || 0) * 0.04, 40, 90)
     p.retired ??= false

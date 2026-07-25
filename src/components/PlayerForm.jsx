@@ -1,6 +1,6 @@
 import { Field, NumField, PillPicker } from './ui.jsx'
 import {
-  PERSONAL_STATS, SOCIAL_STATS, GENDERS, difficultyOf, TASTE_CHANGE_COST,
+  PERSONAL_STATS, SOCIAL_STATS, GENDERS, difficultyOf,
   TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS,
 } from '../game/constants.js'
 import { clamp } from '../game/util.js'
@@ -27,15 +27,6 @@ function pointsSpent(player) {
   return total - free
 }
 
-// How many of a player's food/arcade tastes differ from their free random
-// roll (added or removed). Each difference costs stat points to keep.
-const symDiff = (a = [], b = []) =>
-  a.filter((x) => !b.includes(x)).length + b.filter((x) => !a.includes(x)).length
-const tasteEdits = (player) => {
-  const roll = player.tasteRoll || { foods: player.foods || [], otherGames: player.otherGames || [] }
-  return symDiff(player.foods, roll.foods) + symDiff(player.otherGames, roll.otherGames)
-}
-
 /**
  * Full player editor. `patch(fn)` applies fn to the live player object inside
  * the draft/save; works for both the setup wizard and mid-save editing.
@@ -49,8 +40,7 @@ export default function PlayerForm({ save, player, patch }) {
   const diff = difficultyOf(save)
   const prestigeBonus = save.prestige?.points || 0
   const budget = consequential ? diff.statPoints + prestigeBonus : null
-  const tasteCost = consequential ? tasteEdits(player) * TASTE_CHANGE_COST : 0
-  const spent = pointsSpent(player) + tasteCost
+  const spent = pointsSpent(player)
 
   return (
     <div>
@@ -143,17 +133,8 @@ export default function PlayerForm({ save, player, patch }) {
         <div className="card sub">
           <div className="row spread">
             <h4>Play Style</h4>
-            <button className="small" onClick={() => patch((p) => {
-              Object.assign(p, randomPreferences(save))
-              // The mulligan: your first re-roll rebases the free taste roll, so
-              // it costs nothing. After that, re-rolling costs points like any
-              // change (the new tastes now differ from the locked-in baseline).
-              if (consequential && !p.tasteRerolled) {
-                p.tasteRoll = { foods: [...p.foods], otherGames: [...p.otherGames] }
-                p.tasteRerolled = true
-              }
-            })}>
-              🎲 Randomize preferences{consequential ? (player.tasteRerolled ? ' (costs points)' : ' — free mulligan') : ''}
+            <button className="small" onClick={() => patch((p) => { Object.assign(p, randomPreferences(save)) })}>
+              🎲 Randomize preferences
             </button>
           </div>
           <Field label="Main character">
@@ -192,27 +173,27 @@ export default function PlayerForm({ save, player, patch }) {
                 p.attractedTags = p.attractedTags.filter((x) => x !== t)
               })} />
           </Field>
-          {consequential && (
-            <p className="dim small" style={{ margin: '4px 0' }}>
-              🎲 Tastes below came from a free random roll. Each change from that roll (adding or removing)
-              costs {TASTE_CHANGE_COST} stat points{tasteCost > 0 ? ` — ${tasteCost} spent so far` : ''}.
-              {!player.tasteRerolled
-                ? ' You get one free re-roll (mulligan) with Randomize preferences above.'
-                : ' Your free mulligan has been used.'}
-            </p>
-          )}
-          <Field label="Other games they like">
-            <PillPicker options={OTHER_GAMES} selected={player.otherGames}
-              onToggle={(g) => patch((p) => {
-                p.otherGames = p.otherGames.includes(g) ? p.otherGames.filter((x) => x !== g) : [...p.otherGames, g]
-              })} />
-          </Field>
-          <Field label="Foods they like">
-            <PillPicker options={FOODS} selected={player.foods}
-              onToggle={(f) => patch((p) => {
-                p.foods = p.foods.includes(f) ? p.foods.filter((x) => x !== f) : [...p.foods, f]
-              })} />
-          </Field>
+          <div className="row">
+            <Field label="Favorite food">
+              <select value={(player.foods || [])[0] || ''}
+                onChange={(e) => patch((p) => { p.foods = e.target.value ? [e.target.value] : [] })}>
+                <option value="">no strong preference</option>
+                {FOODS.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </Field>
+            <Field label="Favorite side cabinet">
+              <select value={(player.otherGames || [])[0] || ''}
+                onChange={(e) => patch((p) => { p.otherGames = e.target.value ? [e.target.value] : [] })}>
+                <option value="">no strong preference</option>
+                {OTHER_GAMES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </Field>
+          </div>
+          <p className="dim small" style={{ margin: '4px 0' }}>
+            Free to pick. Carrying their favorite is a real draw — but favorites are singular, foods
+            sell out, and one cabinet only seats so many a night. A room full of people who all want
+            the same thing is a room full of people about to be disappointed.
+          </p>
         </div>
       </div>
 
@@ -223,7 +204,6 @@ export default function PlayerForm({ save, player, patch }) {
             {budget != null && (
               <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
                 {spent}/{budget} points · max {STAT_MAX_POINTS}/stat
-                {tasteCost > 0 && <span> · incl. {tasteCost} for taste changes</span>}
                 {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
               </span>
             )}

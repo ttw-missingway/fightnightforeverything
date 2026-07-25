@@ -209,9 +209,6 @@ export const difficultyOf = (save) =>
 // Default per-item prices when something is first stocked/installed.
 export const DEFAULT_FOOD_PRICE = 4 // dollars per serving
 export const DEFAULT_GAME_TOKENS = 2 // tokens to play a side cabinet once
-// Changing a created player's rolled food/arcade tastes costs stat points —
-// tastes come free from the random roll; curating them is a real tradeoff.
-export const TASTE_CHANGE_COST = 1
 
 // Advertising channels. Each you run adds `cost` to the weekly upkeep bill.
 // `awareness` lifts how easily first-timers discover the arcade; `arrivals`
