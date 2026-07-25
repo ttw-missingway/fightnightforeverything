@@ -52,6 +52,11 @@ export const RULE_FAMILIES = [
         note: 'damage resistance as health runs low — makes the last sliver stubborn',
       },
       {
+        key: 'stun', label: 'Stun / dizzy',
+        options: ['off', 'lenient', 'normal', 'quick'],
+        note: 'take too much without a breather and you get dizzied — a free punish for them',
+      },
+      {
         key: 'comeback', label: 'Comeback mechanic',
         options: ['none', 'rage damage', 'install trigger', 'x-factor'],
         note: 'something the losing player gets to turn on',
@@ -96,6 +101,7 @@ export function defaultRules() {
     comboScaling: 'normal',
     chipKO: 'chip cannot finish',
     guts: 'light',
+    stun: 'normal',
     comeback: 'none',
     burst: 'none',
     guardCancel: 'off',
@@ -172,6 +178,22 @@ export function timeOverChance(rules) {
   if (secs <= 30) return 0.3
   if (secs <= 60) return 0.16
   return 0.07
+}
+
+// How fast the stun gauge fills. Roughly: 'normal' dizzies after about three
+// clean conversions with no break in between, which is what makes it a
+// punishment for sitting in pressure rather than a random event.
+// Kept close together on purpose: the gauge fills in discrete hits, so widely
+// spaced rates just flip between "never" and "every round". These map to
+// roughly a four-hit, three-hit and two-hit streak.
+const STUN_RATE = { off: 0, lenient: 0.92, normal: 1.0, quick: 1.32 }
+
+export function stunEnabled(rules) {
+  return (rules?.stun ?? 'normal') !== 'off'
+}
+
+export function stunRateOf(rules) {
+  return STUN_RATE[rules?.stun ?? 'normal'] ?? 1
 }
 
 export function chipCanKill(rules) {

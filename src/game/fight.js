@@ -55,10 +55,18 @@ import { ARCHETYPE_FLAVOR, MOVE_VERBS, FORM_VERBS, EFFECT_CLAUSES } from './name
 import { comboDamage, COMBO_SCALING, healthMultOf } from './design.js'
 import {
   defaultRules, gutsFactor, timeOverChance, chipCanKill, burstEnabled,
-  guardCrushEnabled, cancelsEnabled,
+  guardCrushEnabled, cancelsEnabled, stunEnabled, stunRateOf,
 } from './rules.js'
 
 export const HEALTH = 1000
+
+// Stun tuning. Gain is per point of damage taken (as a share of the bar);
+// relief comes off whenever you land something of your own, because getting
+// your turn back is what shakes it off. Softer relief lets partial stun carry
+// between streaks, which is what stops the dizzy rate being a coin flip on
+// "did anyone ever get a 3-hit streak".
+const STUN_GAIN = 140
+const STUN_RELIEF = 16
 
 // Deterministic RNG (mulberry32) — the engine must never touch Math.random.
 function rngOf(seed) {
@@ -243,8 +251,8 @@ function simulateOnce({
   // rather than of some global constant.
   const maxA = Math.round(HEALTH * healthMultOf(charA))
   const maxB = Math.round(HEALTH * healthMultOf(charB))
-  const A = { side: 'A', name: aName, kit: kitOf(charA, skillA), stats: statsA || DEFAULT_STATS, max: maxA, hp: maxA, meter: 0, games: 0 }
-  const B = { side: 'B', name: bName, kit: kitOf(charB, skillB), stats: statsB || DEFAULT_STATS, max: maxB, hp: maxB, meter: 0, games: 0 }
+  const A = { side: 'A', name: aName, kit: kitOf(charA, skillA), stats: statsA || DEFAULT_STATS, max: maxA, hp: maxA, meter: 0, games: 0, stun: 0 }
+  const B = { side: 'B', name: bName, kit: kitOf(charB, skillB), stats: statsB || DEFAULT_STATS, max: maxB, hp: maxB, meter: 0, games: 0, stun: 0 }
   const winner = winnerIsA ? A : B
   const loser = winnerIsA ? B : A
   const winnerProb = winnerIsA ? probA : 1 - probA
@@ -255,11 +263,14 @@ function simulateOnce({
   const lines = []
   const meta = []
   const hud = []
-  const drama = { leadChanges: 0, drops: 0, supers: 0, comebacks: 0, clutch: 0, whiffs: 0, phases: 0, timeOvers: 0 }
+  const drama = { leadChanges: 0, drops: 0, supers: 0, comebacks: 0, clutch: 0, whiffs: 0, phases: 0, timeOvers: 0, dizzies: 0 }
   const snap = () => ({
     hpA: Math.round((clamp(A.hp, 0, A.max) / A.max) * 100), hpB: Math.round((clamp(B.hp, 0, B.max) / B.max) * 100),
     mA: Math.round(clamp(A.meter, 0, 100)), mB: Math.round(clamp(B.meter, 0, 100)),
     gA: A.games, gB: B.games,
+    // Stun gauges. Matches recorded before stun existed simply omit these,
+    // and the HUD hides the bar when it doesn't find them.
+    sA: Math.round(clamp(A.stun, 0, 100)), sB: Math.round(clamp(B.stun, 0, 100)),
   })
   const push = (text, m = {}) => {
     lines.push(text)
@@ -389,6 +400,7 @@ function simulateOnce({
       return {
         raw: superMove.damage ?? 250, hits: irnd(7, 13), curve: 'accel', fx: 'super',
         kind: 'beat', actor: att.name, move: superMove.name, cap: def.max * 0.46,
+        fxForm: superMove.d?.form, fxGuard: superMove.d?.guard,
         text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', superMove.name).replaceAll('{o}', def.name)} ${d} damage.${sRider}`,
       }
     }
@@ -434,7 +446,10 @@ function simulateOnce({
     }
 
     // --- footsies: winning the ground with reach alone -------------------
-    if (k.pokes.length && k.reach > def.kit.reach + 12 && odds(0.4)) {
+    // Not on a guaranteed punish: spacing is meaningless against someone who
+    // can't move, and neither is a high/low guess against someone who can't
+    // block. A free hit should read as a conversion.
+    if (!finisher && k.pokes.length && k.reach > def.kit.reach + 12 && odds(0.4)) {
       const poke = pick(k.pokes)
       return {
         raw: (poke.damage ?? k.avgRaw) * 0.9, hits: 1, kind: 'beat',
@@ -448,13 +463,14 @@ function simulateOnce({
     }
 
     // --- the high/low guess: they had to choose, and they chose wrong -----
-    if ((k.overheads.length || k.lows.length) && odds(k.mixup ? 0.4 : 0.22)) {
+    if (!finisher && (k.overheads.length || k.lows.length) && odds(k.mixup ? 0.4 : 0.22)) {
       const high = k.overheads.length && (!k.lows.length || odds(0.5))
       const mv2 = high ? pick(k.overheads) : pick(k.lows)
       return {
         raw: (mv2.damage ?? k.avgRaw) * 1.05,
         hits: k.combos.length ? Math.max(2, Math.min(k.combos[0].len, 4)) : 1, curve: 'decel',
         kind: 'beat', actor: att.name, move: mv2.name, momentum: 0.45, fx: 'impact',
+        fxForm: mv2.d?.form, fxGuard: mv2.d?.guard,
         text: (d) => (high
           ? pick([
             `${att.name} goes upstairs — ${mv2.name} has to be blocked standing and ${def.name} was crouching. ${d}.`,
@@ -473,7 +489,8 @@ function simulateOnce({
     }
 
     // --- punish an actual unsafe move ON BLOCK ---------------------------
-    if (def.kit.unsafe.length && odds(0.3)) {
+    // Nor a blocked punish — they aren't blocking, they're seeing stars.
+    if (!finisher && def.kit.unsafe.length && odds(0.3)) {
       const bad = pick(def.kit.unsafe)
       // With a universal cancel system, the punish isn't free — they can pay
       // meter to erase the recovery and walk away from it.
@@ -505,6 +522,7 @@ function simulateOnce({
       const grab = pick(k.grabs)
       return {
         raw: grab.damage ?? k.avgRaw, hits: 1, fx: 'grab', kind: 'beat', actor: att.name, move: grab.name, momentum: 0.35,
+        fxForm: grab.d?.form, fxGuard: grab.d?.guard,
         text: (d) => `${pre}${att.name} ${pick(verbsFor(grab)).replaceAll('{m}', grab.name).replaceAll('{o}', def.name)} — ${d}.`,
       }
     }
@@ -515,7 +533,7 @@ function simulateOnce({
       const throws = irnd(3, 6)
       return {
         raw: Math.max(30, (proj.chip ?? 5) * throws + 40), hits: throws, curve: 'even', fx: 'projectile',
-        kind: 'beat', actor: att.name, move: proj.name, momentum: 0.2,
+        kind: 'beat', actor: att.name, move: proj.name, momentum: 0.2, fxForm: proj.d?.form,
         text: (d) => `${att.name} ${pick(verbsFor(proj)).replaceAll('{m}', proj.name).replaceAll('{o}', def.name)} — ${throws} of them, ${d} shaved off.`,
       }
     }
@@ -544,6 +562,7 @@ function simulateOnce({
         raw: m.damage ?? k.avgRaw * 0.8, hits, curve: 'even',
         fx: m.type === 'projectile' ? 'projectile' : m.type === 'command grab' ? 'grab' : 'impact',
         kind: 'beat', actor: att.name, move: m.name, momentum: 0.25,
+        fxForm: m.d?.form, fxGuard: m.d?.guard,
         text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', m.name).replaceAll('{o}', def.name)} — ${d}.${rider}`,
       }
     }
@@ -614,6 +633,18 @@ function simulateOnce({
       ]),
     }
   }
+
+  // DIZZY. The gauge filled, they're seeing stars, and whatever comes next is
+  // free — which is the entire point of a stun system: it punishes sitting in
+  // pressure rather than arriving at random.
+  const proposeDizzy = (att, def) => ({
+    raw: 0, kind: 'struggle', actor: def.name, momentum: 0.9, fx: 'dizzy',
+    text: () => pick([
+      `${def.name} is DIZZY — stars over their head, arms down, and ${att.name} has all the time in the world.`,
+      `That's the stun. ${def.name} is stood there swaying and ${att.name} gets to pick literally anything.`,
+      `${def.name}'s guard just switches off — dizzied, wide open, and the whole room knows what's coming.`,
+    ]),
+  })
 
   // BURST: the universal escape. Nothing lands, but the turn ends — which is
   // exactly what makes pressure characters worse in a game that has one.
@@ -737,9 +768,21 @@ function simulateOnce({
       defSide.hp -= dmg
       actorSide.meter += irnd(8, 15)
       defSide.meter += irnd(4, 9)
+      // Stun builds from UNINTERRUPTED pressure, not from cumulative damage.
+      // Landing a hit of your own means you got your turn back, and that's
+      // what shakes it off — so a dizzy is the price of never escaping, which
+      // is both how Street Fighter works and the only version of this that
+      // produces variety instead of a coin flip on total damage taken.
+      if (stunEnabled(R_)) {
+        defSide.stun += (dmg / defSide.max) * STUN_GAIN * stunRateOf(R_)
+        actorSide.stun = Math.max(0, actorSide.stun - STUN_RELIEF)
+      }
     } else {
       actorSide.meter += irnd(5, 10)
       defSide.meter += irnd(5, 10)
+      // A breather is exactly how you shake it off.
+      actorSide.stun = Math.max(0, actorSide.stun - STUN_RELIEF)
+      defSide.stun = Math.max(0, defSide.stun - STUN_RELIEF)
     }
     // A tick has to be worth rendering: drop hits until the SMALLEST step
     // still moves the bar about a percent. Decel curves taper hard, so this
@@ -757,6 +800,10 @@ function simulateOnce({
       mag: prop.raw > 0 ? Math.max(mag, 0.12) : 0.2,
       word: prop.raw > 0 && fxType !== 'block' ? fxWordFor(mag, R()) : null,
       ko: defSide.hp <= 0,
+      // The designer's own choices, so a beam doesn't draw like a fireball
+      // and an overhead lands from above rather than centre-mass.
+      ...(prop.fxForm ? { form: prop.fxForm } : {}),
+      ...(prop.fxGuard && prop.fxGuard !== 'mid' ? { guard: prop.fxGuard } : {}),
     }
     push(prop.text(dmg), {
       kind: prop.kind, actor: prop.actor, move: prop.move,
@@ -795,7 +842,7 @@ function simulateOnce({
         const throws = irnd(2, 4)
         commit({
           raw: Math.max(24, (proj.chip ?? 5) * throws + 25), hits: throws, curve: 'even', fx: 'projectile',
-          kind: 'beat', actor: att.name, move: proj.name, cap: def.max * 0.16,
+          kind: 'beat', actor: att.name, move: proj.name, cap: def.max * 0.16, fxForm: proj.d?.form,
           text: (d) => pick([
             `${def.name} creeps forward behind a block and eats ${throws} more on the way in — ${d}.`,
             `${def.name} tries to jump it. ${att.name} was waiting: ${d} and back to full screen.`,
@@ -855,6 +902,7 @@ function simulateOnce({
     // The bell: fresh health, carried meter — its own line, so the bars
     // visibly reset on screen.
     A.hp = A.max; B.hp = B.max
+    A.stun = 0; B.stun = 0
     if (gi === 0) {
       push(pick([
         'Both bars fill. Game one — fight.',
@@ -904,6 +952,7 @@ function simulateOnce({
     // turns into two people staring at each other.
     let neutralLeft = marquee ? irnd(0, 2) : irnd(0, 1)
     let burstsLeft = burstEnabled(R_) ? 1 : 0
+    let dizziesLeft = 1 // one per game — a dizzy should be an event, not weather
     let crushesLeft = guardCrushEnabled(R_) ? 1 : 0
     // A siege isn't only a zoner holding you out — a pressure character who
     // simply refuses to give the turn back runs the same shape, and runPhase
@@ -933,6 +982,19 @@ function simulateOnce({
         const held = runPhase(att, def, sched, { length: marquee ? irnd(2, 3) : 1 })
         if (def.hp <= 0) break
         if (held < 0) flipTo(def)
+        continue
+      }
+
+      // Dizzy check first — a filled gauge outranks everything else.
+      if (dizziesLeft > 0 && stunEnabled(R_) && def.stun >= 100 && sched[att.side].budget > def.max * 0.12) {
+        dizziesLeft--
+        def.stun = 0
+        commit(proposeDizzy(att, def), att, def, sched)
+        // And they cash it in: a guaranteed conversion off the stun.
+        commit(proposeOffense(att, def, { matchPoint, finisher: true, room: sched[att.side].budget }),
+          att, def, sched)
+        drama.dizzies++
+        if (def.hp <= 0) break
         continue
       }
 
@@ -1073,6 +1135,15 @@ function simulateOnce({
     const winnerPct = pctOf(gWinner)
     const clutchKO = winnerPct <= 8
     if (clutchKO) drama.clutch++
+    // A finish that close is the whole reason people stand around a cabinet.
+    if (clutchKO && odds(0.7)) {
+      push(pick([
+        `The room comes UP. ${gWinner.name} had ${winnerPct}% left — one more hit either way and it's the other guy.`,
+        `Somebody in the back yells. ${winnerPct}%. That's what ${gWinner.name} survived on.`,
+        `Chairs scrape. Nobody sat through that one — ${winnerPct}% is a rounding error.`,
+        `${gLoser.name} puts both hands on their head. ${winnerPct}%. That close.`,
+      ]), { kind: 'crowd', actor: gWinner.name })
+    }
     if (!isFinal) {
       let clause
       if (gi === 0) clause = pick([', and takes the opener', ', to bank game one'])
@@ -1130,7 +1201,7 @@ function simulateOnce({
 
   // Density, not volume. Every drama ingredient also costs lines, so without
   // the length penalty `spice` would just keep whichever seed rambled longest.
-  const dramaScore = drama.timeOvers * 3 + drama.leadChanges * 2 + drama.drops * 2 + drama.supers * 2
+  const dramaScore = drama.dizzies * 4 + drama.timeOvers * 3 + drama.leadChanges * 2 + drama.drops * 2 + drama.supers * 2
     + drama.comebacks * 3 + drama.clutch * 4 + drama.phases * 2 + drama.whiffs
     + (loserGames === target - 1 ? 4 : 0)
     - lines.length * 0.4

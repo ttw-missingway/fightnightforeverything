@@ -22,6 +22,7 @@ const FRESH = { hpA: 100, hpB: 100, mA: 0, mB: 0, gA: 0, gB: 0 }
  * chips instead of teleporting.
  */
 export default function MatchHud({ m, revealed = null, state = null, pulse = null, shakeKey = null }) {
+  // A dizzy lasts until the follow-up lands, so it's a state, not a flash.
   const { save } = useStore()
   // Shake fires ONCE per narration line, not once per tick — a seven-hit
   // combo sparks seven times but only rocks the cabinet on the way in.
@@ -65,18 +66,20 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
       onClick={(e) => e.stopPropagation()}>
       <div className="fs-bars">
         <BarSide side="a" name={m.aName} charName={charAName} playerUrl={playerA}
-          hp={st.hpA} meter={st.mA} games={st.gA} target={m.ftTarget} hasBars={hasBars} />
+          hp={st.hpA} meter={st.mA} stun={st.sA} games={st.gA} target={m.ftTarget} hasBars={hasBars} />
         <div className="fs-vs">
           <span>VS</span>
           {m.ftTarget && <span className="fs-ft">FT{m.ftTarget}</span>}
         </div>
         <BarSide side="b" name={m.bName} charName={charBName} playerUrl={playerB}
-          hp={st.hpB} meter={st.mB} games={st.gB} target={m.ftTarget} hasBars={hasBars} />
+          hp={st.hpB} meter={st.mB} stun={st.sB} games={st.gB} target={m.ftTarget} hasBars={hasBars} />
       </div>
       <div className="fs-arena">
         <FighterSprite url={spriteA} alt={charAName} ko={hasBars && st.hpA <= 0}
+          dizzy={pulse?.t === 'dizzy' && pulse.side === 'A'}
           hitKey={pulse?.side === 'A' ? pulse.key : null} />
         <FighterSprite url={spriteB} alt={charBName} ko={hasBars && st.hpB <= 0} mirror
+          dizzy={pulse?.t === 'dizzy' && pulse.side === 'B'}
           hitKey={pulse?.side === 'B' ? pulse.key : null} />
         <FxLayer pulse={pulse} />
       </div>
@@ -84,7 +87,7 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
   )
 }
 
-function BarSide({ side, name, charName, playerUrl, hp, meter, games, target, hasBars }) {
+function BarSide({ side, name, charName, playerUrl, hp, meter, stun, games, target, hasBars }) {
   const mirror = side === 'b'
   return (
     <div className={`hud-side ${side}`}>
@@ -99,12 +102,22 @@ function BarSide({ side, name, charName, playerUrl, hp, meter, games, target, ha
             {/* The chip layer trails the real bar — the red catching up is
                 most of why a hit reads as a hit. */}
             <div className="chip" style={{ width: `${hp}%` }} />
-            <div className={`fill ${hp <= 25 ? 'low' : ''}`} style={{ width: `${hp}%` }} />
+            {/* Under 10% the bar goes into danger — the classic pulse that
+                tells you the next clean hit ends it. */}
+            <div className={`fill ${hp <= 25 ? 'low' : ''} ${hp > 0 && hp <= 10 ? 'danger' : ''}`}
+              style={{ width: `${hp}%` }} />
           </div>
           <div className="hud-under">
             <div className="hud-meter" title={`${meter}% meter`}>
               <div className="fill" style={{ width: `${meter}%` }} />
             </div>
+            {/* Stun gauge. Old matches have no stun data, so it stays hidden
+                rather than drawing an empty bar that never moves. */}
+            {stun != null && (
+              <div className={`hud-stun ${stun >= 80 ? 'near' : ''}`} title={`${stun}% stun`}>
+                <div className="fill" style={{ width: `${stun}%` }} />
+              </div>
+            )}
             <div className="hud-rounds" title={`${games} game${games === 1 ? '' : 's'} taken`}>
               {Array.from({ length: target || 2 }, (_, i) => (
                 <span key={i} className={`pip ${i < games ? 'won' : ''}`} />
@@ -120,12 +133,12 @@ function BarSide({ side, name, charName, playerUrl, hp, meter, games, target, ha
 // A fighter on the stage. KO'd fighters (0 health) slump into grayscale.
 // `hitKey` changes each time this side eats one: the keyed remount is what
 // restarts the flinch animation, so consecutive hits each register.
-function FighterSprite({ url, alt, ko = false, mirror = false, hitKey = null }) {
+function FighterSprite({ url, alt, ko = false, mirror = false, hitKey = null, dizzy = false }) {
   if (!url) return <div />
   return (
     <img
       key={hitKey ?? 'idle'}
-      className={`fs-fighter ${ko ? 'ko' : ''} ${hitKey != null ? 'hit' : ''} ${mirror ? 'from-right' : ''}`}
+      className={`fs-fighter ${ko ? 'ko' : ''} ${hitKey != null ? 'hit' : ''} ${mirror ? 'from-right' : ''} ${dizzy ? 'dizzy' : ''}`}
       src={url} width={96} height={96} alt={alt} title={alt}
       style={mirror ? { transform: 'scaleX(-1)' } : undefined}
     />

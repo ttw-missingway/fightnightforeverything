@@ -740,3 +740,133 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   .narration-scroll > *:first-child { animation: none; }
 }
 @media (max-width: 800px) { .narration-scroll { max-height: 240px; } }
+
+/* ---- A3: fx that follow the move's description ---- */
+
+/* A beam doesn't fly, it IS the space between them. */
+.fx-projectile.beam {
+  height: 22px;
+  border-radius: 3px;
+  width: 62%;
+  background: linear-gradient(90deg, transparent, var(--fx-spark), #fff, var(--fx-spark), transparent);
+  animation: fx-beam 0.34s ease-out forwards;
+}
+.fx-projectile.beam.to-right { left: 15%; }
+.fx-projectile.beam.to-left { left: 23%; }
+@keyframes fx-beam {
+  0% { opacity: 0; transform: scaleY(0.2); }
+  25% { opacity: 1; transform: scaleY(1); }
+  100% { opacity: 0; transform: scaleY(0.7); }
+}
+
+/* A lob goes up and comes down. */
+.fx-projectile.arc.to-right { animation: fx-arc-right 0.42s ease-in forwards; }
+.fx-projectile.arc.to-left { animation: fx-arc-left 0.42s ease-in forwards; }
+@keyframes fx-arc-right {
+  0% { transform: translate(0, 0); opacity: 0; }
+  20% { opacity: 1; }
+  50% { transform: translate(min(28vw, 250px), -46px); }
+  100% { transform: translate(min(58vw, 520px), 6px); opacity: 0.9; }
+}
+@keyframes fx-arc-left {
+  0% { transform: translate(0, 0); opacity: 0; }
+  20% { opacity: 1; }
+  50% { transform: translate(max(-28vw, -250px), -46px); }
+  100% { transform: translate(max(-58vw, -520px), 6px); opacity: 0.9; }
+}
+
+/* Rolling and burrowing travel along the floor. */
+.fx-projectile.ground { bottom: 14%; height: 9px; }
+
+/* A boomerang goes out and comes back. */
+.fx-projectile.boomerang.to-right { animation: fx-boomerang-right 0.62s ease-in-out forwards; }
+.fx-projectile.boomerang.to-left { animation: fx-boomerang-left 0.62s ease-in-out forwards; }
+@keyframes fx-boomerang-right {
+  0% { transform: translateX(0); opacity: 0; }
+  15% { opacity: 1; }
+  55% { transform: translateX(min(56vw, 500px)); }
+  100% { transform: translateX(min(12vw, 100px)); opacity: 0; }
+}
+@keyframes fx-boomerang-left {
+  0% { transform: translateX(0); opacity: 0; }
+  15% { opacity: 1; }
+  55% { transform: translateX(max(-56vw, -500px)); }
+  100% { transform: translateX(max(-12vw, -100px)); opacity: 0; }
+}
+
+/* Overheads land from above, lows from underneath. */
+.fx-burst.high { bottom: 52%; }
+.fx-burst.low { bottom: 16%; }
+
+/* Danger: under 10% the bar pulses. The next clean hit ends it. */
+.hud-health .fill.danger { animation: hud-danger 0.62s ease-in-out infinite; }
+@keyframes hud-danger {
+  0%, 100% { filter: none; }
+  50% { filter: brightness(1.9) saturate(1.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-health .fill.danger { animation: none; }
+}
+
+/* ---- Stun / dizzy ---- */
+
+.hud-stun {
+  flex: 0 0 46px;
+  height: 4px;
+  background: rgba(30, 12, 4, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+}
+.hud-side.b .hud-stun { justify-content: flex-end; }
+.hud-stun .fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffb52d, #ff5d5d);
+  transition: width 0.35s ease;
+}
+/* About to pop — the warning you can act on. */
+.hud-stun.near .fill { animation: hud-danger 0.5s ease-in-out infinite; }
+
+/* Stars orbiting a dizzied fighter. */
+.fx-stars {
+  position: absolute;
+  bottom: 62%;
+  width: 54px;
+  height: 22px;
+  margin-left: -27px;
+  animation: fx-stars-spin 0.9s linear infinite;
+}
+.fx-stars.at-left { left: 17%; }
+.fx-stars.at-right { left: 83%; }
+.fx-stars i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4px 0 0 -4px;
+  background: var(--gold);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  box-shadow: 0 0 6px rgba(255, 206, 79, 0.9);
+}
+.fx-stars i:nth-child(1) { transform: rotate(0deg) translateX(24px); }
+.fx-stars i:nth-child(2) { transform: rotate(120deg) translateX(24px); }
+.fx-stars i:nth-child(3) { transform: rotate(240deg) translateX(24px); }
+@keyframes fx-stars-spin { to { transform: rotate(360deg); } }
+
+/* And the fighter goes limp under them. */
+.fs-fighter.dizzy { animation: fs-dizzy 0.85s ease-in-out infinite; }
+@keyframes fs-dizzy {
+  0%, 100% { transform: rotate(-5deg) translateY(2px); }
+  50% { transform: rotate(5deg) translateY(0); }
+}
+.fs-fighter.dizzy.from-right { animation-name: fs-dizzy-mirror; }
+@keyframes fs-dizzy-mirror {
+  0%, 100% { transform: scaleX(-1) rotate(-5deg) translateY(2px); }
+  50% { transform: scaleX(-1) rotate(5deg) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-stars, .fs-fighter.dizzy, .hud-stun.near .fill { animation: none; }
+}

@@ -18,6 +18,7 @@ const KIND_STYLE = {
   grab: { spark: 'var(--red, #ff5f5f)', glow: 'rgba(255, 95, 95, 0.55)' },
   projectile: { spark: 'var(--cyan)', glow: 'rgba(45, 226, 230, 0.55)' },
   block: { spark: '#9fb3c8', glow: 'rgba(159, 179, 200, 0.45)' },
+  dizzy: { spark: 'var(--gold)', glow: 'rgba(255, 206, 79, 0.5)' },
   drop: { spark: '#9fb3c8', glow: 'rgba(159, 179, 200, 0.35)' },
   whiff: { spark: '#7b8794', glow: 'rgba(123, 135, 148, 0.25)' },
 }
@@ -26,9 +27,23 @@ const KIND_STYLE = {
  * `pulse`: { key, t, side, mag, word, ko } — or null for lines with no visual.
  * `side` is the side taking the hit: 'A' is the left fighter, 'B' the right.
  */
+// Projectile forms that need their own motion, not just their own colour.
+const PROJECTILE_SHAPE = {
+  'beam': 'beam',
+  'screen-filling beam': 'beam',
+  'arcing lob': 'arc',
+  'burrowing': 'ground',
+  'rolling': 'ground',
+  'boomerang': 'boomerang',
+}
+
 export default function FxLayer({ pulse }) {
   if (!pulse || !pulse.t) return null
-  const { t, side, mag = 0.4, word, ko } = pulse
+  const { t, side, mag = 0.4, word, ko, form, guard } = pulse
+  // An overhead lands from above and a low from underneath — the guard
+  // property is the whole guessing game, so it should be visible.
+  const height = guard === 'overhead' ? 'high' : guard === 'low' ? 'low' : ''
+  const shape = PROJECTILE_SHAPE[form] || ''
   const style = KIND_STYLE[t] || KIND_STYLE.impact
   const hitLeft = side === 'A'
   // Scale the whole effect with how hard it landed.
@@ -38,14 +53,14 @@ export default function FxLayer({ pulse }) {
     <div className="fx-layer" key={pulse.key} aria-hidden="true">
       {t === 'projectile' && (
         <span
-          className={`fx-projectile ${hitLeft ? 'to-left' : 'to-right'}`}
+          className={`fx-projectile ${hitLeft ? 'to-left' : 'to-right'} ${shape}`}
           style={{ '--fx-spark': style.spark, '--fx-glow': style.glow }}
         />
       )}
 
       {t !== 'whiff' && t !== 'drop' && (
         <span
-          className={`fx-burst ${hitLeft ? 'at-left' : 'at-right'} ${t === 'super' ? 'big' : ''}`}
+          className={`fx-burst ${hitLeft ? 'at-left' : 'at-right'} ${t === 'super' ? 'big' : ''} ${height}`}
           style={{
             '--fx-spark': style.spark,
             '--fx-glow': style.glow,
@@ -56,6 +71,13 @@ export default function FxLayer({ pulse }) {
 
       {t === 'whiff' && (
         <span className={`fx-swish ${hitLeft ? 'at-right' : 'at-left'}`} />
+      )}
+
+      {/* Dizzy: stars going round over their head, the way they should. */}
+      {t === 'dizzy' && (
+        <span className={`fx-stars ${hitLeft ? 'at-left' : 'at-right'}`}>
+          <i /><i /><i />
+        </span>
       )}
 
       {word && (
@@ -79,6 +101,7 @@ export default function FxLayer({ pulse }) {
 export function shakeClassFor(pulse) {
   if (!pulse || !pulse.t) return ''
   if (pulse.t === 'whiff' || pulse.t === 'drop' || pulse.t === 'block') return ''
+  if (pulse.t === 'dizzy') return 'shake-md'
   const mag = pulse.mag ?? 0
   if (pulse.ko || pulse.t === 'super' || mag >= 0.62) return 'shake-lg'
   if (mag >= 0.3) return 'shake-md'
