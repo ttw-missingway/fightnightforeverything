@@ -74,13 +74,22 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
         <BarSide side="b" name={m.bName} charName={charBName} playerUrl={playerB}
           hp={st.hpB} meter={st.mB} stun={st.sB} games={st.gB} target={m.ftTarget} hasBars={hasBars} />
       </div>
-      <div className="fs-arena">
-        <FighterSprite url={spriteA} alt={charAName} ko={hasBars && st.hpA <= 0}
-          dizzy={pulse?.t === 'dizzy' && pulse.side === 'A'}
-          hitKey={pulse?.side === 'A' ? pulse.key : null} />
-        <FighterSprite url={spriteB} alt={charBName} ko={hasBars && st.hpB <= 0} mirror
-          dizzy={pulse?.t === 'dizzy' && pulse.side === 'B'}
-          hitKey={pulse?.side === 'B' ? pulse.key : null} />
+      {/* How close they're standing, straight from the engine. Matches from
+          before spacing existed have no `d`, so the fighters just hold their
+          original marks. */}
+      <div className="fs-arena" style={st.d != null ? { '--fs-close': 1 - st.d / 100 } : undefined}>
+        {/* The slot walks; the sprite inside keeps its own mirror/flinch
+            transforms, which would otherwise fight each other. */}
+        <div className="fs-slot a">
+          <FighterSprite url={spriteA} alt={charAName} ko={hasBars && st.hpA <= 0}
+            dizzy={pulse?.t === 'dizzy' && pulse.side === 'A'}
+            hitKey={pulse?.side === 'A' ? pulse.key : null} />
+        </div>
+        <div className="fs-slot b">
+          <FighterSprite url={spriteB} alt={charBName} ko={hasBars && st.hpB <= 0} mirror
+            dizzy={pulse?.t === 'dizzy' && pulse.side === 'B'}
+            hitKey={pulse?.side === 'B' ? pulse.key : null} />
+        </div>
         <FxLayer pulse={pulse} />
       </div>
     </div>

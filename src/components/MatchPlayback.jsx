@@ -174,8 +174,13 @@ export default function MatchPlayback({
     if (!fx) return null
     return {
       ...fx,
-      // A projectile volley crosses once, then just keeps connecting.
-      t: fx.t === 'projectile' && tickIndex > 0 ? 'impact' : fx.t,
+      t: fx.t,
+      // The projectile is keyed per LINE so one shot completes its flight
+      // across the arena; the sparks and words below key per tick.
+      lineKey: revealed,
+      // Which hit of the line this is — the first one on a projectile has to
+      // wait for the shot to actually arrive before it's allowed to land.
+      tick: tickIndex,
       // Only the last hit of a line can be the knockout.
       ko: fx.ko && tickIndex >= ((mi.hits || 1) - 1),
       key: `${revealed}-${tickIndex}`,

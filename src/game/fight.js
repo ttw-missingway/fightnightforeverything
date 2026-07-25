@@ -251,6 +251,10 @@ function simulateOnce({
   // rather than of some global constant.
   const maxA = Math.round(HEALTH * healthMultOf(charA))
   const maxB = Math.round(HEALTH * healthMultOf(charB))
+  // How far apart they're standing, 0 = chest to chest, 1 = full screen. The
+  // beats declare where they happen and this eases toward it, so the fighters
+  // on screen end up where the fight actually is.
+  let dist = 0.62
   const A = { side: 'A', name: aName, kit: kitOf(charA, skillA), stats: statsA || DEFAULT_STATS, max: maxA, hp: maxA, meter: 0, games: 0, stun: 0 }
   const B = { side: 'B', name: bName, kit: kitOf(charB, skillB), stats: statsB || DEFAULT_STATS, max: maxB, hp: maxB, meter: 0, games: 0, stun: 0 }
   const winner = winnerIsA ? A : B
@@ -271,6 +275,7 @@ function simulateOnce({
     // Stun gauges. Matches recorded before stun existed simply omit these,
     // and the HUD hides the bar when it doesn't find them.
     sA: Math.round(clamp(A.stun, 0, 100)), sB: Math.round(clamp(B.stun, 0, 100)),
+    d: Math.round(clamp(dist, 0, 1) * 100),
   })
   const push = (text, m = {}) => {
     lines.push(text)
@@ -387,6 +392,21 @@ function simulateOnce({
       }
     }
 
+    // --- zoning volley: real chip, one projectile at a time --------------
+    const projectileBeat = () => {
+      const proj = pick(k.projectiles)
+      const throws = irnd(3, 6)
+      return {
+        raw: Math.max(30, (proj.chip ?? 5) * throws + 40), hits: throws, curve: 'even', fx: 'projectile',
+        kind: 'beat', actor: att.name, move: proj.name, momentum: 0.2, fxForm: proj.d?.form, dist: 0.92,
+        text: (d) => `${att.name} ${pick(verbsFor(proj)).replaceAll('{m}', proj.name).replaceAll('{o}', def.name)} — ${throws} of them, ${d} shaved off.`,
+      }
+    }
+    // For a kit built around throwing things, the projectile IS the gameplan —
+    // it shouldn't be the eighth thing checked, reachable only when combos,
+    // footsies, mix-ups, punishes and grabs have all declined to fire.
+    if (k.zoner && k.projectiles.length && !finisher && odds(0.5)) return projectileBeat()
+
     // --- super cash-out: needs the real meter, spends the real cost -------
     const superMove = k.supers.length ? pick(k.supers) : null
     const superCost = superMove ? Math.min(100, superMove.meterCost ?? 100) : 100
@@ -399,7 +419,7 @@ function simulateOnce({
       const sRider = sRiders ? ' ' + pick(sRiders).replaceAll('{o}', def.name) : ''
       return {
         raw: superMove.damage ?? 250, hits: irnd(7, 13), curve: 'accel', fx: 'super',
-        kind: 'beat', actor: att.name, move: superMove.name, cap: def.max * 0.46,
+        kind: 'beat', actor: att.name, move: superMove.name, cap: def.max * 0.46, dist: 0.2,
         fxForm: superMove.d?.form, fxGuard: superMove.d?.guard,
         text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', superMove.name).replaceAll('{o}', def.name)} ${d} damage.${sRider}`,
       }
@@ -429,14 +449,14 @@ function simulateOnce({
         if (matchPoint) drama.clutch++
         return {
           raw: combo.dmg * 0.42, hits: Math.max(2, Math.min(combo.len - 1, 4)), curve: 'decel',
-          kind: 'struggle', actor: att.name, move: combo.name, momentum: -0.6, fx: 'drop',
+          kind: 'struggle', actor: att.name, move: combo.name, momentum: -0.6, dist: 0.2, fx: 'drop',
           cap: def.max * 0.2, // only part of the route landed — bill it that way
           text: (d) => `${att.name} confirms into ${art(combo.name)}… and DROPS it${matchPoint ? ' under match point pressure' : ''} — only ${d} of it lands.`,
         }
       }
       return {
         raw: combo.dmg, hits: Math.max(2, Math.min(combo.len, 6)), curve: 'decel',
-        kind: 'beat', actor: att.name, move: combo.name, momentum: 0.3,
+        kind: 'beat', actor: att.name, move: combo.name, momentum: 0.3, dist: 0.16,
         text: (d) => `${pre}${att.name} ${pick([
           `confirms into ${art(combo.name)} — ${d} damage, the crowd counting every hit`,
           `lands the full ${combo.name}. ${d} off one touch`,
@@ -453,7 +473,7 @@ function simulateOnce({
       const poke = pick(k.pokes)
       return {
         raw: (poke.damage ?? k.avgRaw) * 0.9, hits: 1, kind: 'beat',
-        actor: att.name, move: poke.name, momentum: 0.3, fx: 'impact',
+        actor: att.name, move: poke.name, momentum: 0.3, fx: 'impact', dist: 0.66,
         text: (d) => pick([
           `${att.name} stands exactly where ${poke.name} reaches and ${def.name} doesn't. ${d}, and nothing ${def.name} has can answer from there.`,
           `Pure spacing — ${poke.name} catches ${def.name} at the tip, ${d}, and ${att.name} strolls back out of range.`,
@@ -469,7 +489,7 @@ function simulateOnce({
       return {
         raw: (mv2.damage ?? k.avgRaw) * 1.05,
         hits: k.combos.length ? Math.max(2, Math.min(k.combos[0].len, 4)) : 1, curve: 'decel',
-        kind: 'beat', actor: att.name, move: mv2.name, momentum: 0.45, fx: 'impact',
+        kind: 'beat', actor: att.name, move: mv2.name, momentum: 0.45, fx: 'impact', dist: 0.1,
         fxForm: mv2.d?.form, fxGuard: mv2.d?.guard,
         text: (d) => (high
           ? pick([
@@ -507,7 +527,7 @@ function simulateOnce({
       return {
         raw: k.combos.length ? k.combos[0].dmg : k.avgRaw * 1.1,
         hits: k.combos.length ? Math.max(2, Math.min(k.combos[0].len, 5)) : 1, curve: 'decel',
-        kind: 'beat', actor: att.name, move: bad.name, momentum: 0.4, fx: 'block',
+        kind: 'beat', actor: att.name, move: bad.name, momentum: 0.4, fx: 'block', dist: 0.18,
         text: (d) => pick([
           `${def.name} throws ${bad.name} into a block — ${fmtPlus(bad.onBlock ?? -9)} — and ${att.name} takes the free punish: ${d}.`,
           `${bad.name} gets blocked. At ${fmtPlus(bad.onBlock ?? -9)} that's not a gamble, it's a donation — ${att.name} collects ${d}.`,
@@ -521,22 +541,14 @@ function simulateOnce({
     if (k.grabs.length && odds(0.32)) {
       const grab = pick(k.grabs)
       return {
-        raw: grab.damage ?? k.avgRaw, hits: 1, fx: 'grab', kind: 'beat', actor: att.name, move: grab.name, momentum: 0.35,
+        raw: grab.damage ?? k.avgRaw, hits: 1, fx: 'grab', kind: 'beat', actor: att.name, move: grab.name, momentum: 0.35, dist: 0.04,
         fxForm: grab.d?.form, fxGuard: grab.d?.guard,
         text: (d) => `${pre}${att.name} ${pick(verbsFor(grab)).replaceAll('{m}', grab.name).replaceAll('{o}', def.name)} — ${d}.`,
       }
     }
 
-    // --- zoning volley: real chip, ticking one projectile at a time ------
-    if (k.projectiles.length && odds(0.32)) {
-      const proj = pick(k.projectiles)
-      const throws = irnd(3, 6)
-      return {
-        raw: Math.max(30, (proj.chip ?? 5) * throws + 40), hits: throws, curve: 'even', fx: 'projectile',
-        kind: 'beat', actor: att.name, move: proj.name, momentum: 0.2, fxForm: proj.d?.form,
-        text: (d) => `${att.name} ${pick(verbsFor(proj)).replaceAll('{m}', proj.name).replaceAll('{o}', def.name)} — ${throws} of them, ${d} shaved off.`,
-      }
-    }
+
+    if (k.projectiles.length && odds(0.34)) return projectileBeat()
 
     // --- speed check: my fastest button beats yours, and here's the math --
     if (k.fastestMove && def.kit.fastestMove && k.fastest < def.kit.fastest && odds(0.3)) {
@@ -563,6 +575,8 @@ function simulateOnce({
         fx: m.type === 'projectile' ? 'projectile' : m.type === 'command grab' ? 'grab' : 'impact',
         kind: 'beat', actor: att.name, move: m.name, momentum: 0.25,
         fxForm: m.d?.form, fxGuard: m.d?.guard,
+        // Stand at the range the move is actually built for.
+        dist: clamp(((m.range ?? 50) / 100) * 0.9, 0.06, 0.92),
         text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', m.name).replaceAll('{o}', def.name)} — ${d}.${rider}`,
       }
     }
@@ -588,7 +602,7 @@ function simulateOnce({
       const bad = pick(k.laggy)
       drama.whiffs++
       return {
-        raw: 0, fx: 'whiff', kind: 'struggle', actor: def.name, move: bad.name, momentum: -1,
+        raw: 0, fx: 'whiff', kind: 'struggle', actor: def.name, move: bad.name, momentum: -1, dist: 0.64,
         text: () => pick([
           `${def.name} walks it back just outside the range, lets ${bad.name} sail past, and strolls in. Nothing lands — but the turn just changed hands.`,
           `${def.name} has seen ${bad.name} all set. They dip out of range on purpose, and ${att.name} is left holding ${bad.recovery ?? 24} frames of recovery.`,
@@ -602,7 +616,7 @@ function simulateOnce({
       const bad = k.stubby.length && odds(0.6) ? pick(k.stubby) : pick(k.laggy.length ? k.laggy : k.stubby)
       drama.whiffs++
       return {
-        raw: 0, fx: 'whiff', kind: 'struggle', actor: att.name, move: bad.name, momentum: -0.7,
+        raw: 0, fx: 'whiff', kind: 'struggle', actor: att.name, move: bad.name, momentum: -0.7, dist: 0.6,
         text: () => pick([
           `${att.name} reaches for ${bad.name} from way too far out. It whiffs through empty air and ${def.name} just… watches it.`,
           `${bad.name} comes out at nothing. ${att.name} is stuck in it, and ${def.name} is already moving.`,
@@ -624,7 +638,7 @@ function simulateOnce({
 
     // Two people not doing anything, which in a fighting game is everything.
     return {
-      raw: 0, kind: 'crowd', actor: def.name, momentum: -0.25,
+      raw: 0, kind: 'crowd', actor: def.name, momentum: -0.25, dist: 0.72,
       text: () => pick([
         `${def.name} blocks it all — the round slows to a staring contest at half screen.`,
         `${def.name} weathers the storm, life bar intact, meter ticking up.`,
@@ -638,7 +652,7 @@ function simulateOnce({
   // free — which is the entire point of a stun system: it punishes sitting in
   // pressure rather than arriving at random.
   const proposeDizzy = (att, def) => ({
-    raw: 0, kind: 'struggle', actor: def.name, momentum: 0.9, fx: 'dizzy',
+    raw: 0, kind: 'struggle', actor: def.name, momentum: 0.9, fx: 'dizzy', dist: 0.12,
     text: () => pick([
       `${def.name} is DIZZY — stars over their head, arms down, and ${att.name} has all the time in the world.`,
       `That's the stun. ${def.name} is stood there swaying and ${att.name} gets to pick literally anything.`,
@@ -649,7 +663,7 @@ function simulateOnce({
   // BURST: the universal escape. Nothing lands, but the turn ends — which is
   // exactly what makes pressure characters worse in a game that has one.
   const proposeBurst = (def, att) => ({
-    raw: 0, kind: 'struggle', actor: def.name, momentum: -1, fx: 'block',
+    raw: 0, kind: 'struggle', actor: def.name, momentum: -1, fx: 'block', dist: 0.5,
     text: () => pick([
       `${def.name} BURSTS out of it — the combo dies mid-route and ${att.name} gets launched off.`,
       `${def.name} has had enough and cashes the burst. ${att.name}'s turn is over, just like that.`,
@@ -659,7 +673,7 @@ function simulateOnce({
 
   // GUARD CRUSH: blocking forever stops being free once there's a gauge.
   const proposeGuardCrush = (att, def) => ({
-    raw: def.max * 0.09, hits: 1, kind: 'beat', actor: att.name, momentum: 0.7,
+    raw: def.max * 0.09, hits: 1, kind: 'beat', actor: att.name, momentum: 0.7, dist: 0.1,
     cap: def.max * 0.2, fx: 'impact',
     text: (d) => pick([
       `${def.name}'s guard finally gives — the gauge empties and ${att.name} walks straight through it for ${d}.`,
@@ -784,6 +798,10 @@ function simulateOnce({
       actorSide.stun = Math.max(0, actorSide.stun - STUN_RELIEF)
       defSide.stun = Math.max(0, defSide.stun - STUN_RELIEF)
     }
+    // Ease toward where this beat happens. Eased, not snapped, so the
+    // fighters walk into range rather than teleporting.
+    if (prop.dist != null) dist = dist * 0.4 + prop.dist * 0.6
+
     // A tick has to be worth rendering: drop hits until the SMALLEST step
     // still moves the bar about a percent. Decel curves taper hard, so this
     // matters most exactly where it's prettiest.
@@ -903,6 +921,7 @@ function simulateOnce({
     // visibly reset on screen.
     A.hp = A.max; B.hp = B.max
     A.stun = 0; B.stun = 0
+    dist = 0.62 // back to their starting marks
     if (gi === 0) {
       push(pick([
         'Both bars fill. Game one — fight.',

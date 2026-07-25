@@ -39,7 +39,11 @@ const PROJECTILE_SHAPE = {
 
 export default function FxLayer({ pulse }) {
   if (!pulse || !pulse.t) return null
-  const { t, side, mag = 0.4, word, ko, form, guard } = pulse
+  const { t, side, mag = 0.4, word, ko, form, guard, tick = 0 } = pulse
+  // A projectile has to cross the arena before it can hit anything. Without
+  // this the impact fired the moment the shot launched, so the burst went off
+  // next to the thrower while the projectile was still in the air.
+  const awaitFlight = t === 'projectile' && tick === 0 ? 'after-flight' : ''
   // An overhead lands from above and a low from underneath — the guard
   // property is the whole guessing game, so it should be visible.
   const height = guard === 'overhead' ? 'high' : guard === 'low' ? 'low' : ''
@@ -50,9 +54,16 @@ export default function FxLayer({ pulse }) {
   const size = 40 + mag * 70
 
   return (
-    <div className="fx-layer" key={pulse.key} aria-hidden="true">
+    // NOT keyed as a whole. Keying the layer meant every child was destroyed
+    // and rebuilt on each tick — and since a projectile volley ticks every
+    // 95ms while the travel animation runs 300ms, the projectile was killed a
+    // third of the way across and never once reached the other fighter.
+    <div className="fx-layer" aria-hidden="true">
       {t === 'projectile' && (
         <span
+          // Keyed on the LINE, so one shot crosses the whole arena and
+          // survives every tick of the volley.
+          key={`p${pulse.lineKey}`}
           className={`fx-projectile ${hitLeft ? 'to-left' : 'to-right'} ${shape}`}
           style={{ '--fx-spark': style.spark, '--fx-glow': style.glow }}
         />
@@ -60,7 +71,8 @@ export default function FxLayer({ pulse }) {
 
       {t !== 'whiff' && t !== 'drop' && (
         <span
-          className={`fx-burst ${hitLeft ? 'at-left' : 'at-right'} ${t === 'super' ? 'big' : ''} ${height}`}
+          key={`b${pulse.key}`}
+          className={`fx-burst ${hitLeft ? 'at-left' : 'at-right'} ${t === 'super' ? 'big' : ''} ${height} ${awaitFlight}`}
           style={{
             '--fx-spark': style.spark,
             '--fx-glow': style.glow,
@@ -70,26 +82,27 @@ export default function FxLayer({ pulse }) {
       )}
 
       {t === 'whiff' && (
-        <span className={`fx-swish ${hitLeft ? 'at-right' : 'at-left'}`} />
+        <span key={`s${pulse.key}`} className={`fx-swish ${hitLeft ? 'at-right' : 'at-left'}`} />
       )}
 
       {/* Dizzy: stars going round over their head, the way they should. */}
       {t === 'dizzy' && (
-        <span className={`fx-stars ${hitLeft ? 'at-left' : 'at-right'}`}>
+        <span key={`d${pulse.lineKey}`} className={`fx-stars ${hitLeft ? 'at-left' : 'at-right'}`}>
           <i /><i /><i />
         </span>
       )}
 
       {word && (
         <span
-          className={`fx-word ${hitLeft ? 'at-left' : 'at-right'} ${mag >= 0.62 ? 'heavy' : mag >= 0.3 ? 'medium' : 'light'}`}
+          key={`w${pulse.key}`}
+          className={`fx-word ${hitLeft ? 'at-left' : 'at-right'} ${mag >= 0.62 ? 'heavy' : mag >= 0.3 ? 'medium' : 'light'} ${awaitFlight}`}
           style={{ '--fx-spark': style.spark }}
         >
           {word}
         </span>
       )}
 
-      {ko && <span className="fx-ko-flash" />}
+      {ko && <span key={`k${pulse.key}`} className="fx-ko-flash" />}
     </div>
   )
 }
@@ -102,8 +115,10 @@ export function shakeClassFor(pulse) {
   if (!pulse || !pulse.t) return ''
   if (pulse.t === 'whiff' || pulse.t === 'drop' || pulse.t === 'block') return ''
   if (pulse.t === 'dizzy') return 'shake-md'
+  // Delay the shake on an incoming projectile for the same reason.
+  const late = pulse.t === 'projectile' && (pulse.tick ?? 0) === 0 ? ' shake-late' : ''
   const mag = pulse.mag ?? 0
-  if (pulse.ko || pulse.t === 'super' || mag >= 0.62) return 'shake-lg'
-  if (mag >= 0.3) return 'shake-md'
-  return 'shake-sm'
+  if (pulse.ko || pulse.t === 'super' || mag >= 0.62) return 'shake-lg' + late
+  if (mag >= 0.3) return 'shake-md' + late
+  return 'shake-sm' + late
 }

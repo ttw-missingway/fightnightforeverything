@@ -553,24 +553,43 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 .fx-projectile {
   position: absolute;
   bottom: 36%;
-  width: 22px;
-  height: 12px;
+  width: 34px;
+  height: 16px;
+  margin-left: -17px;
   border-radius: 50%;
-  background: radial-gradient(circle at 70% 50%, #fff, var(--fx-spark) 45%, transparent 78%);
-  box-shadow: 0 0 12px 3px var(--fx-glow);
+  background: radial-gradient(circle at 70% 50%, #fff, var(--fx-spark) 48%, transparent 80%);
+  box-shadow: 0 0 16px 5px var(--fx-glow), 0 0 34px 10px var(--fx-glow);
 }
-.fx-projectile.to-right { left: 15%; animation: fx-fly-right 0.3s ease-in forwards; }
-.fx-projectile.to-left { left: 85%; animation: fx-fly-left 0.3s ease-in forwards; }
+/* A tail, so it reads as travelling rather than blinking. */
+.fx-projectile::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 46px;
+  height: 5px;
+  margin-top: -2px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, var(--fx-glow));
+}
+.fx-projectile.to-right::after { right: 60%; }
+.fx-projectile.to-left::after { left: 60%; background: linear-gradient(270deg, transparent, var(--fx-glow)); }
+.fx-projectile.to-right { animation: fx-fly-right 0.3s ease-in forwards; }
+.fx-projectile.to-left { animation: fx-fly-left 0.3s ease-in forwards; }
 
+/* Left/right rather than translateX: the fighters stand at 17% and 83% of the
+   arena, so this actually arrives at the other player instead of guessing a
+   distance in viewport units. */
 @keyframes fx-fly-right {
-  0% { transform: translateX(0) scaleX(1); opacity: 0; }
-  15% { opacity: 1; }
-  100% { transform: translateX(min(58vw, 520px)) scaleX(1.5); opacity: 0.9; }
+  0% { left: 19%; opacity: 0; transform: scaleX(0.7); }
+  12% { opacity: 1; transform: scaleX(1); }
+  88% { opacity: 1; transform: scaleX(1.35); }
+  100% { left: 81%; opacity: 0; transform: scaleX(1.35); }
 }
 @keyframes fx-fly-left {
-  0% { transform: translateX(0) scaleX(1); opacity: 0; }
-  15% { opacity: 1; }
-  100% { transform: translateX(max(-58vw, -520px)) scaleX(1.5); opacity: 0.9; }
+  0% { left: 81%; opacity: 0; transform: scaleX(0.7); }
+  12% { opacity: 1; transform: scaleX(1); }
+  88% { opacity: 1; transform: scaleX(1.35); }
+  100% { left: 19%; opacity: 0; transform: scaleX(1.35); }
 }
 
 /* A whiff: a fast arc through empty air, and nothing else. */
@@ -760,38 +779,38 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 }
 
 /* A lob goes up and comes down. */
-.fx-projectile.arc.to-right { animation: fx-arc-right 0.42s ease-in forwards; }
-.fx-projectile.arc.to-left { animation: fx-arc-left 0.42s ease-in forwards; }
+.fx-projectile.arc.to-right { animation: fx-arc-right 0.56s ease-in-out forwards; }
+.fx-projectile.arc.to-left { animation: fx-arc-left 0.56s ease-in-out forwards; }
 @keyframes fx-arc-right {
-  0% { transform: translate(0, 0); opacity: 0; }
-  20% { opacity: 1; }
-  50% { transform: translate(min(28vw, 250px), -46px); }
-  100% { transform: translate(min(58vw, 520px), 6px); opacity: 0.9; }
+  0% { left: 19%; bottom: 34%; opacity: 0; }
+  15% { opacity: 1; }
+  50% { bottom: 62%; }
+  100% { left: 81%; bottom: 30%; opacity: 0; }
 }
 @keyframes fx-arc-left {
-  0% { transform: translate(0, 0); opacity: 0; }
-  20% { opacity: 1; }
-  50% { transform: translate(max(-28vw, -250px), -46px); }
-  100% { transform: translate(max(-58vw, -520px), 6px); opacity: 0.9; }
+  0% { left: 81%; bottom: 34%; opacity: 0; }
+  15% { opacity: 1; }
+  50% { bottom: 62%; }
+  100% { left: 19%; bottom: 30%; opacity: 0; }
 }
 
 /* Rolling and burrowing travel along the floor. */
 .fx-projectile.ground { bottom: 14%; height: 9px; }
 
 /* A boomerang goes out and comes back. */
-.fx-projectile.boomerang.to-right { animation: fx-boomerang-right 0.62s ease-in-out forwards; }
-.fx-projectile.boomerang.to-left { animation: fx-boomerang-left 0.62s ease-in-out forwards; }
+.fx-projectile.boomerang.to-right { animation: fx-boomerang-right 0.8s ease-in-out forwards; }
+.fx-projectile.boomerang.to-left { animation: fx-boomerang-left 0.8s ease-in-out forwards; }
 @keyframes fx-boomerang-right {
-  0% { transform: translateX(0); opacity: 0; }
-  15% { opacity: 1; }
-  55% { transform: translateX(min(56vw, 500px)); }
-  100% { transform: translateX(min(12vw, 100px)); opacity: 0; }
+  0% { left: 19%; opacity: 0; }
+  12% { opacity: 1; }
+  55% { left: 81%; }
+  100% { left: 25%; opacity: 0; }
 }
 @keyframes fx-boomerang-left {
-  0% { transform: translateX(0); opacity: 0; }
-  15% { opacity: 1; }
-  55% { transform: translateX(max(-56vw, -500px)); }
-  100% { transform: translateX(max(-12vw, -100px)); opacity: 0; }
+  0% { left: 81%; opacity: 0; }
+  12% { opacity: 1; }
+  55% { left: 19%; }
+  100% { left: 75%; opacity: 0; }
 }
 
 /* Overheads land from above, lows from underneath. */
@@ -869,4 +888,27 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 
 @media (prefers-reduced-motion: reduce) {
   .fx-stars, .fs-fighter.dizzy, .hud-stun.near .fill { animation: none; }
+}
+
+/* Impacts wait for the shot to land. The flight is 0.3s, so the burst, the
+   word and the shake all hold until it's actually arrived — otherwise the hit
+   goes off next to the thrower while the projectile is still travelling. */
+.fx-burst.after-flight,
+.fx-word.after-flight { animation-delay: 0.26s; opacity: 0; }
+.fightscreen.shake-late { animation-delay: 0.26s; }
+
+/* ---- Fighters stand where the fight is ----
+   The engine records how far apart the exchange happened (hud.d, 0-100), so a
+   zoning volley pushes them to opposite edges and a command grab puts them
+   chest to chest. The SLOT moves; the sprite inside keeps its own mirror and
+   flinch transforms, which would otherwise overwrite each other. */
+.fs-slot {
+  transition: transform 0.55s cubic-bezier(0.3, 0.8, 0.4, 1);
+  will-change: transform;
+}
+.fs-slot.a { transform: translateX(calc(var(--fs-close, 0) * min(20vw, 150px))); }
+.fs-slot.b { transform: translateX(calc(var(--fs-close, 0) * min(-20vw, -150px))); }
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-slot { transition: none; }
 }
