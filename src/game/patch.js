@@ -393,6 +393,13 @@ export function releasePatch(save) {
     }
   }
 
+  // A genuinely acclaimed patch opens a FRESH-META WINDOW: for the next few
+  // weeks everyone wants to try the new stuff and the room hums. This is the
+  // designer's payoff — patch QUALITY, not just cadence, fills the arcade.
+  if (consequentialRun && score >= 10) {
+    save.freshMetaUntilAbs = absDayOf(save.day, save.year) + 24 + Math.round(score)
+    chronicle(save, '🌊', `The v${version} meta has everyone in the lab — the room hasn't buzzed like this in months.`)
+  }
   chronicle(save, '🛠', `Patch v${version} released — ${label}${why.length ? ` (${why[0]})` : ''}`)
   postPatchReaction(save, patch)
   // The community needs about a week of games before the tier list drops.

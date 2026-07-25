@@ -7,6 +7,8 @@ import { getMatchup, remember, chronicle, pushVod } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { bumpPassion } from './career.js'
+import { applyChampionDividend } from './relevance.js'
+import { econLog, trySpend } from './economy.js'
 import { buildStream, personalityOf, elitePersonality, applyStageReps } from './stream.js'
 import { speak } from './dialogue.js'
 
@@ -370,6 +372,80 @@ export function invitationScore(p) {
   return 1200 + (p.elo - 1200) * proven + p.respect * 6 + p.glory * 1.5
 }
 
+// ---------- Staged exhibitions: the showrunner's lever ----------
+//
+// An exhibition is an event you BOOK: pay for the venue night, invite your
+// four biggest names, and put the whole card on the channel. The payoff scales
+// with the audience you've built — a huge channel turns a good card into a
+// national moment — which is what makes a media-first playstyle real: followers
+// and hype finally cash out, but only through an event someone chose to stage.
+export const EXHIBITION_COST = 140
+export const EXHIBITION_COOLDOWN = 28
+
+export function canStageExhibition(save) {
+  if (save.settings.mode === 'sandbox') return { ok: true }
+  const abs = (save.year - 1) * 336 + save.day
+  const since = abs - (save.lastExhibitionAbs || 0)
+  if (since < EXHIBITION_COOLDOWN) return { ok: false, reason: `the scene needs ${EXHIBITION_COOLDOWN - since} more days between showcases` }
+  if (save.economy.money < EXHIBITION_COST) return { ok: false, reason: `booking the night costs $${EXHIBITION_COST}` }
+  const candidates = Object.values(save.players)
+    .filter((p) => p.isRegular && !p.retired && !p.banished && p.mainCharId)
+  if (candidates.length < 4) return { ok: false, reason: 'you need at least 4 established players to headline a card' }
+  return { ok: true }
+}
+
+export function runExhibition(save) {
+  const can = canStageExhibition(save)
+  if (!can.ok) return { ok: false, reason: can.reason }
+  if (!trySpend(save, EXHIBITION_COST, 'staged an exhibition night')) return { ok: false, reason: 'not enough cash' }
+
+  // The four biggest draws in the building, seeded 1v4 / 2v3.
+  const stars = Object.values(save.players)
+    .filter((p) => p.isRegular && !p.retired && !p.banished && p.mainCharId)
+    .sort((a, b) => invitationScore(b) - invitationScore(a))
+    .slice(0, 4)
+    .map((p) => arcadeEntrant(save, p))
+  const semi1 = resolveEntrantMatch(save, stars[0], stars[3], { long: true, context: 'tournament' })
+  const semi2 = resolveEntrantMatch(save, stars[1], stars[2], { long: true, context: 'tournament' })
+  const w1 = stars.find((e) => e.id === semi1.winnerId)
+  const w2 = stars.find((e) => e.id === semi2.winnerId)
+  const final = resolveEntrantMatch(save, w1, w2, { long: true, context: 'tournament' })
+  const champ = [w1, w2].find((e) => e.id === final.winnerId)
+
+  const viewers = (semi1.stream?.viewers || 0) + (semi2.stream?.viewers || 0) + (final.stream?.viewers || 0)
+  // The showcase payoff: relevance scaled by how many actually tuned in — but
+  // an exhibition of a STALE game is a rerun. Event-making amplifies a living
+  // game; it can't substitute for one, so the showrunner still needs patches.
+  const staleDays = (save.year - save.lastPatch.year) * 336 + (save.day - save.lastPatch.day)
+  const freshness = clamp(1 - Math.max(0, staleDays - 70) / 180, 0.4, 1)
+  const relGain = Math.round(clamp(2 + viewers / 110, 2, 7) * freshness)
+  save.relevance = clamp((save.relevance ?? 55) + relGain, 0, 100)
+  save.stream.hype = clamp(save.stream.hype + 5, 0, 100)
+  champ.ref.glory += 6
+  champ.ref.respect += 4
+  save.lastExhibitionAbs = (save.year - 1) * 336 + save.day
+
+  const record = {
+    id: uid('t'),
+    type: 'singles',
+    format: 'single',
+    name: 'Exhibition Showcase',
+    day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
+    storylines: [`${save.arcade.name} put its four biggest names under the lights — ${viewers} watched live.`],
+    revealed: 999999,
+    rounds: [
+      { title: 'Showcase Semifinals', matches: [semi1, semi2] },
+      { title: 'Showcase Final', matches: [final] },
+    ],
+    placements: [{ place: 1, name: champ.name }],
+    champion: champ.name,
+    entrantCount: 4,
+  }
+  pushVod(save, record)
+  chronicle(save, '🎪', `Exhibition night: ${champ.name} took the showcase in front of ${viewers} viewers — the scene felt BIG tonight.`)
+  return { ok: true, viewers, relGain, record }
+}
+
 function dropoutChance(p) {
   let c = 0.05 + (5 - p.mood) * 0.01 + (5 - p.personal.spark) * 0.008
   return clamp(c, 0.01, 0.16)
@@ -711,7 +787,16 @@ export function runEvo(save) {
     p.respect += Math.round(glory / 3)
     // The world stage reignites a career — the reason they grind another year.
     bumpPassion(p, place === 1 ? 30 : place <= 4 ? 18 : place <= 8 ? 12 : 6)
-    if (place === 1) { p.tournamentWins += 1; p.evoTitles = (p.evoTitles || 0) + 1; p.mood = 10; remember(save, p, 'evo', `WINNING EVO Year ${save.year}`) }
+    if (place === 1) {
+      p.tournamentWins += 1; p.evoTitles = (p.evoTitles || 0) + 1; p.mood = 10
+      remember(save, p, 'evo', `WINNING EVO Year ${save.year}`)
+      // The Champion Dividend: a world title out of YOUR arcade changes
+      // everything — the game roars back into the conversation (golden age),
+      // and the prize/sponsor money flows through the venue that made them.
+      applyChampionDividend(save)
+      const prize = 400 + Math.round((save.stream?.followers || 0) * 0.05)
+      econLog(save, Math.min(900, prize), 'EVO champion — sponsors & pilgrimage')
+    }
     else if (place <= 8) { p.mood = clamp(p.mood + 2, 0, 10); remember(save, p, 'evo', `the top-${place <= 4 ? 4 : 8} run at EVO Year ${save.year}`) }
   }
   if (champion.kind === 'elite') {

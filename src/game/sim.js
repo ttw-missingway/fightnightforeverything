@@ -23,6 +23,7 @@ import {
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
 import { areSeparated, pruneSeparations } from './discipline.js'
 import { relevanceDaily } from './relevance.js'
+import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
 
 const pName = (save, p) => displayName(p, save)
@@ -230,6 +231,13 @@ function attendChance(save, player) {
   // room with it. This is why a hands-off owner loses even a clean arcade.
   const relevance = save.relevance ?? 55
   p *= clamp(0.3 + (relevance / 100) * 1.35, 0.3, 1.45)
+  // A hit patch opens a WINDOW: for a few weeks everyone wants to try the new
+  // stuff, lapsed faces drift back, the room hums. The designer's payoff.
+  if (absDayOf(save.day, save.year) < (save.freshMetaUntilAbs || 0)) p *= 1.18
+  // Momentum: a golden-age room is the place to be; a slumping one, easy to skip.
+  const mom = save.momentum?.state
+  if (mom === 'golden') p *= 1.12
+  else if (mom === 'slump') p *= 0.92
   return clamp(p, 0.02, 0.9)
 }
 
@@ -876,6 +884,11 @@ export function simHour(save) {
     const matches = []
     const pool = [...wantsToPlay]
     const setupsCount = Math.max(1, save.settings.setups)
+    // Queue pressure: everyone left in the pool when the cabs are full is a
+    // player holding a token with nowhere to put it. Tallied for the day and
+    // folded into the arcade's reputation (endDay) — "you can never get a
+    // game there" is exactly the complaint that makes expansion worth it.
+    dip.demandTurns = (dip.demandTurns || 0) + wantsToPlay.length
     while (matches.length < setupsCount && pool.length >= 2) {
       const a = pool.shift()
       // Prefer an opponent near their elo, or a rival they want to run it back with.
@@ -892,6 +905,7 @@ export function simHour(save) {
       }
       const b = pool.splice(bIdx, 1)[0]
       matches.push([a, b])
+      dip.servedTurns = (dip.servedTurns || 0) + 2
     }
 
     // Everyone else: concession, other games, or watching.
@@ -1186,6 +1200,16 @@ export function endDay(save) {
     checkRetirement(save, p, events)
   }
 
+  // Crowding: what share of would-be players got turned away from a cab today.
+  // Rolls slowly so one packed Saturday isn't a crisis but a packed MONTH is —
+  // and the fix (more setups) is exactly the expansion decision.
+  {
+    const demand = dip.demandTurns || 0
+    const served = dip.servedTurns || 0
+    const turnedAway = demand > 0 ? Math.max(0, demand - served) / demand : 0
+    save.arcade.crowding = (save.arcade.crowding ?? 0) * 0.75 + turnedAway * 0.25
+  }
+
   checkSceneCollapse(save, attendees.length)
 
   // The books: tokens and food the players actually bought, then payroll and
@@ -1350,6 +1374,7 @@ export function advanceDay(save) {
   settleRecurring(save)
   pruneSeparations(save)
   relevanceDaily(save)
+  maybeWorldEvent(save)
   // Daily economic snapshot for the Manage-tab income graph and foot-traffic
   // count: net cash change and how many people came through the door. Recorded
   // here — the single tick EVERY day flows through (normal, tournament, EVO,

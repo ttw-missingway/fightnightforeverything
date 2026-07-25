@@ -126,7 +126,7 @@ export const DIFFICULTIES = [
   {
     key: 'normal', label: 'Normal', statPoints: 113, statCap: 8,
     startingMoney: 1500, rentMult: 1, rentBase: 220, popularityMult: 0.95, receptionBias: -1,
-    collapseGrace: 30, fadeGrace: 50, rentEscalation: 0.12, relevanceDecayMult: 1,
+    collapseGrace: 30, fadeGrace: 50, rentEscalation: 0.12, relevanceDecayMult: 1.32,
     blurb: 'The intended experience: a scene you have to keep alive on purpose.',
   },
   {

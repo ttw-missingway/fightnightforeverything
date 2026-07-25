@@ -172,6 +172,11 @@ export function newSave(partial = {}) {
     patches: [], // released patches: {id, version, day, year, notes, score, reception}
     patchMorale: 0, // -10..10 community feeling about the game's balance/freshness
     relevance: 55, // 0-100 national interest in the game+scene — the late-game master variable
+    momentum: { state: 'steady', untilAbs: 0 }, // golden age / slump — success and failure compound
+    attentionDrift: { untilAbs: 0, value: 0 }, // monthly luck-of-the-algorithm drift on relevance
+    worldEffects: [], // lingering world events: [{key, untilAbs, decayMult?, rentMult?}]
+    lastWorldEventAbs: 0, // pacing guard so shocks feel like events, not weather
+    freshMetaUntilAbs: 0, // a hit patch opens a window where everyone piles back in
     lastRelevanceAbs: 0, // guard so relevance drifts exactly once per day
     scene: { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [] }, // daily scene-health read
     lastPatch: { day: 1, year: 1 },
@@ -420,6 +425,13 @@ export function migrateSave(save) {
   save.staffing ??= newStaffing()
   save.prestige ??= { points: 0, runs: 0 }
   save.rosterCollapsed ??= false
+  save.momentum ??= { state: 'steady', untilAbs: 0 }
+  save.attentionDrift ??= { untilAbs: 0, value: 0 }
+  save.worldEffects ??= []
+  save.lastWorldEventAbs ??= 0
+  save.freshMetaUntilAbs ??= 0
+  save.lastExhibitionAbs ??= 0
+  save.arcade.crowding ??= 0
   save.gameOver ??= null
   save.peakAttendance ??= 0
   save.quietDays ??= 0

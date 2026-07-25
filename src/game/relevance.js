@@ -6,7 +6,7 @@
 // dying game, a miss buries it faster. The stakes rise the more fragile things
 // get, so late-game balance changes are genuinely dangerous.
 
-import { clamp } from './util.js'
+import { clamp, hash01, rand } from './util.js'
 import { absDayOf, DAYS_PER_YEAR, difficultyOf } from './constants.js'
 import { chronicle } from './model.js'
 import { communityGameOpinion } from './social.js'
@@ -58,17 +58,14 @@ export function relevanceDaily(save) {
   // A game stays relevant while it's FRESH. The dominant force is the content
   // treadmill: the longer it's been since a patch, the more the scene drifts to
   // whatever's new — and an older game is more fragile. Shipping a patch resets
-  // this clock, which is how an active owner keeps the game (and the room, since
-  // attendance rides on relevance) alive, while a hands-off one lets it go stale
-  // and bleed out.
-  // Interest bleeds away, and FASTER every year the game has been around — this
-  // is the accelerating clock that ultimately ends every run. Even a perfectly
-  // run scene can only hold it off for so long; a mediocre one loses the fight
-  // in a couple of years, and a neglected one in months. Difficulty scales how
-  // relentless the bleed is.
-  const staleness = clamp((stale - 55) * 0.0035, 0, 0.5) * (1 + age * 0.3)
+  // this clock; a hands-off owner lets it run and bleeds out. Every run's
+  // community has its own PATIENCE for a stale build — some scenes grind one
+  // patch for months happily, some get restless in weeks — so the same play
+  // produces genuinely different timelines run to run.
+  const patience = 0.82 + hash01(`${save.id}:patience`) * 0.36 // 0.82..1.18
+  const staleness = clamp((stale * patience - 55) * 0.0035, 0, 0.5) * (1 + age * 0.3)
   const timeDecay = 0.045 + age * 0.043
-  const decayMult = difficultyOf(save).relevanceDecayMult ?? 1
+  let decayMult = (difficultyOf(save).relevanceDecayMult ?? 1) * worldDecayMult(save, abs)
   // What holds it off is the QUALITY of the scene, not just its size: a room
   // people genuinely love (well-run, fair, healthy — high opinion) and a fresh,
   // frequently-patched game keep the world watching. A big but mediocre room
@@ -77,9 +74,89 @@ export function relevanceDaily(save) {
   // auto-streams), so it deliberately isn't the lever.
   const sustain = hype * 0.001 + Math.min(1, activeRegulars / 40) * 0.03 + (opinion - 5) * 0.055
 
+  // The wider world's attention wanders on its own schedule: some months the
+  // algorithm loves you, some months a new release eats every headline. Rolled
+  // monthly so the drift comes in STREAKS — the difference between a lucky year
+  // and an unlucky one, and a big part of why identical strategies diverge.
+  save.attentionDrift ??= { untilAbs: 0, value: 0 }
+  if (abs >= save.attentionDrift.untilAbs) {
+    save.attentionDrift = { untilAbs: abs + 28, value: (rand() - 0.5) * 0.22 }
+  }
+
+  // Momentum compounds: a scene on a heater holds attention with less effort, a
+  // scene in a rut has to fight for every eyeball (see updateMomentum below).
+  const momentum = save.momentum?.state || 'steady'
+  if (momentum === 'golden') decayMult *= 0.55
+  else if (momentum === 'slump') decayMult *= 1.3
+
   const before = save.relevance
-  save.relevance = clamp(before + sustain - (timeDecay + staleness) * decayMult, 0, 100)
+  save.relevance = clamp(
+    before + sustain + save.attentionDrift.value - (timeDecay + staleness) * decayMult, 0, 100)
+  updateMomentum(save, abs)
   markMilestones(save, before, save.relevance)
+}
+
+// ---------- Momentum: golden ages and slumps ----------
+//
+// Success and failure both compound. A championship (or a sustained run at the
+// top of the conversation) tips the scene into a GOLDEN AGE — the room is the
+// place to be, the world checks in on its own, and the clock runs slow. Let
+// relevance rot and the scene tips into a SLUMP that takes real work (a hit
+// patch, a champion) to climb out of. The hysteresis — hard to enter, hard to
+// leave — is what stretches great runs and buries failing ones.
+function updateMomentum(save, abs) {
+  save.momentum ??= { state: 'steady', untilAbs: 0 }
+  const m = save.momentum
+  const rel = save.relevance ?? 55
+  if (m.state === 'golden') {
+    if (abs >= m.untilAbs || rel < 55) {
+      save.momentum = { state: 'steady', untilAbs: 0 }
+      chronicle(save, '🌇', `The golden age of ${save.game.name} has cooled into something quieter. What a stretch it was.`)
+    }
+  } else if (m.state === 'slump') {
+    if (rel > 45) {
+      save.momentum = { state: 'steady', untilAbs: 0 }
+      chronicle(save, '🌅', `${save.game.name} has pulled out of its slump — people are coming back.`)
+    }
+  } else {
+    if (rel >= 88) {
+      save.momentum = { state: 'golden', untilAbs: abs + 75 }
+      chronicle(save, '🌟', `A GOLDEN AGE: ${save.game.name} is the center of the fighting-game world right now.`)
+    } else if (rel < 20) {
+      save.momentum = { state: 'slump', untilAbs: 0 }
+      chronicle(save, '🕳', `${save.game.name} has slid into a real slump — the room feels it every night.`)
+    }
+  }
+}
+
+// Active world-event modifier on the decay clock (see worldevents.js) — e.g. a
+// rival game's launch window eating everyone's attention.
+function worldDecayMult(save, abs) {
+  let mult = 1
+  for (const fx of save.worldEffects || []) {
+    if (fx.untilAbs > abs && fx.decayMult) mult *= fx.decayMult
+  }
+  return mult
+}
+
+/**
+ * THE CHAMPION DIVIDEND. One of ours winning EVO is the biggest thing that can
+ * happen to a scene: the game is suddenly a story the whole world is telling,
+ * the arcade is a landmark, and the run gets a real extension. The more
+ * forgotten the game was, the bigger the resurrection — a champion out of a
+ * dying arcade is the stuff of documentaries. Also tips the scene straight
+ * into a golden age.
+ */
+export function applyChampionDividend(save) {
+  if (save.relevance == null) save.relevance = 55
+  const abs = absDayOf(save.day, save.year)
+  const before = save.relevance
+  const gain = Math.round(14 + (100 - before) * 0.3)
+  save.relevance = clamp(before + gain, 0, 100)
+  save.momentum = { state: 'golden', untilAbs: abs + 100 }
+  chronicle(save, '🌟', `A world champion, from THIS arcade. ${save.game.name} is back in every conversation — a golden age begins.`)
+  markMilestones(save, before, save.relevance)
+  return save.relevance - before
 }
 
 function markMilestones(save, before, after) {

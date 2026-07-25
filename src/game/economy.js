@@ -8,6 +8,7 @@ import { clamp, chance, choice, randInt, uid, hash01 } from './util.js'
 import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
 import { difficultyOf, absDayOf, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS } from './constants.js'
 import { chronicle } from './model.js'
+import { worldRentMult } from './worldevents.js'
 
 export const foodPriceOf = (save, name) => save.arcade.foodPrices?.[name] ?? DEFAULT_FOOD_PRICE
 export const gameTokensOf = (save, name) => save.arcade.gameTokens?.[name] ?? DEFAULT_GAME_TOKENS
@@ -113,7 +114,8 @@ export function monthlyRent(save) {
   // actually grown the takings. Standing still is a slow way of quitting.
   const years = Math.max(0, (save.year || 1) - 1)
   const escalation = Math.pow(1 + (diff.rentEscalation || 0), years)
-  return Math.round(base * diff.rentMult * escalation)
+  // Active world events (a landlord "revisiting the market rate") stack on top.
+  return Math.round(base * diff.rentMult * escalation * worldRentMult(save))
 }
 
 // ---------- Fixed catalogs ----------

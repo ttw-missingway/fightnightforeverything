@@ -366,6 +366,11 @@ export function arcadeOpinionOf(save, p) {
   // comes" flow through reputation instead of being a separate rule.
   const clean = save.arcade.cleanliness ?? 80
   score += (clean - 62) * (clean < 62 ? 0.08 : 0.03)
+  // "You can never get a cab there" — a chronically over-full floor reads as a
+  // badly-run one. Waiting a turn is arcade life (the rail is half the fun), so
+  // the penalty only starts where the wait becomes hopeless — and the cure is
+  // buying setups, which makes expansion the answer to demand, not a rent trap.
+  score -= Math.max(0, (save.arcade.crowding || 0) - 0.45) * 6
   score += ((save.staffing?.morale ?? 70) - 60) * 0.012
   const tokenPrice = save.arcade.prices?.token ?? 1
   score -= Math.max(0, tokenPrice - (0.6 + (p.social?.income ?? 5) * 0.16)) * 0.8
