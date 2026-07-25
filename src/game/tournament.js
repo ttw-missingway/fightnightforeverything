@@ -366,6 +366,12 @@ function runFormat(save, entrants, format) {
  * plus reputation — respect and glory. A fresh 1200 with 6 games shouldn't
  * bump a proven vet.
  */
+// The seeding law of the whole calendar: the user's players are first-class
+// citizens. Filler only enters a bracket when there aren't enough cast members
+// to fill it — and because alternates use the same order, a dropout's slot goes
+// to another cast member first, every time. EVO most of all.
+export const castFirst = (a, b) => (a.npc ? 1 : 0) - (b.npc ? 1 : 0) || invitationScore(b) - invitationScore(a)
+
 export function invitationScore(p) {
   const games = p.wins + p.losses
   const proven = clamp(games / 40, 0.25, 1)
@@ -402,7 +408,7 @@ export function runExhibition(save) {
   // The four biggest draws in the building, seeded 1v4 / 2v3.
   const stars = Object.values(save.players)
     .filter((p) => p.isRegular && !p.retired && !p.banished && p.mainCharId)
-    .sort((a, b) => invitationScore(b) - invitationScore(a))
+    .sort(castFirst)
     .slice(0, 4)
     .map((p) => arcadeEntrant(save, p))
   const semi1 = resolveEntrantMatch(save, stars[0], stars[3], { long: true, context: 'tournament' })
@@ -485,7 +491,7 @@ export function runSinglesTournament(save, scheduleEntry) {
   const size = consequential ? Math.max(8, scheduleEntry?.size || 8) : (scheduleEntry?.size || 8)
   const ranked = Object.values(save.players)
     .filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
-    .sort((a, b) => invitationScore(b) - invitationScore(a))
+    .sort(castFirst)
   if (ranked.length < size) {
     return { ok: false, reason: `${name} cancelled — only ${ranked.length} eligible, need at least ${size}.` }
   }
@@ -587,8 +593,10 @@ export function runTeamTournament(save, scheduleEntry) {
   // Power-of-two field: the strongest teams by average invitation score.
   for (const s of allSquads) {
     s.avgScore = s.squad.reduce((sum, p) => sum + invitationScore(p), 0) / 4
+    s.castCount = s.squad.filter((p) => !p.npc).length
   }
-  allSquads.sort((a, b) => b.avgScore - a.avgScore)
+  // Squads carrying the user's players outrank all-filler squads for the field.
+  allSquads.sort((a, b) => b.castCount - a.castCount || b.avgScore - a.avgScore)
   let fieldSize = 2
   while (fieldSize * 2 <= allSquads.length) fieldSize *= 2
   const squads = allSquads.slice(0, fieldSize)
@@ -737,7 +745,7 @@ function buildMediaDay(save, advancers) {
 export function runEvo(save) {
   const regulars = Object.values(save.players)
     .filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
-    .sort((a, b) => invitationScore(b) - invitationScore(a))
+    .sort(castFirst)
   const qualified = regulars.slice(0, 8)
   if (!qualified.length) return { ok: false, reason: 'No arcade players qualified for EVO this year.' }
 

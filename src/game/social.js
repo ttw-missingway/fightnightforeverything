@@ -111,6 +111,12 @@ export function teamRecruitChance(team) {
 
 export function tryFoundTeam(save, founder, cofounder, day, year, events) {
   if (founder.teamId || cofounder.teamId) return null
+  // Teams are a CAST institution: filler can be recruited into one, but a team
+  // only comes into existence around one of the user's players. Two
+  // passers-through never plant a flag, and if the spark came from the filler
+  // side, the cast member is the founder on the record.
+  if (founder.npc && cofounder.npc) return null
+  if (founder.npc) [founder, cofounder] = [cofounder, founder]
   const { name, acronym } = generateTeamName(Object.values(save.teams))
   const team = newTeam({
     name, acronym,

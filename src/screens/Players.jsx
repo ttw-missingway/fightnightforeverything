@@ -214,7 +214,10 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
   const team = p.teamId ? save.teams[p.teamId] : null
   const rels = Object.entries(p.relationships)
     .map(([id, v]) => ({ other: save.players[id], v }))
-    .filter((r) => r.other)
+    // Relationships with filler exist mechanically (feuds still poison the
+    // room, discipline still works on them) but aren't part of your player's
+    // STORY — only cast-to-cast bonds are worth reading about.
+    .filter((r) => r.other && !r.other.npc)
     .sort((a, b) => b.v - a.v)
   const mentorship = save.mentorships.find((m) => m.mentorId === p.id || m.studentId === p.id)
   const knownInnovs = save.innovations.filter((i) => p.knownInnovations.includes(i.id))
