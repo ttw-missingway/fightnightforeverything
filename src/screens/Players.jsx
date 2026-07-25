@@ -331,12 +331,12 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           <h3 style={{ marginTop: 12 }}>Social</h3>
           {SOCIAL_TEMPERAMENTS.map((t) => (
             <div key={t.key} style={{ marginBottom: 8 }}>
-              <h4 className="dim" style={{ margin: '6px 0 2px' }}>
+              <h4 style={{ margin: '6px 0 2px', color: t.color }}>
                 {t.emoji} {t.label}
-                {p.socialTemperament === t.key && <span className="pink small"> · their temperament</span>}
+                {p.socialTemperament === t.key && <span className="small"> · their temperament</span>}
               </h4>
               {t.stats.map((k) => (
-                <StatBar key={k} label={k} max={STAT_MAX_POINTS}
+                <StatBar key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
                   value={Math.round((p.social[k] || 0) / STAT_UNIT * 10) / 10}
                   title={Object.fromEntries(SOCIAL_STATS)[k]} />
               ))}

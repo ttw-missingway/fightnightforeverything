@@ -62,22 +62,22 @@ export const TEMPERAMENTS = [
 
 export const SOCIAL_TEMPERAMENTS = [
   {
-    key: 'warm', label: 'Warm', emoji: '💛',
+    key: 'warm', label: 'Warm', emoji: '💛', color: 'var(--orange)',
     stats: ['charisma', 'community'],
     blurb: 'The glue. Learns your name the first night, introduces newcomers around, ends up godparent to half the scene.',
   },
   {
-    key: 'gracious', label: 'Gracious', emoji: '🤝',
+    key: 'gracious', label: 'Gracious', emoji: '🤝', color: 'var(--cyan)',
     stats: ['politeness', 'sportsmanship'],
     blurb: "Runs the set back, says good games and means it. The kind of loss you don't mind taking — and the kind of player a warning actually reaches.",
   },
   {
-    key: 'dramatic', label: 'Dramatic', emoji: '🎭',
+    key: 'dramatic', label: 'Dramatic', emoji: '🎭', color: 'var(--magenta)',
     stats: ['persona', 'sensitivity'],
     blurb: 'Feels everything, at volume. Half the arcade would run through a wall for them; the other half leaves when they arrive. Nobody plateaus with one of these around.',
   },
   {
-    key: 'puttogether', label: 'Put-together', emoji: '🧾',
+    key: 'puttogether', label: 'Put-together', emoji: '🧾', color: 'var(--indigo)',
     stats: ['reliability', 'income'],
     blurb: "Has their life in order, which around here makes them exotic. Shows up when they said they would, never drops from a bracket, and actually buys the food.",
   },
