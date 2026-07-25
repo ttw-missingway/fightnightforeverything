@@ -39,22 +39,22 @@ export const SOCIAL_KEYS = SOCIAL_STATS.map(([k]) => k)
 // and flaws are where the stories come from.
 export const TEMPERAMENTS = [
   {
-    key: 'killer', label: 'The Killer', emoji: '🔥',
+    key: 'killer', label: 'The Killer', emoji: '🔥', color: 'var(--red)',
     stats: ['determination', 'dominance', 'mojo', 'xfactor'],
     blurb: 'Winning is the point. Losing is fuel. They run hotter than everyone in the room and the room can feel it — keep one leashed and they drag your whole scene up; leave one alone and they burn it down.',
   },
   {
-    key: 'scholar', label: 'The Scholar', emoji: '💨',
+    key: 'scholar', label: 'The Scholar', emoji: '💨', color: 'var(--gold)',
     stats: ['analysis', 'innovation', 'learning', 'mastery'],
     blurb: "They watch three sets for every one they play, and they remember all of it. The chart is a weapon, the lab is home, and the tech everyone runs next month has their name on it — whether anyone says so or not.",
   },
   {
-    key: 'natural', label: 'The Natural', emoji: '💧',
+    key: 'natural', label: 'The Natural', emoji: '💧', color: 'var(--blue)',
     stats: ['spark', 'aptitude', 'adaptation', 'presence'],
     blurb: "Some people just have it. They're at the arcade every night like water finding its level, they pick up a new character over a weekend, and when the camera swings their way the chat wakes up.",
   },
   {
-    key: 'stoic', label: 'The Stoic', emoji: '🪨',
+    key: 'stoic', label: 'The Stoic', emoji: '🪨', color: 'var(--green)',
     stats: ['temperance', 'loyalty', 'stamina', 'composure'],
     blurb: "Nothing moves them. Not a bad loss, not a hot streak, not ten thousand people watching a grand final. They pick a character, play a thousand hours, and outlast every prodigy who ever laughed at their neutral.",
   },

@@ -273,7 +273,7 @@ function TemperamentPicker({ title, list, group, chosen, field, patch }) {
             className="card sub clickable"
             style={{
               cursor: 'pointer', margin: 0,
-              borderColor: chosen === t.key ? 'var(--pink)' : 'var(--border)',
+              borderColor: chosen === t.key ? (t.color || 'var(--pink)') : 'var(--border)',
               opacity: chosen && chosen !== t.key ? 0.75 : 1,
             }}
             onClick={() => patch((p) => {
@@ -285,8 +285,8 @@ function TemperamentPicker({ title, list, group, chosen, field, patch }) {
               for (const k of t.stats) bag[k] = Math.min(STAT_MAX_POINTS * STAT_UNIT, (bag[k] || 0) + STAT_UNIT)
             })}>
             <div className="row spread">
-              <strong>{t.emoji} {t.label}</strong>
-              {chosen === t.key && <span className="pink small">✓ chosen</span>}
+              <strong style={t.color ? { color: t.color } : {}}>{t.emoji} {t.label}</strong>
+              {chosen === t.key && <span className="small" style={{ color: t.color || 'var(--pink)' }}>✓ chosen</span>}
             </div>
             <p className="dim small" style={{ margin: '4px 0 6px' }}>{t.blurb}</p>
             <div className="small" style={{ color: 'var(--cyan)' }}>{t.stats.join(' · ')}</div>
@@ -321,7 +321,7 @@ function PointStats({ player, patch, group, rows, budget, spent, chosenRow }) {
     <div className="grid2" style={{ marginBottom: 10 }}>
       {rows.map((t) => (
         <div key={t.key} style={{ opacity: chosenRow && chosenRow !== t.key ? 0.9 : 1 }}>
-          <h4 className="dim" style={{ margin: '4px 0' }}>
+          <h4 style={{ margin: '4px 0', color: t.color || 'var(--dim)' }}>
             {t.emoji} {t.label}{chosenRow === t.key && <span className="pink small"> · your temperament</span>}
           </h4>
           {t.stats.map(statRow)}

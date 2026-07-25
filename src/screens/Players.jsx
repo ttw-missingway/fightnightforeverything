@@ -3,7 +3,7 @@ import { useStore, downloadJson, fileStem } from '../state/store.jsx'
 import { StatBar, moodFace, Portrait } from '../components/ui.jsx'
 import { playerArt, charArt } from '../components/art.js'
 import PlayerForm from '../components/PlayerForm.jsx'
-import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay } from '../game/constants.js'
+import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from '../game/constants.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
 import { passionLabel } from '../game/career.js'
 import { displayName } from '../game/util.js'
@@ -314,10 +314,34 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
 
       <div className="grid2">
         <div className="card">
-          <h3>Personal Stats</h3>
-          {PERSONAL_STATS.map(([k, desc]) => <StatBar key={k} label={k} value={p.personal[k]} title={desc} />)}
-          <h3>Social Stats</h3>
-          {SOCIAL_STATS.map(([k, desc]) => <StatBar key={k} label={k} value={p.social[k]} title={desc} />)}
+          <h3>Stats <span className="dim small">(0–{STAT_MAX_POINTS} points, by temperament)</span></h3>
+          {TEMPERAMENTS.map((t) => (
+            <div key={t.key} style={{ marginBottom: 8 }}>
+              <h4 style={{ margin: '6px 0 2px', color: t.color }}>
+                {t.emoji} {t.label}
+                {p.temperament === t.key && <span className="small"> · their temperament</span>}
+              </h4>
+              {t.stats.map((k) => (
+                <StatBar key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
+                  value={Math.round((p.personal[k] || 0) / STAT_UNIT * 10) / 10}
+                  title={Object.fromEntries(PERSONAL_STATS)[k]} />
+              ))}
+            </div>
+          ))}
+          <h3 style={{ marginTop: 12 }}>Social</h3>
+          {SOCIAL_TEMPERAMENTS.map((t) => (
+            <div key={t.key} style={{ marginBottom: 8 }}>
+              <h4 className="dim" style={{ margin: '6px 0 2px' }}>
+                {t.emoji} {t.label}
+                {p.socialTemperament === t.key && <span className="pink small"> · their temperament</span>}
+              </h4>
+              {t.stats.map((k) => (
+                <StatBar key={k} label={k} max={STAT_MAX_POINTS}
+                  value={Math.round((p.social[k] || 0) / STAT_UNIT * 10) / 10}
+                  title={Object.fromEntries(SOCIAL_STATS)[k]} />
+              ))}
+            </div>
+          ))}
         </div>
 
         <div className="card">

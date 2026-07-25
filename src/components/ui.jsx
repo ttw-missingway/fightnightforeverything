@@ -20,11 +20,13 @@ export function NumField({ label, value, onChange, min = 0, max = 100, step = 1 
   )
 }
 
-export function StatBar({ label, value, max = 10, title }) {
+export function StatBar({ label, value, max = 10, title, color }) {
   return (
     <div className="statbar" title={title}>
       <span className="label">{label}</span>
-      <div className="track"><div className="fill" style={{ width: `${(value / max) * 100}%` }} /></div>
+      <div className="track">
+        <div className="fill" style={{ width: `${(value / max) * 100}%`, ...(color ? { background: color } : {}) }} />
+      </div>
       <span className="val">{Math.round(value * 10) / 10}</span>
     </div>
   )
