@@ -55,6 +55,12 @@ export function newPlayer(partial = {}) {
     catchphrase: '',
     spriteKey: null, // pixel-art sprite name (null = auto-pick from id)
     createdBy: 'user', // 'user' | 'cpu'
+    // Filler. NPCs are generated on demand to populate the floor, live in
+    // `players` so matchmaking/social/tournaments treat them like anyone else,
+    // and are never surfaced as part of the cast the user tracks. They drift in
+    // and out: stop showing up for long enough and they're gone for good.
+    npc: false,
+    npcLastSeenAbs: null, // absolute day they last walked in — drives churn
     personal: blankStats(PERSONAL_KEYS),
     social: blankStats(SOCIAL_KEYS), // includes `income` — spending money they walk in with
     defaultMood: 5,
@@ -206,7 +212,14 @@ export function newSave(partial = {}) {
       lastRentMonth: 0, // month index rent was last settled through (0 = opening month grace)
       lastUpkeepWeek: 0, // week index upkeep was last settled through
     },
-    rosterCollapsed: false, // finite cast: once every player has retired/banished, the run is over
+    rosterCollapsed: false, // legacy alias for a scene-dynamics ending; see gameOver
+    // A run ends down exactly one of three funnels, and which one it was is the
+    // whole post-mortem: the books (early), the room (mid), or the world losing
+    // interest (late). Null while the run is alive.
+    gameOver: null, // {funnel: 'economy'|'dynamics'|'opinion', title, text, day, year}
+    peakAttendance: 0, // busiest night this run — the yardstick a decline is measured against
+    quietDays: 0, // consecutive days the floor was effectively empty — the dynamics funnel
+    fadedDays: 0, // consecutive days nobody outside cares anymore — the opinion funnel
     separations: [], // {key, aId, bId, untilAbs} — pairs the owner is keeping apart to cool a feud
     prestige: { points: 0, runs: 0 }, // earned at foreclosure/reset from arcade fame; spent on player creation
     archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
@@ -407,6 +420,17 @@ export function migrateSave(save) {
   save.staffing ??= newStaffing()
   save.prestige ??= { points: 0, runs: 0 }
   save.rosterCollapsed ??= false
+  save.gameOver ??= null
+  save.peakAttendance ??= 0
+  save.quietDays ??= 0
+  save.fadedDays ??= 0
+  // Pre-NPC saves carry a full seeded CPU cast. Those people stay exactly as
+  // they are — they're already part of that run's history — but from here on
+  // filler is generated on demand instead.
+  for (const p of Object.values(save.players)) {
+    p.npc ??= false
+    p.npcLastSeenAbs ??= null
+  }
   save.separations ??= []
   save.archives ??= []
   // The origin snapshot (old "reset to first created") is retired — reset now

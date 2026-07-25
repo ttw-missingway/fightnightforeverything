@@ -33,7 +33,12 @@ export function skillCeiling(save, player, charId) {
   // Iron sharpens iron: an active rival is the main way past the plateau.
   if (hasActiveRival(save, player)) ceiling += 10
   // Earned stage belief: battle-tested players realize more of their potential.
-  ceiling += (player.belief ?? 0) * 0.12
+  // This is the single biggest thing separating a cultivated player from a
+  // talented one who was left alone. The rate is calibrated to what belief can
+  // actually REACH: since it became a wager rather than an accrual, a genuinely
+  // battle-tested player lands in the 60s, not the 90s, so each point is worth
+  // proportionally more.
+  ceiling += (player.belief ?? 0) * 0.24
   // Knowing the character's discovered tech lifts the very top a little.
   ceiling += Math.min(6, techniqueBonus(save, player, charId) * 0.6)
   return clamp(ceiling, 20, 100)
@@ -63,7 +68,9 @@ export function gainSkill(save, player, charId, baseAmount) {
   const cur = player.charSkill[charId] || 0
   const cap = skillCeiling(save, player, charId)
   const gain = Math.max(0, baseAmount * skillGainMultiplier(save, player, charId))
-  const next = clamp(cur + gain, 0, cap)
+  // Losing your nerve stalls growth; it never unlearns what you already know.
+  // (Belief moves the ceiling now, so `cap` can legitimately sit below `cur`.)
+  const next = Math.max(cur, clamp(cur + gain, 0, cap))
   player.charSkill[charId] = Math.round(next * 100) / 100
   if (save.charMilestones) {
     const char = save.game.characters.find((c) => c.id === charId)

@@ -5,11 +5,12 @@
 // sticks, and a genuinely close matchup. Tournaments auto-stream every
 // match; EVO is always packed.
 
-import { clamp, rand, randInt, choice, chance } from './util.js'
+import { clamp, rand, randInt, choice, chance, displayName } from './util.js'
 import { CHAT_NAME_PARTS, CHAT_LINES } from './names.js'
 import { difficultyOf } from './constants.js'
 import { upsetSeverityOf } from './match.js'
 import { bumpPassion } from './career.js'
+import { chronicle } from './model.js'
 import { econLog } from './economy.js'
 
 // How famous an arcade player is, 0..1. Respect and glory are the resume; a
@@ -28,27 +29,92 @@ export function personalityOf(player) {
 // decision: the hypest match grows your channel, but your prospect's match is
 // what forges a champion.
 const STAGE_BASE = { daily: 0.6, moneymatch: 1.6, tournament: 1.0, evo: 4 }
-// Each kind of stage only takes belief so far. Grinding local weeklies makes you
-// SEASONED (~45) but not a star; the leap to champion-level nerve (70+) comes
-// only from the biggest stages — EVO, money matches — and, above all, from being
-// deliberately put in the spotlight day after day (the daily stream you choose).
-// This is what keeps the choke real on autopilot: a scene that just competes
-// plateaus its belief and still folds at EVO. Only cultivation forges a champion.
-const STAGE_CAP = { daily: 100, moneymatch: 55, tournament: 45, evo: 100 }
 
-export function applyStageReps(save, players, stream, context = 'daily', weight = 1) {
+// Belief is a WAGER, not an accrual. What moves it is how you performed against
+// what the room EXPECTED of you, amplified by how many people were watching:
+//
+//     Δ = STAGE_BASE × viewerFactor × (0.35 + 2.6 × (achieved − expected))
+//
+// Take the underdog who drags a monster to a last game in front of a packed
+// channel: they lost, and they walk away MORE sure of themselves, because
+// nobody thought they'd get close. The goliath who gets swept by them loses a
+// chunk of who they thought they were. And a local king beating the same locals
+// every week stops gaining anything at all — his `expected` has caught up with
+// him, so the only way left to build is bigger stages and bigger crowds.
+//
+// That last property is what retired the old per-stage caps: expectation caps
+// belief on its own, and it does it in a way the player can reason about.
+const EXPOSURE = 0.35 // just being on camera, win or lose
+const SURPRISE = 2.6 // how hard the gap between result and expectation bites
+const WIN_FLOOR = 0.15 // winning never shakes you, however scrappy it looked
+// Being on camera is a thrill the first hundred times and Tuesday after that.
+// Exposure alone tops out at "comfortable under the lights" — nowhere near
+// champion nerve. Without this ceiling the bump is an accrual again, and a big
+// enough channel could idle its way to a 90-belief player on exposure alone.
+const EXPOSURE_CAP = 35
+
+// A big swing has to be VISIBLE or the player can never learn the mechanic —
+// belief moving silently just reads as luck. Only genuinely notable nights get
+// a line, so the chronicle doesn't fill up with every streamed set.
+function noteBeliefSwing(save, ref, delta, viewers) {
+  if (Math.abs(delta) < 6) return
+  const who = displayName(ref, save)
+  const crowd = viewers >= 400 ? 'a packed channel' : `${viewers} watching`
+  chronicle(save, delta > 0 ? '🔥' : '💔', delta > 0
+    ? `${who} did it under the lights with ${crowd} — you can see it in how they carry themselves now`
+    : `${who} came apart on stream in front of ${crowd}. Something went out of them that night.`)
+}
+
+// A steady head doesn't spiral after a bad night. Composure was already the
+// innate half of stage nerve; this makes it the thing that protects the earned
+// half too, so the two read as one attribute.
+const lossDamp = (ref) => clamp(1.25 - (ref.personal?.composure ?? 5) * 0.075, 0.5, 1.25)
+
+// How well a player actually performed, 0..1, read off the real scoreline —
+// a 3–0 sweep is 1, a 3–2 war is ~0.67, getting swept is 0.
+function achievedFrom(myGames, oppGames, target) {
+  if (!target) return null
+  return clamp(0.5 + 0.5 * (myGames - oppGames) / target, 0, 1)
+}
+
+/**
+ * `outcome` is {probA, aWins, target, loserGames} and `players` is [a, b] in
+ * that order. Without it (a stage with no set behind it) players just collect
+ * the exposure term.
+ */
+export function applyStageReps(save, players, stream, context = 'daily', weight = 1, outcome = null) {
   const viewers = stream?.viewers || 0
   const base = (STAGE_BASE[context] ?? 0.5) * weight
-  const cap = STAGE_CAP[context] ?? 100
-  const viewerFactor = clamp(0.4 + viewers / 120, 0.4, 2.5)
-  for (const p of players) {
+  const viewerFactor = clamp(0.35 + viewers / 110, 0.35, 3)
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i]
     if (!p || p.kind === 'elite') continue // elites are already made
     const ref = p.ref || p // accept a raw player or a tournament entrant
     if (!ref || ref.createdBy == null) continue
-    // Belief asymptotes toward this stage's cap — the first reps matter most,
-    // and routine stages can't carry you past their ceiling.
-    const bAim = Math.max(0, cap - (ref.belief ?? 0)) / 100
-    ref.belief = clamp((ref.belief ?? 0) + base * viewerFactor * bAim, 0, 100)
+
+    const belief = ref.belief ?? 0
+    const achieved = outcome
+      ? (() => {
+        const won = (i === 0) === outcome.aWins
+        const my = won ? outcome.target : outcome.loserGames
+        const opp = won ? outcome.loserGames : outcome.target
+        return { won, value: achievedFrom(my, opp, outcome.target) }
+      })()
+      : null
+
+    // Familiarity with the camera — fades toward its own low ceiling.
+    let delta = base * viewerFactor * EXPOSURE * clamp((EXPOSURE_CAP - belief) / 100, 0, 1)
+    // What actually forges a champion: beating what the room expected of you.
+    // Gains asymptote toward the top so the last stretch is a grind; losses are
+    // flat, so the further you've been built up the further you have to fall.
+    if (achieved && achieved.value != null) {
+      const expected = i === 0 ? outcome.probA : 1 - outcome.probA
+      const swing = base * viewerFactor * SURPRISE * (achieved.value - expected)
+      delta += swing >= 0 ? swing * (100 - belief) / 100 : swing * lossDamp(ref)
+      if (achieved.won) delta = Math.max(delta, base * viewerFactor * WIN_FLOOR * (100 - belief) / 100)
+    }
+    ref.belief = clamp(belief + delta, 0, 100)
+    noteBeliefSwing(save, ref, delta, viewers)
     // Popularity climbs with eyeballs (fades slowly without them, in endDay).
     ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * (1 - (ref.popularity ?? 0) / 120), 0, 100)
     // Recognition rekindles the fire — being seen is why a lot of people play.
@@ -252,7 +318,12 @@ export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily')
   a.mood = clamp(a.mood + lift, 0, 10)
   b.mood = clamp(b.mood + lift, 0, 10)
   // ...and, more importantly, they get stage reps: belief, popularity, passion.
-  applyStageReps(save, [a, b], stream, context)
+  applyStageReps(save, [a, b], stream, context, 1, {
+    probA: matchEvent.probA,
+    aWins: matchEvent.winnerId === a.id,
+    target: matchEvent.ftTarget,
+    loserGames: matchEvent.setLoserGames,
+  })
   return stream
 }
 

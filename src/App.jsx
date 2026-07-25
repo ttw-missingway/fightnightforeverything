@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useStore, useIdleLoop } from './state/store.jsx'
 import MainMenu from './screens/MainMenu.jsx'
 import Setup from './screens/Setup.jsx'
@@ -76,8 +75,7 @@ export default function App() {
       {screen.name === 'manage' && <Manage />}
 
       <ForeclosureModal />
-      <RosterCollapseModal />
-      <AwayModal />
+      <GameOverModal />
     </div>
   )
 }
@@ -111,20 +109,20 @@ function ForeclosureModal() {
   )
 }
 
-// The finite-cast fail state: the roster is fixed the day the run begins and
-// never refills, so once the last of them has retired or been banished there's
-// no scene left to run. A new run reseeds the cast from the same identities.
-function RosterCollapseModal() {
+// The two fail states that aren't the bank: the room emptied out (mid-game
+// arcade dynamics) or the world stopped caring (late-game community opinion).
+// Both carry the reason the run ended, because that's the lesson to take into
+// the next one.
+function GameOverModal() {
   const { save, resetCurrentRun, closeSave } = useStore()
-  if (!save?.rosterCollapsed || save?.economy?.foreclosed) return null
+  const over = save?.gameOver
+  if (!over || save?.economy?.foreclosed) return null
+  const icon = over.funnel === 'dynamics' ? '🏁' : '🪦'
   return (
     <div className="modal-backdrop">
       <div className="modal card" style={{ borderColor: 'var(--red)' }}>
-        <h3 style={{ marginTop: 0 }} className="red">🏁 The scene has run its course</h3>
-        <p>
-          Every last regular of {save.arcade.name} has hung it up. The cabinets still hum, but there's
-          nobody left to play — a scene has a lifespan, and this one reached the end of its. This run is over.
-        </p>
+        <h3 style={{ marginTop: 0 }} className="red">{icon} {over.title}</h3>
+        <p>{over.text}</p>
         <p className="small dim">
           A new run keeps your game design and player roster (progress wiped), archives this run's
           chronicle, hall of fame, and VODs, and converts your arcade's fame into prestige points.
@@ -138,69 +136,3 @@ function RosterCollapseModal() {
   )
 }
 
-// Paginated "while you were away" recap, shown when offline idle catch-up ran.
-function AwayModal() {
-  const { save, dismissAwayReport, nav } = useStore()
-  const [page, setPage] = useState(0)
-  const r = save?.idle?.awayReport
-  if (!r) return null
-
-  const pages = [
-    <div key="summary">
-      <h3 style={{ marginTop: 0 }}>⏱ While you were away</h3>
-      <p>
-        <strong>{r.daysPassed}</strong> day{r.daysPassed === 1 ? '' : 's'} passed
-        {' · '}{r.hoursSimmed} hour{r.hoursSimmed === 1 ? '' : 's'} of arcade time simmed.
-      </p>
-      <ul style={{ margin: '8px 0', paddingLeft: 18 }}>
-        <li>📡 {r.followersDelta >= 0 ? '+' : ''}{r.followersDelta} followers · hype {r.hypeDelta >= 0 ? '+' : ''}{r.hypeDelta}</li>
-        {save.economy && <li>💰 {r.moneyDelta >= 0 ? '+' : '−'}${Math.abs(r.moneyDelta)}</li>}
-      </ul>
-      {r.capped && (
-        <p className="dim small">Caught up as far as one pass allows — reopen the save to continue catching up.</p>
-      )}
-    </div>,
-  ]
-  if (r.tournaments.length) {
-    pages.push(
-      <div key="events">
-        <h3 style={{ marginTop: 0 }}>🏆 Events you missed</h3>
-        <p className="dim small">Ready to watch back spoiler-free in the VODs tab.</p>
-        {r.tournaments.map((t) => (
-          <div key={t.id} className="small" style={{ padding: '2px 0' }}>
-            {t.type === 'evo' ? '🌏' : t.type === 'teams' ? '🛡' : '🏆'} {t.name} — <span className="dim">{t.dateLabel}</span>
-          </div>
-        ))}
-        <button className="small" style={{ marginTop: 8 }} onClick={() => { dismissAwayReport(); nav('vods') }}>
-          Go to VODs →
-        </button>
-      </div>,
-    )
-  }
-  if (r.headlines.length) {
-    pages.push(
-      <div key="headlines">
-        <h3 style={{ marginTop: 0 }}>📰 Headlines</h3>
-        {r.headlines.map((h, i) => <div key={i} className="small" style={{ padding: '2px 0' }}>{h}</div>)}
-      </div>,
-    )
-  }
-
-  const p = Math.min(page, pages.length - 1)
-  return (
-    <div className="modal-backdrop">
-      <div className="modal card">
-        {pages[p]}
-        <div className="row spread" style={{ marginTop: 12 }}>
-          <span className="dim small">{p + 1} / {pages.length}</span>
-          <div className="row">
-            {p > 0 && <button className="small" onClick={() => setPage(p - 1)}>← Back</button>}
-            {p < pages.length - 1
-              ? <button className="small primary" onClick={() => setPage(p + 1)}>Next →</button>
-              : <button className="small primary" onClick={dismissAwayReport}>Got it</button>}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}

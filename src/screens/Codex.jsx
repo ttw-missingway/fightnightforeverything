@@ -64,7 +64,7 @@ function charName(save, charId) {
 }
 
 function TechniqueIndex({ save }) {
-  const players = Object.values(save.players)
+  const players = Object.values(save.players).filter((p) => !p.npc)
   const knowsInnov = (iid) => players.filter((p) => p.knownInnovations.includes(iid)).length
 
   return (
@@ -98,7 +98,7 @@ function TechniqueIndex({ save }) {
 }
 
 function CharacterIndex({ save }) {
-  const players = Object.values(save.players)
+  const players = Object.values(save.players).filter((p) => !p.npc)
   return (
     <div className="grid2">
       {save.game.characters.map((c) => {

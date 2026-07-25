@@ -8,7 +8,7 @@ export default function HallOfFame() {
   const { save, nav } = useStore()
   const [tab, setTab] = useState('records')
   const records = [...save.hallOfFame].reverse()
-  const players = Object.values(save.players)
+  const players = Object.values(save.players).filter((p) => !p.npc)
   const mostGlorious = [...players].sort((a, b) => b.glory - a.glory).slice(0, 5).filter((p) => p.glory > 0)
   const evoLegends = [...save.evoRoster].sort((a, b) => (b.titles || 0) - (a.titles || 0)).filter((e) => e.titles > 0)
   const archives = save.archives || []

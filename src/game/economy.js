@@ -98,12 +98,22 @@ export function trySpend(save, amount, label) {
 
 // Rent is a monthly bill now — charged on the 1st of each in-game month.
 export function monthlyRent(save) {
-  // Rent bites harder than it used to: a passively-run arcade (default prices,
-  // no traffic-building, no efficient staffing) can't quite cover it, so walking
-  // away after setup bleeds you toward foreclosure. Active management — ads for
-  // traffic, smart pricing, a well-run floor — is what turns a profit.
-  const base = 160 + save.settings.setups * 38 + save.arcade.otherGames.length * 18
-  return Math.round(base * difficultyOf(save).rentMult)
+  // Rent is a FLAT nut that has nothing to do with how busy you are — the
+  // landlord wants the same check whether the room is packed or empty. That's
+  // the whole early game: a hands-off arcade draws a thin crowd whose spending
+  // can't cover the rent, so it bleeds out; the only way into the black is
+  // filling the room, which takes actually running the place. The flat floor
+  // (not the per-cabinet part) is what makes low attendance fatal — so it
+  // punishes coasting, not building.
+  const diff = difficultyOf(save)
+  const base = (diff.rentBase ?? 300) + save.settings.setups * 38 + save.arcade.otherGames.length * 18
+  // The lease gets renegotiated every year, and never in your favour. This is
+  // what makes a hands-off arcade lose: an operation that was comfortably in
+  // the black on day one is underwater by year three unless the owner has
+  // actually grown the takings. Standing still is a slow way of quitting.
+  const years = Math.max(0, (save.year || 1) - 1)
+  const escalation = Math.pow(1 + (diff.rentEscalation || 0), years)
+  return Math.round(base * diff.rentMult * escalation)
 }
 
 // ---------- Fixed catalogs ----------

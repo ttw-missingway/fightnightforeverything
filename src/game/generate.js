@@ -1,4 +1,4 @@
-import { choice, sample, randInt, rollStat, uid, chance } from './util.js'
+import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
 import { newPlayer, newCharacter } from './model.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS } from './constants.js'
 import {
@@ -157,22 +157,73 @@ export function generatePlayer(save, overrides = {}) {
 }
 
 // Seed the WHOLE finite cast up front. The roster is fixed the day the run
-// begins: consequential worlds fill to 48, sandbox honors the allow toggle +
-// CPU cap. Everyone starts a stranger (isRegular=false) and DISCOVERS the
-// arcade over time through the normal attendance ramp — so the early game still
-// feels like a scene slowly forming. Nobody is ever generated again: once these
-// people retire, they're gone, and running out of them ends the run.
+// begins. That model is retired: the cast the user cares about is the cast the
+// user CREATED, and everyone else is filler who wanders in and out (see
+// topUpNpcs). Kept as a no-op-ish shim so sandbox saves that lean on a fixed
+// generated pool still work.
 export function populateRoster(save) {
   const sandbox = save.settings.mode === 'sandbox'
-  if (sandbox && !save.settings.allowGeneratedPlayers) return
-  const total = () => Object.keys(save.players).length
+  if (!sandbox || !save.settings.allowGeneratedPlayers) return
   const cpuCount = () => Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
-  const roomToGrow = sandbox
-    ? () => cpuCount() < save.settings.maxGeneratedPlayers
-    : () => total() < 48
   let guard = 0
-  while (roomToGrow() && guard++ < 200) {
+  while (cpuCount() < save.settings.maxGeneratedPlayers && guard++ < 200) {
     const p = generatePlayer(save)
+    save.players[p.id] = p
+  }
+}
+
+// ---------- Filler: the faces that make an arcade feel like an arcade ----------
+//
+// The people you TRACK are the ones you made. Everyone else is generated on
+// demand, drifts through for a while, and leaves without ceremony — they exist
+// so the floor has opponents and the brackets have bodies, not so the user has
+// 48 names to manage.
+//
+// Crucially, filler is a SUPPLY of candidates, not a guarantee of turnout: each
+// one still rolls the same attendance check as a created player. A grimy,
+// unknown, toxic arcade that can't pull a crowd doesn't get one handed to it,
+// so tournaments really can come up short.
+
+// How many strangers are plausibly in orbit of this arcade right now. Scales
+// with how known and how liked the place is — the same pull that decides
+// whether any individual walks in, applied to the size of the pool.
+export function npcPoolTarget(save) {
+  const known = clamp((save.stream?.hype ?? 0) / 120 + (save.arcade.ads?.length || 0) * 0.08, 0, 0.7)
+  const draw = clamp((save.relevance ?? 55) / 100, 0.15, 1)
+  const created = Object.values(save.players).filter((p) => !p.npc && !p.retired && !p.banished).length
+  // A floor of bodies so a brand-new arcade isn't empty, scaling up as the
+  // scene becomes something people have heard of.
+  const base = 16 + Math.round(created * 1.1)
+  return clamp(Math.round(base + 40 * draw * (0.6 + known)), 12, 60)
+}
+
+/**
+ * Keep the filler pool near its target: generate newcomers to fill a gap, and
+ * retire filler that's drifted away (nobody notices, by design). Called at the
+ * top of every day.
+ */
+export function topUpNpcs(save, absDay) {
+  if (save.settings.mode === 'sandbox' && !save.settings.allowGeneratedPlayers) return
+  const npcs = Object.values(save.players).filter((p) => p.npc && !p.retired && !p.banished)
+
+  // Churn: filler who hasn't been in for weeks has simply moved on. Anyone the
+  // user has entangled with the cast (a team, a mentorship, a real rivalry)
+  // sticks around — those are the ones who became part of the story.
+  for (const p of npcs) {
+    const last = p.npcLastSeenAbs ?? absDay
+    const feuding = Object.values(p.relationships || {}).some((v) => v <= -45)
+    const attached = feuding || p.teamId ||
+      save.mentorships.some((m) => m.mentorId === p.id || m.studentId === p.id)
+    if (!attached && absDay - last > 45 + Math.floor(rand() * 30)) delete save.players[p.id]
+  }
+
+  const alive = Object.values(save.players).filter((p) => p.npc && !p.retired && !p.banished).length
+  const target = npcPoolTarget(save)
+  // Trickle in rather than materialising a crowd — a scene fills up over weeks.
+  let room = Math.min(target - alive, 3)
+  let guard = 0
+  while (room-- > 0 && guard++ < 10) {
+    const p = generatePlayer(save, { npc: true, createdBy: 'cpu', npcLastSeenAbs: absDay })
     save.players[p.id] = p
   }
 }

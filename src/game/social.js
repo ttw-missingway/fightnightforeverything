@@ -360,7 +360,12 @@ export function arcadeOpinionOf(save, p) {
   const rels = Object.values(p.relationships || {})
   score += Math.min(2, rels.filter((v) => v >= 20).length * 0.35)
   score -= Math.min(1.5, rels.filter((v) => v <= -50).length * 0.4)
-  score += ((save.arcade.cleanliness ?? 80) - 60) * 0.02
+  // Cleanliness is the loudest thing about a room's reputation: a spotless floor
+  // is a real draw, but a filthy one is a dealbreaker — and it tanks the vibe
+  // far faster than a clean one lifts it. This is what makes "gross → nobody
+  // comes" flow through reputation instead of being a separate rule.
+  const clean = save.arcade.cleanliness ?? 80
+  score += (clean - 62) * (clean < 62 ? 0.08 : 0.03)
   score += ((save.staffing?.morale ?? 70) - 60) * 0.012
   const tokenPrice = save.arcade.prices?.token ?? 1
   score -= Math.max(0, tokenPrice - (0.6 + (p.social?.income ?? 5) * 0.16)) * 0.8

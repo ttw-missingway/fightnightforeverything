@@ -7,7 +7,7 @@ import { difficultyOf } from '../game/constants.js'
 
 export default function RosterEditor({ save, update }) {
   const [selId, setSelId] = useState(null)
-  const players = Object.values(save.players)
+  const players = Object.values(save.players).filter((p) => !p.npc)
   const sel = save.players[selId] || null
   const consequential = save.settings.mode !== 'sandbox'
   const atCap = consequential && players.length >= 48 // consequential worlds max out at 48 players

@@ -37,7 +37,10 @@ export default function Setup() {
   const charCount = draft.game.characters.length
   const consequential = draft.settings.mode !== 'sandbox'
   const overBudget = consequential && arcadeBuildCost(draft) > startingBudget(draft)
-  const canStart = charCount >= 2 && !overBudget
+  // The cast you create IS the cast you follow — everyone else is filler who
+  // drifts through. So a run needs at least one person to actually care about.
+  const createdCount = Object.values(draft.players).filter((p) => !p.npc).length
+  const canStart = charCount >= 2 && createdCount >= 1 && !overBudget
 
   return (
     <div>
@@ -68,8 +71,8 @@ export default function Setup() {
           {consequential && <BudgetBar save={draft} />}
           <ul className="dim">
             <li>{charCount} characters, {draft.game.stages.length} stages</li>
-            <li>{Object.keys(draft.players).length} created players
-              {draft.settings.allowGeneratedPlayers ? `, up to ${draft.settings.maxGeneratedPlayers} generated players may join` : ', no generated players'}</li>
+            <li>{createdCount} created player{createdCount === 1 ? '' : 's'} to follow
+              <span className="dim"> — other faces come and go on their own</span></li>
             <li>{draft.settings.setups} setups, {draft.arcade.foods.length} foods, {draft.arcade.otherGames.length} side games</li>
             <li>{draft.arcade.schedule.length} scheduled tournaments + EVO every year</li>
             {consequential && (
@@ -82,10 +85,13 @@ export default function Setup() {
             )}
           </ul>
           {charCount < 2 && <p className="red">You need at least 2 characters in the game's roster to start.</p>}
-          {overBudget && <p className="red">You're over your build budget — trim setups, food, or side games before opening.</p>}
-          {Object.keys(draft.players).length === 0 && !draft.settings.allowGeneratedPlayers && (
-            <p className="red">No players and no generated players allowed — the arcade would stay empty forever.</p>
+          {createdCount < 1 && (
+            <p className="red">
+              Create at least one player. They're who this run is about — the rest of the room fills
+              itself with people passing through.
+            </p>
           )}
+          {overBudget && <p className="red">You're over your build budget — trim setups, food, or side games before opening.</p>}
           <button className="primary" disabled={!canStart} onClick={() => startSave(draft)}>
             Open the Arcade
           </button>

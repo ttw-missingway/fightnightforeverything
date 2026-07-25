@@ -449,5 +449,5 @@ function simulateOnce({
 
   const dramaScore = drama.leadChanges * 2 + drama.drops * 2 + drama.supers * 2
     + drama.comebacks * 3 + drama.clutch * 4 + (loserGames === target - 1 ? 4 : 0)
-  return { lines, meta, hud, score, target, seed, drama: dramaScore }
+  return { lines, meta, hud, score, target, loserGames, seed, drama: dramaScore }
 }

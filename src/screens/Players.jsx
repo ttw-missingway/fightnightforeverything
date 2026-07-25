@@ -46,7 +46,7 @@ export default function Players() {
   const standings = {}
   for (const p of Object.values(save.players)) standings[p.id] = standingOf(save, p)
   const sortFn = sortKey === 'standing' ? (p) => standings[p.id] : SORTS[sortKey]
-  const players = Object.values(save.players).sort((a, b) => {
+  const players = Object.values(save.players).filter((p) => !p.npc).sort((a, b) => {
     const ka = sortFn(a)
     const kb = sortFn(b)
     const cmp = typeof ka === 'string' ? ka.localeCompare(kb) : ka - kb
@@ -377,7 +377,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
 // their lifetime record, and what's brewing between them.
 function ComparePanel({ save, player: p, mutate, goTo }) {
   const [otherId, setOtherId] = useState('')
-  const others = Object.values(save.players)
+  const others = Object.values(save.players).filter((p) => !p.npc)
     .filter((o) => o.id !== p.id && o.isRegular && !o.banished)
     .sort((a, b) => displayName(a, save).localeCompare(displayName(b, save)))
   const o = save.players[otherId]

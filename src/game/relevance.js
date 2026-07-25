@@ -7,7 +7,7 @@
 // get, so late-game balance changes are genuinely dangerous.
 
 import { clamp } from './util.js'
-import { absDayOf, DAYS_PER_YEAR } from './constants.js'
+import { absDayOf, DAYS_PER_YEAR, difficultyOf } from './constants.js'
 import { chronicle } from './model.js'
 import { communityGameOpinion } from './social.js'
 
@@ -55,14 +55,30 @@ export function relevanceDaily(save) {
   const opinion = communityGameOpinion(save) ?? 5
   const stale = staleDaysOf(save)
 
-  // The world moves on — faster the older the game gets.
-  const decay = 0.045 + age * 0.05
-  // A hot, well-liked, full scene keeps the game in the national conversation.
-  let sustain = hype * 0.0028 + Math.min(1, activeRegulars / 48) * 0.06 + (opinion - 5) * 0.013
-  sustain -= Math.min(0.22, Math.max(0, stale - 45) * 0.0013) // no fresh content, attention drifts (capped)
+  // A game stays relevant while it's FRESH. The dominant force is the content
+  // treadmill: the longer it's been since a patch, the more the scene drifts to
+  // whatever's new — and an older game is more fragile. Shipping a patch resets
+  // this clock, which is how an active owner keeps the game (and the room, since
+  // attendance rides on relevance) alive, while a hands-off one lets it go stale
+  // and bleed out.
+  // Interest bleeds away, and FASTER every year the game has been around — this
+  // is the accelerating clock that ultimately ends every run. Even a perfectly
+  // run scene can only hold it off for so long; a mediocre one loses the fight
+  // in a couple of years, and a neglected one in months. Difficulty scales how
+  // relentless the bleed is.
+  const staleness = clamp((stale - 55) * 0.0035, 0, 0.5) * (1 + age * 0.3)
+  const timeDecay = 0.045 + age * 0.043
+  const decayMult = difficultyOf(save).relevanceDecayMult ?? 1
+  // What holds it off is the QUALITY of the scene, not just its size: a room
+  // people genuinely love (well-run, fair, healthy — high opinion) and a fresh,
+  // frequently-patched game keep the world watching. A big but mediocre room
+  // sustains far less than a smaller, beloved one, so this rewards running the
+  // place well over merely running it big. Hype can't carry it alone (everyone
+  // auto-streams), so it deliberately isn't the lever.
+  const sustain = hype * 0.001 + Math.min(1, activeRegulars / 40) * 0.03 + (opinion - 5) * 0.055
 
   const before = save.relevance
-  save.relevance = clamp(before + sustain - decay, 0, 100)
+  save.relevance = clamp(before + sustain - (timeDecay + staleness) * decayMult, 0, 100)
   markMilestones(save, before, save.relevance)
 }
 
@@ -90,8 +106,15 @@ export function applyPatchRelevance(save, receptionScore, divisive) {
   const age = gameAgeYears(save)
   const rel = save.relevance
   const stakes = 1 + age * 0.28 + (1 - rel / 100) * 0.7
-  let delta = receptionScore * 0.55 * stakes
-  if (divisive) delta -= 3 * stakes // controversy alienates as much as it engages
+  // Shipping fresh content is what keeps a game relevant, full stop — the
+  // staleness clock resets in relevanceDaily every time you patch, so a regular
+  // patch cadence is the backbone of a long run. Reception only decides how much
+  // a patch BOOSTS on top: a hit revives interest, a middling one just doesn't
+  // add much (it never actively buries you — "there's something new to play" is
+  // the point). Only a genuine disaster still stings.
+  let delta = Math.max(0, receptionScore) * 0.5 * stakes
+  if (receptionScore < -12) delta += (receptionScore + 12) * 0.3 * stakes // a true bomb still hurts
+  if (divisive) delta -= 1.5 * stakes // controversy alienates as much as it engages
   const before = save.relevance
   save.relevance = clamp(rel + delta, 0, 100)
   markMilestones(save, before, save.relevance)

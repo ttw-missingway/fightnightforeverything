@@ -37,7 +37,7 @@ export function passionDaily(save, player, ctx) {
   const tenure = player.daysAttended || 0
   const skill = Math.max(0, ...Object.values(player.charSkill || {}), 0)
 
-  let decay = 0.05 + Math.max(0, tenure - 120) * 0.0008
+  let decay = 0.05 + Math.max(0, tenure - 120) * 0.00055
   if (skill >= 88) decay += 0.05 // fully mastered — less left to chase
   const stale = ctx.staleDays || 0
   if (stale > 90) decay += Math.min(0.12, (stale - 90) * 0.0007) // no fresh content wears thin

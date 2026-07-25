@@ -112,25 +112,33 @@ export const AUTO_STREAM_CADENCES = [
 // creation, starting money is the opening float, rent/popularity/reception
 // multipliers squeeze (or pad) everything downstream. Master is meant to be
 // nearly impossible.
+// Each tier also sets how much rope the two non-economic funnels give you:
+// `collapseGrace` is how many dead nights the scene survives, `fadeGrace` how
+// long the world can ignore you, and `rentEscalation` is the annual rent hike
+// that makes standing still a losing move.
 export const DIFFICULTIES = [
   {
     key: 'easy', label: 'Easy', statPoints: 127, statCap: 9,
-    startingMoney: 2200, rentMult: 0.7, popularityMult: 1.35, receptionBias: 4,
+    startingMoney: 2200, rentMult: 0.7, rentBase: 170, popularityMult: 1.35, receptionBias: 4,
+    collapseGrace: 60, fadeGrace: 120, rentEscalation: 0, relevanceDecayMult: 0.6,
     blurb: 'Generous funds, cheap rent, a forgiving community.',
   },
   {
     key: 'normal', label: 'Normal', statPoints: 113, statCap: 8,
-    startingMoney: 1400, rentMult: 1, popularityMult: 1, receptionBias: 0,
-    blurb: 'The intended experience.',
+    startingMoney: 1500, rentMult: 1, rentBase: 220, popularityMult: 0.95, receptionBias: -1,
+    collapseGrace: 30, fadeGrace: 50, rentEscalation: 0.12, relevanceDecayMult: 1,
+    blurb: 'The intended experience: a scene you have to keep alive on purpose.',
   },
   {
     key: 'difficult', label: 'Difficult', statPoints: 100, statCap: 8,
-    startingMoney: 850, rentMult: 1.5, popularityMult: 0.62, receptionBias: -5,
+    startingMoney: 850, rentMult: 1.15, rentBase: 250, popularityMult: 0.6, receptionBias: -5,
+    collapseGrace: 21, fadeGrace: 38, rentEscalation: 0.16, relevanceDecayMult: 1.35,
     blurb: 'Thin margins, a skeptical internet, a hungry landlord.',
   },
   {
     key: 'master', label: 'Master', statPoints: 87, statCap: 7,
-    startingMoney: 500, rentMult: 2.5, popularityMult: 0.45, receptionBias: -9,
+    startingMoney: 1050, rentMult: 1.2, rentBase: 235, popularityMult: 0.95, receptionBias: -9,
+    collapseGrace: 16, fadeGrace: 30, rentEscalation: 0.16, relevanceDecayMult: 1.7,
     blurb: 'Nearly impossible. The landlord is already drafting the notice.',
   },
 ]

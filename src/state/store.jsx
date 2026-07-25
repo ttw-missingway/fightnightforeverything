@@ -12,11 +12,9 @@ import { uid } from '../game/util.js'
 const INDEX_KEY = 'fightnight:index'
 const saveKey = (id) => `fightnight:save:${id}`
 
-// How many advance-steps a single idle pass may run. Foreground ticks stay
-// small (smooth UI); the offline catch-up on load may cover much more, but is
-// still bounded so reopening after a very long absence can't hang the tab.
+// How many advance-steps a single idle pass may run. Idle only advances with
+// the tab open, so this just keeps each foreground tick smooth.
 const IDLE_FOREGROUND_CAP = 200
-const IDLE_CATCHUP_CAP = 2000
 
 export function loadIndex() {
   try {
@@ -238,6 +236,11 @@ export function importSaveFromText(text) {
 
 // ---------- Day stepping (shared by manual advance and idle) ----------
 
+// A run is over when any of the three funnels has closed: the books, the room,
+// or the world's interest. `economy.foreclosed` predates the unified flag, so
+// it's still checked directly.
+export const runEnded = (s) => !!(s?.economy?.foreclosed || s?.gameOver || s?.rosterCollapsed)
+
 /**
  * Advance the save exactly one step, mutating `next`, and return what
  * happened WITHOUT touching React or navigation. One step is: open the
@@ -375,7 +378,7 @@ function maybeAutoStream(next) {
  */
 function idleRun(next, maxSteps, revealTournaments = false) {
   const idle = next.idle
-  if (!idle || next.economy?.foreclosed || next.rosterCollapsed) return null // no idling past the end of a run
+  if (!idle || runEnded(next)) return null // no idling past the end of a run
   const speed = idleSpeedOf(idle.speed)
   const now = Date.now()
   if (idle.lastTickAt == null) { idle.lastTickAt = now; return null }
@@ -394,7 +397,7 @@ function idleRun(next, maxSteps, revealTournaments = false) {
   let hoursSimmed = 0
 
   for (let i = 0; i < due; i++) {
-    if (next.economy?.foreclosed || next.rosterCollapsed) break // the run ended mid-catch-up
+    if (runEnded(next)) break // the run ended mid-catch-up
     // On the arcade tab, tournaments reveal a match per tick; everywhere else
     // (and during offline catch-up) they resolve in one step.
     const outcome = revealTournaments ? idleArcadeStep(next) : stepSave(next)
@@ -476,13 +479,12 @@ export function StoreProvider({ children }) {
   const openSave = useCallback((id) => {
     const loaded = loadSaveById(id)
     if (!loaded) return
-    // Offline catch-up: if idle mode was left running, sim the time that
-    // elapsed while the save was closed and stash a welcome-back report.
-    if (loaded.idle?.enabled && loaded.idle?.running && loaded.idle?.lastTickAt != null) {
-      const report = idleRun(loaded, IDLE_CATCHUP_CAP)
-      if (report && report.steps > 0) loaded.idle.awayReport = report
-    }
-    persistSave(loaded) // write migrations + catch-up back immediately
+    // This is not a game that plays itself while you're gone. Idle mode is a
+    // fast-forward you WATCH — it only advances with the tab open — so closing
+    // the save stops time cold. Reopening just restarts the clock from now; the
+    // hours you were away never happened.
+    if (loaded.idle) { loaded.idle.running = false; loaded.idle.lastTickAt = null; loaded.idle.awayReport = null }
+    persistSave(loaded) // write migrations back immediately
     setSave(loaded)
     setScreen({ name: 'arcade' })
   }, [setSave])
@@ -496,7 +498,7 @@ export function StoreProvider({ children }) {
   // screen; everything else stays in the arcade.
   const advance = useCallback(() => {
     const prev = saveRef.current
-    if (!prev || prev.economy?.foreclosed || prev.rosterCollapsed) return // the run is over
+    if (!prev || runEnded(prev)) return // the run is over
     const next = structuredClone(prev)
     const outcome = stepSave(next)
     persistSave(next)
@@ -509,7 +511,7 @@ export function StoreProvider({ children }) {
   // Skip straight to the daily recap: finish (or run) the whole day at once.
   const skipDay = useCallback(() => {
     const prev = saveRef.current
-    if (!prev || prev.economy?.foreclosed || prev.rosterCollapsed) return
+    if (!prev || runEnded(prev)) return
     const next = structuredClone(prev)
     let notice
     // A tournament being revealed match by match: finish the broadcast and jump
@@ -592,7 +594,6 @@ export function StoreProvider({ children }) {
       s.idle.lastTickAt = Date.now() // restart the clock so a speed change can't burst
     }),
     setAutoStream: (patch) => mutate((s) => { Object.assign(s.idle.autoStream, patch) }),
-    dismissAwayReport: () => mutate((s) => { s.idle.awayReport = null }),
   }), [mutate])
 
   const value = useMemo(() => ({

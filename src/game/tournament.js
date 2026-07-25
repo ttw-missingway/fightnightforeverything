@@ -121,7 +121,9 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
   // Competing on the big stage is how a player gets battle-tested — arcade
   // entrants earn belief/popularity from every set, and the marquee sets (finals,
   // EVO) forge the most. This is what makes deep runs and big brackets worth it.
-  applyStageReps(save, [a, b], stream, context === 'evo' ? 'evo' : 'tournament', marquee ? 1.6 : 1)
+  applyStageReps(save, [a, b], stream, context === 'evo' ? 'evo' : 'tournament', marquee ? 1.6 : 1, {
+    probA, aWins, target: nar.target, loserGames: nar.loserGames,
+  })
 
   // Bracket sets end with words too — when both players are real people.
   const postMatch = []

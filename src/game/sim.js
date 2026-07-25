@@ -1,6 +1,6 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
-import { driftEvoRoster } from './generate.js'
+import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, chronicle, pushVod } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
@@ -18,7 +18,7 @@ import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
-  sceneHealth, rivalOf,
+  sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf,
 } from './social.js'
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
 import { areSeparated, pruneSeparations } from './discipline.js'
@@ -195,15 +195,15 @@ function attendChance(save, player) {
       if (player.repelledTags.includes(t)) p -= 0.05
     }
   }
-  // A grimy floor and miserable staff make the whole place unpleasant to be
-  // in — a real drag on turnout. A spotless, well-run room is a genuine draw.
-  // (This is what makes staffing pay off once you're busy enough to need it.)
-  p *= clamp(0.68 + (save.arcade.cleanliness ?? 80) / 250, 0.68, 1.1)
-  p *= clamp(0.86 + (save.staffing?.morale ?? 70) / 500, 0.86, 1.08)
   // A familiar face behind the counter is its own draw — regulars turn up to
   // hang out where their friend (or the local star) works. This is the payoff
   // for staffing a PLAYER instead of an anonymous outside hire.
   p += playerStaffAppeal(save) * 0.015
+  // The people you created are this arcade's founding crew — this is their
+  // place, and they turn up like it. Filler still has to be tempted in. Spark
+  // still decides who's here nightly and who's here on weekends; this just
+  // means a cast of three can't quietly evaporate into a room of strangers.
+  if (!player.npc) p = p * 1.3 + 0.14
   // A brand-new arcade nobody's heard of is hard to DISCOVER: first-timers
   // barely trickle in until word spreads. Once someone's a regular, they come
   // regardless — so those early discoverers are what seeds the whole scene.
@@ -212,18 +212,24 @@ function attendChance(save, player) {
   p *= 0.45 + 0.55 * popularityFactor(save)
   // Passion: a player losing the fire for the game turns up less and less.
   p *= passionAttendanceFactor(player)
-  // Relevance: a game the world has moved on from empties the room over time.
-  p *= clamp(0.65 + (save.relevance ?? 55) / 100 * 0.45, 0.65, 1.05)
-  // Toxicity: a scene full of bad blood empties a room. A great venue (clean,
-  // well-staffed) softens it, but only so much — left unchecked, toxicity drives
-  // attendance into the floor, and with a finite cast that never refills, that's
-  // a death spiral: fewer people → the bad blood among who's left dominates →
-  // fewer still → the scene collapses and you lose. Warn/separate/ban is the way out.
-  const tox = save.scene?.toxicity || 0
-  if (tox > 0) {
-    const comfort = clamp((((save.arcade.cleanliness ?? 80) + (save.staffing?.morale ?? 70)) / 200), 0, 1)
-    p *= clamp(1 - tox * 0.85 * (1 - comfort * 0.35), 0.22, 1)
-  }
+  // ---- The draw ----
+  // Whether the room fills or empties comes down to two things, and both take
+  // actually running the place to keep up. This is the early-game loop: manage
+  // well and the room is full and pays the rent; coast and it quietly empties
+  // until the thin crowd can't cover a bill that never shrinks.
+  //
+  // REPUTATION — is this a good place to be? arcadeOpinionOf folds it all in: a
+  // clean floor, fair prices, snacks people like, and a healthy vibe (a toxic
+  // scene tanks it). A well-run arcade is a genuine draw; a gross or hostile one
+  // is where nobody wants to hang out.
+  const reputation = arcadeOpinionOf(save, player) // 0..10
+  p *= clamp(0.15 + reputation * 0.16, 0.15, 1.55)
+  // FRESHNESS — is the game still worth showing up for? A hot, evolving scene
+  // packs the room; one the world has moved on from empties it. Patches and a
+  // living competitive scene keep this up; a stale build bleeds it away, and the
+  // room with it. This is why a hands-off owner loses even a clean arcade.
+  const relevance = save.relevance ?? 55
+  p *= clamp(0.3 + (relevance / 100) * 1.35, 0.3, 1.45)
   return clamp(p, 0.02, 0.9)
 }
 
@@ -515,6 +521,7 @@ function runMoneyMatch(save, mm, present, events) {
     watcherIds: watchers.map((w) => w.id),
     watcherNames: watchers.map((w) => pName(save, w)),
     narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
+    setLoserGames: nar.loserGames,
     narrationHud: nar.hud, ftTarget: nar.target, narrationSeed: nar.seed,
     preMatch, postMatch,
   }
@@ -528,7 +535,9 @@ function runMoneyMatch(save, mm, present, events) {
     context: 'daily',
   })
   // A money match under the lights is real stage experience for both principals.
-  applyStageReps(save, [a, b], ev.stream, 'moneymatch')
+  applyStageReps(save, [a, b], ev.stream, 'moneymatch', 1, {
+    probA, aWins: result.aWins, target: nar.target, loserGames: nar.loserGames,
+  })
   // Stakes: pride, glory, and the story everyone will tell.
   winner.respect += 6
   winner.glory += 3
@@ -730,9 +739,11 @@ export function startDay(save) {
   // attendance (toxicity thins the crowd) and the day's rivalry development.
   save.scene = sceneHealth(save)
 
-  // The cast is FINITE and fixed: the whole roster was seeded at save start and
-  // discovers the arcade over time (below). Nobody new is ever generated — once
-  // these people retire, they're gone, and running out of them ends the run.
+  // Refresh the filler pool: strangers drift into the arcade's orbit and back
+  // out of it. They're candidates, not attendees — every one of them still has
+  // to pass the same attendance check as the cast the user built, so a scene
+  // nobody wants to be part of stays empty no matter how many exist.
+  topUpNpcs(save, absDayOf(save.day, save.year))
 
   const everyone = Object.values(save.players)
   const attendees = []
@@ -744,15 +755,18 @@ export function startDay(save) {
       const prevStatus = statusOf(p)?.key
       attendees.push(p)
       p.daysAttended += 1
+      if (p.npc) p.npcLastSeenAbs = absDayOf(save.day, save.year)
       if (!p.isRegular) {
         p.isRegular = true
         newcomers.push(p.id)
-        events.push({ type: 'arrival', text: `${p.firstName} "${p.alias || '—'}" ${p.lastName} came to ${save.arcade.name} for the first time.` })
+        // Filler arrives without an announcement — the room just has people in
+        // it. Only the cast the user built gets a first-night beat.
+        if (!p.npc) events.push({ type: 'arrival', text: `${p.firstName} "${p.alias || '—'}" ${p.lastName} came to ${save.arcade.name} for the first time.` })
       }
       // Climbing the status ladder is an event — being a regular here
       // MEANS something now.
       const nowStatus = statusOf(p)
-      if (nowStatus && nowStatus.key !== prevStatus && prevStatus != null) {
+      if (!p.npc && nowStatus && nowStatus.key !== prevStatus && prevStatus != null) {
         const line = {
           casual: `${pName(save, p)} keeps finding excuses to come back — a casual now.`,
           regular: `${pName(save, p)} is officially a regular. They have a spot, and everyone knows it's theirs.`,
@@ -1010,6 +1024,7 @@ export function simHour(save) {
         narration,
         narrationMeta: nar.meta,
         setScore: nar.score,
+        setLoserGames: nar.loserGames,
         narrationHud: nar.hud,
         ftTarget: nar.target,
         narrationSeed: nar.seed,
@@ -1066,6 +1081,68 @@ export function simHour(save) {
 /**
  * Closes up for the night: end-of-day checks, the daily recap, calendar tick.
  */
+/**
+ * End a run down a named funnel. Every ending records WHICH pressure killed it,
+ * because that's the whole lesson: the books, the room, or the world.
+ */
+export function endRun(save, funnel, title, text) {
+  if (save.gameOver) return
+  save.gameOver = { funnel, title, text, day: save.day, year: save.year }
+  if (funnel === 'dynamics') save.rosterCollapsed = true // legacy mirror
+  chronicle(save, funnel === 'economy' ? '🔒' : funnel === 'dynamics' ? '🏁' : '🪦', text)
+}
+
+/**
+ * The two funnels that aren't the bank.
+ *
+ * MID GAME — arcade dynamics. A scene is people, and people leave: burnt out,
+ * driven off by bad blood, or just never given a reason to come back. Once the
+ * room is empty night after night there's nothing left to run. This is the
+ * failure the toxicity/passion/venue systems all drain into.
+ *
+ * LATE GAME — community opinion. You can keep a clean, solvent, friendly arcade
+ * and still lose, because the world outside moved on to something else. Letting
+ * the game go stale is a decision, and this is its bill.
+ */
+export function checkSceneCollapse(save, attendanceToday) {
+  if (save.gameOver || save.settings.mode === 'sandbox') return
+  const diff = difficultyOf(save)
+
+  // The cast the user actually built. Filler doesn't count — a floor of
+  // strangers isn't a scene, and losing your last real player IS the ending.
+  const tracked = Object.values(save.players).filter((p) => !p.npc)
+  if (tracked.length > 0 && !tracked.some((p) => !p.retired && !p.banished)) {
+    endRun(save, 'dynamics', 'The scene has run its course',
+      `Every player you brought into ${save.arcade.name} has hung it up. The cabinets still hum, but the people who made this place are gone.`)
+    return
+  }
+
+  // A room that's stopped filling. Only counts once the arcade HAD a crowd —
+  // a quiet opening month is an economy problem, not a dead scene.
+  save.peakAttendance = Math.max(save.peakAttendance || 0, attendanceToday)
+  const established = (save.peakAttendance || 0) >= 8
+  // Dying is relative: a room that used to pull twenty and now pulls four has
+  // died, even though four isn't zero. Measuring against the crowd the arcade
+  // once drew is what makes the decline legible instead of a cliff at empty.
+  const quiet = established && attendanceToday <= Math.max(2, Math.round(save.peakAttendance * 0.22))
+  save.quietDays = quiet ? (save.quietDays || 0) + 1 : 0
+  if (save.quietDays >= diff.collapseGrace) {
+    endRun(save, 'dynamics', 'The scene has run its course',
+      `${save.arcade.name} has sat all but empty for ${save.quietDays} days straight. Word gets around that nobody goes there anymore, and that's the kind of thing a scene doesn't come back from.`)
+    return
+  }
+
+  // Nobody outside is watching any more. Relevance is the slow one — it takes
+  // sustained neglect, which is exactly why it's the ending that catches the
+  // owner who set everything up perfectly and then stopped playing.
+  const forgotten = (save.relevance ?? 55) <= 12 && communityGameOpinion(save) < 5.6
+  save.fadedDays = forgotten ? (save.fadedDays || 0) + 1 : 0
+  if (save.fadedDays >= diff.fadeGrace) {
+    endRun(save, 'opinion', 'The world moved on',
+      `${save.game.name} has been out of the conversation for ${save.fadedDays} days. No new blood, no coverage, no reason for anyone to care — the scene didn't blow up, it just faded out.`)
+  }
+}
+
 export function endDay(save) {
   const dip = save.dayInProgress
   if (!dip) return
@@ -1109,14 +1186,7 @@ export function endDay(save) {
     checkRetirement(save, p, events)
   }
 
-  // The finite cast never refills. When the last of the 48 has retired or been
-  // banished, there's no scene left to run — the whole enterprise has run its
-  // course. (Only fires once the roster genuinely existed, so a fresh save with
-  // everyone still a stranger can't trip it.)
-  const roster = Object.values(save.players)
-  if (roster.length > 0 && !roster.some((p) => !p.retired && !p.banished)) {
-    save.rosterCollapsed = true
-  }
+  checkSceneCollapse(save, attendees.length)
 
   // The books: tokens and food the players actually bought, then payroll and
   // cleaning (daily). Weekly upkeep and monthly rent are settled from a ledger

@@ -968,7 +968,7 @@ export function StaffManagement({ save, update }) {
   const { employees, managers } = staffCounts(save)
   const mgmt = managementQuality(save)
   const clean = Math.round(save.arcade.cleanliness ?? 80)
-  const hirable = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !isStaffed(save, p.id))
+  const hirable = Object.values(save.players).filter((p) => !p.npc && p.isRegular && !p.retired && !isStaffed(save, p.id))
   const [hirePlayerId, setHirePlayerId] = useState('')
   const draw = playerStaffAppeal(save)
   // Per-player pull if put behind the counter — mirrors playerStaffAppeal's
