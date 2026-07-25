@@ -111,6 +111,59 @@ export function newPlayer(partial = {}) {
   }
 }
 
+// A player's identity, stats, and tastes survive into a new world; their
+// PROGRESS (elo, skills, relationships, records, teams) does not. Used by
+// "start a new run" and by importing an exported player list into a new save.
+// A main pinned at creation stays pinned; anything settled through play resets.
+export function resetPlayerForNewRun(p) {
+  return newPlayer({
+    id: p.id,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    alias: p.alias,
+    gender: p.gender,
+    description: p.description,
+    catchphrase: p.catchphrase,
+    spriteKey: p.spriteKey || null,
+    createdBy: p.createdBy,
+    personal: structuredClone(p.personal),
+    social: structuredClone(p.social), // includes income
+    voice: p.voice ? structuredClone(p.voice) : null,
+    defaultMood: p.defaultMood,
+    mood: p.defaultMood,
+    mainCharId: p.lockedMain ? p.mainCharId : null,
+    lockedMain: p.lockedMain,
+    settledMain: !!p.lockedMain,
+    exploredChars: p.lockedMain && p.mainCharId ? [p.mainCharId] : [],
+    attractedTags: [...(p.attractedTags || [])],
+    repelledTags: [...(p.repelledTags || [])],
+    playerTags: [...(p.playerTags || [])],
+    attractedPlayerTags: [...(p.attractedPlayerTags || [])],
+    repelledPlayerTags: [...(p.repelledPlayerTags || [])],
+    otherGames: [...(p.otherGames || [])],
+    foods: [...(p.foods || [])],
+  })
+}
+
+// Deep-clone a character under entirely fresh ids (character, moves, and the
+// combo routes that reference them) — for importing a roster file into a game
+// that already contains some of the same ids.
+export function cloneCharacterFresh(char) {
+  const c = structuredClone(char)
+  c.id = uid('char')
+  const moveIdMap = {}
+  for (const m of c.moves || []) {
+    const fresh = uid('move')
+    moveIdMap[m.id] = fresh
+    m.id = fresh
+  }
+  for (const combo of c.combos || []) {
+    combo.id = uid('combo')
+    combo.moveIds = (combo.moveIds || []).map((id) => moveIdMap[id] || id)
+  }
+  return c
+}
+
 export function newTeam(partial = {}) {
   return {
     id: uid('team'),

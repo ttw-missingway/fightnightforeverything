@@ -4,7 +4,7 @@ import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyO
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { generateEvoRoster, populateRoster } from '../game/generate.js'
-import { migrateSave, newSave, newPlayer } from '../game/model.js'
+import { migrateSave, newSave, resetPlayerForNewRun } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
@@ -99,39 +99,6 @@ export function deleteSaveById(id) {
   writeIndex(loadIndex().filter((e) => e.id !== id))
 }
 
-// A player's identity, stats, and tastes survive a reset; their PROGRESS
-// (elo, skills, relationships, records, teams) starts over. A main pinned
-// at creation stays pinned; anything they settled into through play resets.
-function resetPlayerForNewRun(p) {
-  return newPlayer({
-    id: p.id,
-    firstName: p.firstName,
-    lastName: p.lastName,
-    alias: p.alias,
-    gender: p.gender,
-    description: p.description,
-    catchphrase: p.catchphrase,
-    spriteKey: p.spriteKey || null,
-    createdBy: p.createdBy,
-    personal: structuredClone(p.personal),
-    social: structuredClone(p.social), // includes income
-    voice: p.voice ? structuredClone(p.voice) : null,
-    defaultMood: p.defaultMood,
-    mood: p.defaultMood,
-    mainCharId: p.lockedMain ? p.mainCharId : null,
-    lockedMain: p.lockedMain,
-    settledMain: !!p.lockedMain,
-    exploredChars: p.lockedMain && p.mainCharId ? [p.mainCharId] : [],
-    attractedTags: [...(p.attractedTags || [])],
-    repelledTags: [...(p.repelledTags || [])],
-    playerTags: [...(p.playerTags || [])],
-    attractedPlayerTags: [...(p.attractedPlayerTags || [])],
-    repelledPlayerTags: [...(p.repelledPlayerTags || [])],
-    otherGames: [...(p.otherGames || [])],
-    foods: [...(p.foods || [])],
-  })
-}
-
 /**
  * Start the world over. The DESIGN survives — characters, stages, and the
  * player roster (identities and stats, progress wiped). Everything you
@@ -186,19 +153,28 @@ export function resetSaveById(id) {
 
 // ---------- Sharing worlds ----------
 
+/** Download any payload as a .json file (worlds, rosters, casts). */
+export function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// Safe file-name stem from a user-entered name.
+export const fileStem = (name, fallback) =>
+  (name || fallback).replace(/[^\w\- ]+/g, '').trim() || fallback
+
 /** Download a save as a portable .json file another player can import. */
 export function exportSaveById(id) {
   const raw = localStorage.getItem(saveKey(id))
   if (!raw) return false
   const save = JSON.parse(raw)
   const payload = { format: 'fightnight-save', formatVersion: 1, exportedAt: Date.now(), save }
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${(save.saveName || 'world').replace(/[^\w\- ]+/g, '').trim() || 'world'}.fightnight.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadJson(`${fileStem(save.saveName, 'world')}.fightnight.json`, payload)
   return true
 }
 

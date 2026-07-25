@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Field, NumField, StringListEditor, PillPicker } from './ui.jsx'
-import { newCharacter, newMove, newStage, newTournamentEntry } from '../game/model.js'
+import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh } from '../game/model.js'
 import { canStageExhibition, runExhibition, EXHIBITION_COST } from '../game/tournament.js'
+import { downloadJson, fileStem } from '../state/store.jsx'
 import {
   generateCharacter, generateGameTitle, generateArcadeName,
   generateStage, generateTournamentName,
@@ -11,7 +12,7 @@ import {
   ARCHETYPE_KITS, applyArchetypeKit, generateMoveNameForType, STAGE_VIBES,
   generateMoveData, generateCombo, comboDamage, comboRoute, adjustCharacterPower,
 } from '../game/design.js'
-import { computeMatchup, matchupExplanation } from '../game/balance.js'
+import { computeMatchup, computeMatchups, matchupExplanation } from '../game/balance.js'
 import {
   ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES,
   DIFFICULTIES, difficultyOf, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS,
@@ -404,6 +405,7 @@ export function TagsEditor({ save, update }) {
 
 export function CharactersEditor({ save, update }) {
   const [selId, setSelId] = useState(null)
+  const importRef = useRef(null)
   const chars = save.game.characters
   const sel = chars.find((c) => c.id === selId) || null
 
@@ -411,6 +413,38 @@ export function CharactersEditor({ save, update }) {
     const c = s.game.characters.find((x) => x.id === selId)
     if (c) fn(c)
   })
+
+  // Roster files: a designed cast is real work — carry it between worlds.
+  const exportRoster = () => downloadJson(
+    `${fileStem(save.game.name, 'roster')}.characters.fightnight.json`,
+    {
+      format: 'fightnight-characters', formatVersion: 1, exportedAt: Date.now(),
+      gameName: save.game.name, tags: save.game.tags || [], characters: chars,
+    })
+  const importRoster = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const data = JSON.parse(await file.text())
+      if (data.format !== 'fightnight-characters' || !Array.isArray(data.characters)) {
+        alert('That file is not a Fight Night character roster.')
+        return
+      }
+      update((s) => {
+        // The imported cast's tags come along — they shape who mains whom.
+        for (const t of data.tags || []) if (!s.game.tags.includes(t)) s.game.tags.push(t)
+        const have = new Set(s.game.characters.map((c) => c.id))
+        for (const char of data.characters) {
+          // Same id already here (re-import): clone under fresh ids instead of duping.
+          s.game.characters.push(have.has(char.id) ? cloneCharacterFresh(char) : structuredClone(char))
+        }
+        computeMatchups(s.game) // the imported designs are matchup data now
+      })
+    } catch {
+      alert('Could not read that file.')
+    }
+  }
 
   return (
     <div className="grid2">
@@ -426,6 +460,11 @@ export function CharactersEditor({ save, update }) {
               const used = new Set(s.game.characters.map((c) => c.name))
               s.game.characters.push(generateCharacter(used))
             })}>🎲 Generate</button>
+            {chars.length > 0 && (
+              <button className="small" title="download this cast as a file you can import into another world" onClick={exportRoster}>📤</button>
+            )}
+            <button className="small" title="import a character roster file (.characters.fightnight.json)" onClick={() => importRef.current?.click()}>📥</button>
+            <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={importRoster} />
           </div>
         </div>
         <div className="table-scroll"><table>

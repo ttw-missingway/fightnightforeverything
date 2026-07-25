@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import PlayerForm, { capAndFit } from './PlayerForm.jsx'
 import { Field, NumField } from './ui.jsx'
-import { newPlayer } from '../game/model.js'
+import { newPlayer, resetPlayerForNewRun } from '../game/model.js'
+import { uid } from '../game/util.js'
+import { downloadJson, fileStem } from '../state/store.jsx'
 import { generatePlayer, randomPreferences } from '../game/generate.js'
 import { difficultyOf } from '../game/constants.js'
 
 export default function RosterEditor({ save, update }) {
   const [selId, setSelId] = useState(null)
+  const importRef = useRef(null)
   const players = Object.values(save.players).filter((p) => !p.npc)
   const sel = save.players[selId] || null
   const consequential = save.settings.mode !== 'sandbox'
@@ -47,6 +50,46 @@ export default function RosterEditor({ save, update }) {
           <div className="row">
             <button className="small" disabled={atCap} onClick={() => addPlayer(() => newPlayer())}>+ New player</button>
             <button className="small" disabled={atCap} onClick={() => addPlayer((s) => generatePlayer(s, { createdBy: 'user' }))}>🎲 Generate one</button>
+            {players.length > 0 && (
+              <button className="small" title="download this cast as a file you can import into another world"
+                onClick={() => downloadJson(
+                  `${fileStem(save.saveName, 'cast')}.players.fightnight.json`,
+                  { format: 'fightnight-players', formatVersion: 1, exportedAt: Date.now(), players })}>📤</button>
+            )}
+            <button className="small" title="import a player cast file (.players.fightnight.json)" onClick={() => importRef.current?.click()}>📥</button>
+            <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={async (e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (!file) return
+              try {
+                const data = JSON.parse(await file.text())
+                if (data.format !== 'fightnight-players' || !Array.isArray(data.players)) {
+                  alert('That file is not a Fight Night player cast.')
+                  return
+                }
+                // Identities and stats come along; progress starts fresh. Each
+                // one runs through addPlayer so it lands tournament-legal under
+                // THIS world's difficulty, with its tastes as the free roll.
+                for (const raw of data.players) {
+                  if (raw.npc) continue
+                  addPlayer((s) => {
+                    const p = resetPlayerForNewRun(raw)
+                    if (s.players[p.id]) p.id = uid('player') // re-import: fresh identity
+                    // A pinned main only survives if that character exists here
+                    // (it does when the matching character roster was imported).
+                    if (p.mainCharId && !s.game.characters.some((c) => c.id === p.mainCharId)) {
+                      p.mainCharId = null
+                      p.lockedMain = false
+                      p.settledMain = false
+                      p.exploredChars = []
+                    }
+                    return p
+                  })
+                }
+              } catch {
+                alert('Could not read that file.')
+              }
+            }} />
           </div>
         </div>
         {atCap && <p className="dim small">Consequential worlds cap out at 48 players.</p>}
@@ -54,9 +97,8 @@ export default function RosterEditor({ save, update }) {
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
           {consequential ? (
             <p className="dim small">
-              🧑‍🤝‍🧑 Generated players will fill out the remaining slots over time (up to 48). A bigger scene
-              is always better for business, so there's nothing to tune here — just create the regulars you
-              want to guarantee.
+              🧑‍🤝‍🧑 These are YOUR players — the cast this run is about. Everyone else is filler who
+              drifts in and out of the arcade on their own; they never show up on the Players tab.
             </p>
           ) : (
             <>

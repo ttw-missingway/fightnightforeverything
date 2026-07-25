@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../state/store.jsx'
+import { useStore, downloadJson, fileStem } from '../state/store.jsx'
 import { StatBar, moodFace, Portrait } from '../components/ui.jsx'
 import { playerArt, charArt } from '../components/art.js'
 import PlayerForm from '../components/PlayerForm.jsx'
@@ -79,7 +79,15 @@ export default function Players() {
     <div>
       <SceneHealthBanner scene={save.scene} />
       <div className="card">
-      <h2 style={{ marginTop: 0 }}>Leaderboard <span className="dim small">(click a column to sort)</span></h2>
+      <div className="row spread">
+        <h2 style={{ marginTop: 0 }}>Leaderboard <span className="dim small">(click a column to sort)</span></h2>
+        <button className="small" title="download your cast (identities & stats, progress excluded) to import into another world"
+          onClick={() => downloadJson(
+            `${fileStem(save.saveName, 'cast')}.players.fightnight.json`,
+            { format: 'fightnight-players', formatVersion: 1, exportedAt: Date.now(), players })}>
+          📤 Export cast
+        </button>
+      </div>
       <div className="table-scroll"><table>
         <thead>
           <tr>
