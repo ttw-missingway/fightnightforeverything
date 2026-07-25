@@ -510,3 +510,197 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   .fightscreen { min-height: 150px; }
   .fs-arena .fs-fighter { width: 64px; height: 64px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Fight-screen VFX (A2)
+   Impact words, sparks, projectiles and screen shake. All drawn in CSS so the
+   effects inherit the theme, scale with the arena, and ship no assets. The
+   engine decides WHAT fires (meta.fx); this only draws it.
+   --------------------------------------------------------------------------- */
+
+.fs-arena { position: relative; }
+
+.fx-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* A hit: expanding ring of light with a starburst core. */
+.fx-burst {
+  position: absolute;
+  bottom: 34%;
+  width: var(--fx-size, 60px);
+  height: var(--fx-size, 60px);
+  margin-left: calc(var(--fx-size, 60px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--fx-spark) 32%, var(--fx-glow) 55%, transparent 72%);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: fx-burst 0.42s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.fx-burst.at-left { left: 17%; }
+.fx-burst.at-right { left: 83%; }
+.fx-burst.big { animation-duration: 0.62s; }
+
+@keyframes fx-burst {
+  0% { transform: scale(0.25) rotate(-18deg); opacity: 0; }
+  22% { transform: scale(1.06) rotate(6deg); opacity: 1; }
+  100% { transform: scale(1.5) rotate(20deg); opacity: 0; }
+}
+
+/* A projectile crossing the stage before it lands. */
+.fx-projectile {
+  position: absolute;
+  bottom: 36%;
+  width: 22px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 70% 50%, #fff, var(--fx-spark) 45%, transparent 78%);
+  box-shadow: 0 0 12px 3px var(--fx-glow);
+}
+.fx-projectile.to-right { left: 15%; animation: fx-fly-right 0.3s ease-in forwards; }
+.fx-projectile.to-left { left: 85%; animation: fx-fly-left 0.3s ease-in forwards; }
+
+@keyframes fx-fly-right {
+  0% { transform: translateX(0) scaleX(1); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateX(min(58vw, 520px)) scaleX(1.5); opacity: 0.9; }
+}
+@keyframes fx-fly-left {
+  0% { transform: translateX(0) scaleX(1); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateX(max(-58vw, -520px)) scaleX(1.5); opacity: 0.9; }
+}
+
+/* A whiff: a fast arc through empty air, and nothing else. */
+.fx-swish {
+  position: absolute;
+  bottom: 38%;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(200, 214, 230, 0.5);
+  border-color: rgba(200, 214, 230, 0.5) transparent transparent transparent;
+  border-radius: 50%;
+  animation: fx-swish 0.4s ease-out forwards;
+}
+.fx-swish.at-left { left: 22%; }
+.fx-swish.at-right { left: 74%; }
+
+@keyframes fx-swish {
+  0% { transform: rotate(-60deg) scale(0.7); opacity: 0; }
+  35% { opacity: 0.9; }
+  100% { transform: rotate(85deg) scale(1.25); opacity: 0; }
+}
+
+/* The comic-book word. */
+.fx-word {
+  position: absolute;
+  bottom: 52%;
+  font-family: 'Impact', 'Haettenschweiler', 'Arial Black', sans-serif;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow:
+    2px 2px 0 var(--fx-spark), -2px 2px 0 var(--fx-spark),
+    2px -2px 0 var(--fx-spark), -2px -2px 0 var(--fx-spark),
+    0 0 14px var(--fx-spark), 3px 4px 6px rgba(0, 0, 0, 0.8);
+  animation: fx-word 0.62s cubic-bezier(0.15, 1.2, 0.4, 1) forwards;
+}
+.fx-word.light { font-size: 15px; }
+.fx-word.medium { font-size: 24px; }
+.fx-word.heavy { font-size: 36px; }
+.fx-word.at-left { left: 13%; }
+.fx-word.at-right { right: 13%; }
+
+@keyframes fx-word {
+  0% { transform: scale(0.3) rotate(-14deg); opacity: 0; }
+  25% { transform: scale(1.18) rotate(-7deg); opacity: 1; }
+  45% { transform: scale(1) rotate(-5deg); }
+  100% { transform: scale(1.05) rotate(-4deg) translateY(-16px); opacity: 0; }
+}
+
+/* KO: the screen blows out for an instant. */
+.fx-ko-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  animation: fx-ko 0.5s ease-out forwards;
+}
+@keyframes fx-ko {
+  0% { opacity: 0; }
+  12% { opacity: 0.72; }
+  100% { opacity: 0; }
+}
+
+/* Screen shake, scaled by how hard it landed. */
+.fightscreen.shake-sm { animation: fs-shake 0.17s ease-in-out; }
+.fightscreen.shake-md { animation: fs-shake 0.24s ease-in-out; --fs-amp: 3px; }
+.fightscreen.shake-lg { animation: fs-shake 0.4s ease-in-out; --fs-amp: 6px; }
+
+@keyframes fs-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(calc(var(--fs-amp, 1.5px) * -1), var(--fs-amp, 1.5px)); }
+  35% { transform: translate(var(--fs-amp, 1.5px), calc(var(--fs-amp, 1.5px) * -0.6)); }
+  55% { transform: translate(calc(var(--fs-amp, 1.5px) * -0.7), calc(var(--fs-amp, 1.5px) * -0.4)); }
+  80% { transform: translate(calc(var(--fs-amp, 1.5px) * 0.4), var(--fs-amp, 1.5px)); }
+}
+
+/* The fighter eating the hit flinches and flashes. */
+.fs-fighter.hit { animation: fs-hit 0.22s ease-out; }
+.fs-fighter.hit.from-right { animation-name: fs-hit-left; }
+@keyframes fs-hit {
+  0% { filter: brightness(3) saturate(0); transform: translateX(6px); }
+  100% { filter: none; transform: translateX(0); }
+}
+@keyframes fs-hit-left {
+  0% { filter: brightness(3) saturate(0); transform: translateX(-6px) scaleX(-1); }
+  100% { filter: none; transform: translateX(0) scaleX(-1); }
+}
+
+/* The classic lagging "chip" bar: red catches up to where the health went. */
+.hud-health { position: relative; }
+.hud-health .chip,
+.hud-health .fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+.hud-side.b .hud-health .chip,
+.hud-side.b .hud-health .fill { left: auto; right: 0; }
+.hud-health .chip {
+  background: linear-gradient(180deg, #ff7a5c, #c62828);
+  transition: width 0.55s ease 0.28s;
+}
+.hud-health .fill { z-index: 1; transition: width 0.1s linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-layer, .fx-ko-flash { display: none; }
+  .fightscreen.shake-sm,
+  .fightscreen.shake-md,
+  .fightscreen.shake-lg { animation: none; }
+  .fs-fighter.hit { animation: none; }
+  .hud-health .chip { transition: none; }
+}
+
+/* Move cards in the character editor. The movelist used to be a very wide
+   table; once guard properties arrived it was fourteen columns and the whole
+   editor scrolled sideways. Cards wrap instead. */
+.movecard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.movecard select { max-width: 100%; }
+
+.tierpick { display: inline-flex; flex-direction: column; gap: 2px; }
+.tierpick > span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}

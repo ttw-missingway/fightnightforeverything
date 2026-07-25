@@ -110,6 +110,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     grudge: bothArcade && (getRel(a.ref, b.ref) < -40 || getRel(b.ref, a.ref) < -40),
     watcherCount: context === 'evo' ? 10 : 4, // tournaments always draw a rail
     marquee, spice: marquee ? 3 : 2,
+    rules: save.game.rules,
     seed: randInt(1, 2147483646),
   })
   // Every tournament match goes out on the arcade's stream channel.

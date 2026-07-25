@@ -502,6 +502,7 @@ function runMoneyMatch(save, mm, present, events) {
     grudge: true,
     watcherCount: watchers.length,
     marquee: true, spice: 3,
+    rules: save.game.rules,
     seed: randInt(1, 2147483646),
   })
   // The stare-down before the sticks are even plugged in.
@@ -955,6 +956,7 @@ export function simHour(save) {
         watcherCount: watcherGroup.length,
         stageName: stage?.name,
         spice: grudge ? 2 : 1,
+        rules: save.game.rules,
         seed: randInt(1, 2147483646),
       })
       const narration = nar.lines

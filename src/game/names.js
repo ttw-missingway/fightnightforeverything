@@ -115,6 +115,30 @@ export const ARCHETYPE_FLAVOR = {
     'anti-airs {o} clean — pure fundamentals',
     'converts a stray poke into real damage',
   ],
+  'Weapon Master': [
+    'catches {o} at the very tip of the blade',
+    'holds {o} at arm\'s length and simply will not let them in',
+    'sweeps a wide arc that {o} has no answer for',
+    'punishes {o} for existing three feet too close',
+  ],
+  'Aerial': [
+    'comes down on {o} from an angle nobody blocks first try',
+    'crosses {o} up in the air and lands behind them',
+    'refuses to stay on the ground long enough to be hit',
+    'turns a jump-in into a full health bar of trouble for {o}',
+  ],
+  'Stance Switch': [
+    'swaps stance mid-blockstring and {o} guesses wrong',
+    'shows {o} one form and beats them with the other',
+    'changes the entire matchup between one hit and the next',
+    'makes {o} fight two characters in a single round',
+  ],
+  'Counter-Puncher': [
+    'does absolutely nothing until {o} commits, then collects',
+    'parries {o} clean and takes a full round\'s worth of damage back',
+    'waits. and waits. and then {o} presses a button.',
+    'turns {o}\'s best read into their worst decision',
+  ],
   'Grappler': [
     'armors through a hit and snatches the grab anyway',
     'closes in on {o} like a slow tide',

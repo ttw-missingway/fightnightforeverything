@@ -9,6 +9,7 @@ import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance
 import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf } from './constants.js'
 import { postPatchReaction, postPatchAnnouncement } from './socialmedia.js'
 import { computeMatchups, observedPower } from './balance.js'
+import { ALL_RULE_KEYS, ruleLabel, defaultRules } from './rules.js'
 
 // A character's power level: average matchup win% against the rest of the cast.
 export function charPower(game, charId) {
@@ -76,29 +77,70 @@ export function bumpVersion(version) {
 // ---------- Exhaustive diff helpers ----------
 // Patch notes list EVERYTHING — the community reads every line.
 
-const MOVE_STATS = [
-  ['damage', 'damage', (v) => `${v}`],
-  ['chip', 'chip', (v) => `${v}`],
-  ['startup', 'startup', (v) => `${v}f`],
-  ['active', 'active', (v) => `${v}f`],
-  ['recovery', 'recovery', (v) => `${v}f`],
-  ['onBlock', 'on block', (v) => (v > 0 ? `+${v}` : `${v}`)],
-  ['meterCost', 'meter cost', (v) => `${v}`],
-  ['duration', 'duration', (v) => `${v}s`],
+// Moves are described, not numbered, so patch notes now read the way real
+// ones do: "damage light → normal" instead of "damage 27 → 42". The derived
+// frame numbers come along in brackets where they moved, because the
+// community absolutely does datamine the frame data.
+const MOVE_DESCRIPTORS = [
+  ['damage', 'damage'],
+  ['chip', 'chip damage'],
+  ['startup', 'startup'],
+  ['recovery', 'recovery'],
+  ['onBlock', 'block advantage'],
+  ['guard', 'guard property'],
+  ['reach', 'reach'],
+  ['cost', 'meter cost'],
+  ['duration', 'duration'],
+  ['form', 'behaviour'],
 ]
+
+// The numeric field each descriptor drives, for the bracketed detail.
+const DESCRIPTOR_NUMBER = {
+  damage: ['damage', (v) => `${v}`],
+  chip: ['chip', (v) => `${v}`],
+  startup: ['startup', (v) => `${v}f`],
+  recovery: ['recovery', (v) => `${v}f`],
+  onBlock: ['onBlock', (v) => (v > 0 ? `+${v}` : `${v}`)],
+  reach: ['range', (v) => `${v}`],
+  cost: ['meterCost', (v) => `${v}`],
+  duration: ['duration', (v) => `${v}s`],
+}
+
+function effectLabel(e) {
+  return `${e.effect} ${e.trigger}`
+}
 
 function moveDiffClauses(oldM, newM) {
   const clauses = []
   if (oldM.name !== newM.name) clauses.push(`renamed to ${newM.name}`)
   if (oldM.type !== newM.type) clauses.push(`type ${oldM.type} → ${newM.type}`)
   if ((oldM.slot || 'special') !== (newM.slot || 'special')) clauses.push(`${oldM.slot || 'special'} → ${newM.slot || 'special'}`)
-  for (const [key, label, fmt] of MOVE_STATS) {
-    const a = oldM[key]
-    const b = newM[key]
-    if (a !== b && (a != null || b != null)) {
-      clauses.push(`${label} ${a != null ? fmt(a) : '—'} → ${b != null ? fmt(b) : '—'}`)
+
+  const oldD = oldM.d || {}
+  const newD = newM.d || {}
+  for (const [key, label] of MOVE_DESCRIPTORS) {
+    const a = oldD[key]
+    const b = newD[key]
+    if (a === b || (a == null && b == null)) continue
+    const num = DESCRIPTOR_NUMBER[key]
+    let detail = ''
+    if (num) {
+      const [field, fmt] = num
+      const na = oldM[field]
+      const nb = newM[field]
+      if (na !== nb && (na != null || nb != null)) {
+        detail = ` (${na != null ? fmt(na) : '—'} → ${nb != null ? fmt(nb) : '—'})`
+      }
     }
+    clauses.push(`${label} ${a ?? '—'} → ${b ?? '—'}${detail}`)
   }
+
+  // Riders are the part players actually argue about.
+  const oldFx = (oldD.effects || []).map(effectLabel)
+  const newFx = (newD.effects || []).map(effectLabel)
+  for (const e of newFx) if (!oldFx.includes(e)) clauses.push(`now ${e}`)
+  for (const e of oldFx) if (!newFx.includes(e)) clauses.push(`no longer ${e}`)
+
   return clauses
 }
 
@@ -129,6 +171,16 @@ export function diffGame(oldGame, draft, observer = null) {
     return others.reduce((s, o) => s + observer(game, char, o), 0) / others.length
   }
   const notes = []
+  // System changes lead the notes, because they re-tune the entire cast at
+  // once — "everyone gets a burst" moves more matchups than any single nerf.
+  const oldRules = { ...defaultRules(), ...(oldGame.rules || {}) }
+  const newRules = { ...defaultRules(), ...(draft.rules || {}) }
+  let ruleChanges = 0
+  for (const key of ALL_RULE_KEYS) {
+    if (oldRules[key] === newRules[key]) continue
+    ruleChanges++
+    notes.push(`SYSTEM — ${ruleLabel(key)}: ${oldRules[key]} → ${newRules[key]}`)
+  }
   const oldChars = new Map(oldGame.characters.map((c) => [c.id, c]))
   const newChars = new Map(draft.characters.map((c) => [c.id, c]))
 
@@ -152,6 +204,14 @@ export function diffGame(oldGame, draft, observer = null) {
     if (old.archetype !== c.archetype) notes.push(`${c.name} reworked: archetype ${old.archetype} → ${c.archetype}`)
     if (c.difficulty !== old.difficulty) notes.push(`${c.name}: difficulty ${old.difficulty} → ${c.difficulty}`)
     if (c.popularity !== old.popularity) notes.push(`${c.name}: star power ${old.popularity} → ${c.popularity}`)
+    // Body changes are the loudest kind of rework — a health-bar adjustment
+    // rewrites every matchup at once.
+    if ((old.vitality || 'normal') !== (c.vitality || 'normal')) {
+      notes.push(`${c.name}: health ${old.vitality || 'normal'} → ${c.vitality || 'normal'}`)
+    }
+    if ((old.size || 'normal') !== (c.size || 'normal')) {
+      notes.push(`${c.name}: hurtbox ${old.size || 'normal'} → ${c.size || 'normal'}`)
+    }
     if ((old.spriteKey || null) !== (c.spriteKey || null)) notes.push(`${c.name}: updated character art`)
     if ((old.description || '') !== (c.description || '')) notes.push(`${c.name}: bio updated`)
     const tagDiff = listDiff(old.tags, c.tags)
@@ -230,7 +290,7 @@ export function diffGame(oldGame, draft, observer = null) {
   const boring = totalPairs >= 6 && flatPairs / totalPairs > 0.85
 
   return {
-    notes, added, removed, buffed, nerfed, moveChanges,
+    notes, added, removed, buffed, nerfed, moveChanges, ruleChanges,
     stageAdds: stageAdds.length,
     overpowered, boring,
     // OP characters the patch actually fixed.
@@ -276,7 +336,8 @@ export function computeReception(diff, daysSince, anticipationDays = 0, bias = 0
   if (anticipationDays >= 3) {
     add(Math.min(8, 3 + anticipationDays * 0.4), 'the countdown had everyone refreshing the patch notes')
   }
-  const content = Math.min(30, diff.added.length * 12 + diff.stageAdds * 4 + diff.moveChanges * 2)
+  const content = Math.min(30, diff.added.length * 12 + diff.stageAdds * 4 + diff.moveChanges * 2
+    + (diff.ruleChanges || 0) * 5) // a system change lands on the whole cast at once
   if (content > 0) add(content, 'fresh content')
   if (diff.fixedOp.length) add(diff.fixedOp.length * 8, `finally addressed ${diff.fixedOp.map((c) => c.name).join(', ')}`)
   if (diff.buffedStrong?.length) {
@@ -363,7 +424,8 @@ export function releasePatch(save) {
     if (divisive) save.stream.hype = clamp(save.stream.hype + 3, 0, 100)
     // Fresh content is a shot of life for a scene grinding the same build for
     // months — it rekindles passion (and keeps veterans from burning out).
-    const contentRefresh = clamp(diff.added.length * 5 + diff.stageAdds * 2 + diff.moveChanges * 0.6, 0, 12)
+    const contentRefresh = clamp(diff.added.length * 5 + diff.stageAdds * 2 + diff.moveChanges * 0.6
+      + (diff.ruleChanges || 0) * 2, 0, 12)
     for (const p of Object.values(save.players)) {
       if (!p.isRegular || p.retired || p.banished) continue
       p.mood = clamp(p.mood + clamp(score / 30, -1.5, 1.5), 0, 10)

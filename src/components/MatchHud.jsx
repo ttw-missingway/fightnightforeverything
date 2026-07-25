@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { charArt, charArtFor, playerArt, playerArtFor, stageArt } from './art.js'
 import { Portrait } from './ui.jsx'
+import FxLayer, { shakeClassFor } from './fx.jsx'
 
 const FRESH = { hpA: 100, hpB: 100, mA: 0, mB: 0, gA: 0, gB: 0 }
 
@@ -14,14 +16,27 @@ const FRESH = { hpA: 100, hpB: 100, mA: 0, mB: 0, gA: 0, gB: 0 }
  * `revealed` = number of narration lines currently shown; omit it for
  * fully-revealed views (recaps, finished brackets). Matches recorded
  * before HUD data existed still get the stage + sprites, just no bars.
+ *
+ * `state` overrides the looked-up snapshot entirely. MatchPlayback uses it
+ * to walk the bars DOWN a line's damage one hit at a time, so a combo
+ * chips instead of teleporting.
  */
-export default function MatchHud({ m, revealed = null }) {
+export default function MatchHud({ m, revealed = null, state = null, pulse = null, shakeKey = null }) {
   const { save } = useStore()
+  // Shake fires ONCE per narration line, not once per tick — a seven-hit
+  // combo sparks seven times but only rocks the cabinet on the way in.
+  const [shaking, setShaking] = useState(false)
+  useEffect(() => {
+    if (shakeKey == null) return
+    setShaking(true)
+    const t = setTimeout(() => setShaking(false), 420)
+    return () => clearTimeout(t)
+  }, [shakeKey])
   if (m.duels) return null // crew battles have no single fighter per side
 
   const hud = m.narrationHud
   const shown = revealed == null ? (hud?.length ?? 0) : Math.min(revealed, hud?.length ?? 0)
-  const st = hud && shown > 0 ? hud[shown - 1] : FRESH
+  const st = state || (hud && shown > 0 ? hud[shown - 1] : FRESH)
   const hasBars = !!hud
 
   const charAName = m.charAName ?? m.aChar
@@ -44,8 +59,9 @@ export default function MatchHud({ m, revealed = null }) {
   const playerA = playerArt(save.players[m.aId]) ?? playerArtFor(m.aId ?? m.aName)
   const playerB = playerArt(save.players[m.bId]) ?? playerArtFor(m.bId ?? m.bName)
 
+  const shake = shaking ? shakeClassFor(pulse) : ''
   return (
-    <div className="fightscreen" style={{ backgroundImage: bgLayers }} title={stage?.name || backdrop.name}
+    <div className={`fightscreen ${shake}`} style={{ backgroundImage: bgLayers }} title={stage?.name || backdrop.name}
       onClick={(e) => e.stopPropagation()}>
       <div className="fs-bars">
         <BarSide side="a" name={m.aName} charName={charAName} playerUrl={playerA}
@@ -58,8 +74,11 @@ export default function MatchHud({ m, revealed = null }) {
           hp={st.hpB} meter={st.mB} games={st.gB} target={m.ftTarget} hasBars={hasBars} />
       </div>
       <div className="fs-arena">
-        <FighterSprite url={spriteA} alt={charAName} ko={hasBars && st.hpA <= 0} />
-        <FighterSprite url={spriteB} alt={charBName} ko={hasBars && st.hpB <= 0} mirror />
+        <FighterSprite url={spriteA} alt={charAName} ko={hasBars && st.hpA <= 0}
+          hitKey={pulse?.side === 'A' ? pulse.key : null} />
+        <FighterSprite url={spriteB} alt={charBName} ko={hasBars && st.hpB <= 0} mirror
+          hitKey={pulse?.side === 'B' ? pulse.key : null} />
+        <FxLayer pulse={pulse} />
       </div>
     </div>
   )
@@ -77,6 +96,9 @@ function BarSide({ side, name, charName, playerUrl, hp, meter, games, target, ha
       {hasBars && (
         <>
           <div className="hud-health" title={`${hp}% health`}>
+            {/* The chip layer trails the real bar — the red catching up is
+                most of why a hit reads as a hit. */}
+            <div className="chip" style={{ width: `${hp}%` }} />
             <div className={`fill ${hp <= 25 ? 'low' : ''}`} style={{ width: `${hp}%` }} />
           </div>
           <div className="hud-under">
@@ -96,11 +118,14 @@ function BarSide({ side, name, charName, playerUrl, hp, meter, games, target, ha
 }
 
 // A fighter on the stage. KO'd fighters (0 health) slump into grayscale.
-function FighterSprite({ url, alt, ko = false, mirror = false }) {
+// `hitKey` changes each time this side eats one: the keyed remount is what
+// restarts the flinch animation, so consecutive hits each register.
+function FighterSprite({ url, alt, ko = false, mirror = false, hitKey = null }) {
   if (!url) return <div />
   return (
     <img
-      className={`fs-fighter ${ko ? 'ko' : ''}`}
+      key={hitKey ?? 'idle'}
+      className={`fs-fighter ${ko ? 'ko' : ''} ${hitKey != null ? 'hit' : ''} ${mirror ? 'from-right' : ''}`}
       src={url} width={96} height={96} alt={alt} title={alt}
       style={mirror ? { transform: 'scaleX(-1)' } : undefined}
     />

@@ -93,6 +93,7 @@ export const STAT_MAX_POINTS = 5 // per-stat cap, every difficulty
 export const ARCHETYPES = [
   'Shoto', 'Grappler', 'Zoner', 'Rushdown', 'Charge', 'Puppet',
   'Setplay', 'Footsies', 'Mix-up', 'Glass Cannon', 'All-Rounder', 'Big Body',
+  'Weapon Master', 'Aerial', 'Stance Switch', 'Counter-Puncher',
 ]
 
 export const MOVE_TYPES = [

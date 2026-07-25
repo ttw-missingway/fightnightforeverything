@@ -10,9 +10,18 @@ import {
 } from '../game/generate.js'
 import {
   ARCHETYPE_KITS, applyArchetypeKit, generateMoveNameForType, STAGE_VIBES,
-  generateMoveData, generateCombo, comboDamage, comboRoute, adjustCharacterPower,
+  generateMoveData, generateCombo, comboDamage, adjustCharacterPower,
+  applyMoveDescriptors, MOVE_FORMS, DAMAGE_TIERS, CHIP_TIERS, SPEED_TIERS,
+  BLOCK_TIERS, COST_TIERS, DURATION_TIERS, VITALITY_TIERS, SIZE_TIERS, REACH_TIERS,
+  EFFECT_TRIGGERS, EFFECT_KINDS, GUARD_TIERS, comboMoves, comboLinks, linkStatus, LINK_LABEL,
 } from '../game/design.js'
-import { computeMatchup, computeMatchups, matchupExplanation } from '../game/balance.js'
+import {
+  computeMatchup, computeMatchups, matchupExplanation,
+  STYLE_BEATS, STYLE_WHY, STYLE_ROLES, styleRoleOf,
+} from '../game/balance.js'
+import {
+  RULE_FAMILIES, NETCODE_OPTIONS, defaultRules, tryNetcode, netcodeTaunt,
+} from '../game/rules.js'
 import {
   ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES,
   DIFFICULTIES, difficultyOf, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS,
@@ -532,6 +541,23 @@ export function CharactersEditor({ save, update }) {
             <NumField label="Popularity (1-10)" value={sel.popularity} min={1} max={10}
               onChange={(v) => patchChar((c) => { c.popularity = v })} />
           </div>
+          <div className="row">
+            <Field label="Health">
+              <select value={sel.vitality || 'normal'}
+                onChange={(e) => patchChar((c) => { c.vitality = e.target.value })}>
+                {VITALITY_TIERS.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="Size">
+              <select value={sel.size || 'normal'}
+                onChange={(e) => patchChar((c) => { c.size = e.target.value })}>
+                {SIZE_TIERS.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <span className="dim small" style={{ alignSelf: 'center' }}>
+              a tank carries a bigger bar; a big body is easier to combo and slower to move
+            </span>
+          </div>
           <Field label="Description">
             <textarea value={sel.description} onChange={(e) => patchChar((c) => { c.description = e.target.value })} />
           </Field>
@@ -631,12 +657,139 @@ export function MatchupReport({ save, observe = null, confidence = 1, games = 0,
   )
 }
 
-const FD_FIELDS = [
-  ['startup', 'Start'], ['active', 'Active'], ['recovery', 'Rec'], ['onBlock', 'OnBlk'],
-  ['damage', 'Dmg'], ['chip', 'Chip'], ['meterCost', 'Meter'], ['duration', 'Dur(s)'],
+// The descriptor controls, in the order they read as a sentence.
+const D_FIELDS = [
+  ['damage', 'Damage', DAMAGE_TIERS],
+  ['chip', 'Chip', CHIP_TIERS],
+  ['startup', 'Speed', SPEED_TIERS],
+  ['recovery', 'Recovery', SPEED_TIERS],
+  ['onBlock', 'On block', BLOCK_TIERS],
+  ['guard', 'Blocked', GUARD_TIERS],
+  ['reach', 'Reach', REACH_TIERS],
+  ['cost', 'Meter', COST_TIERS],
 ]
+const TIMED_KINDS = ['set up', 'trap', 'install']
 
-// The frame-data sheet: normals, specials, supers — every number editable.
+const fmtPlus = (v) => (v > 0 ? `+${v}` : `${v}`)
+
+// Overheads and lows are the guessing game, so they get to shout about it.
+const GUARD_NOTE = {
+  overhead: { label: 'must block standing', color: 'var(--gold)' },
+  low: { label: 'must block crouching', color: 'var(--cyan)' },
+  unblockable: { label: 'unblockable', color: 'var(--red)' },
+  mid: null,
+}
+
+// What the engine actually sees, once the description resolves. Read-only by
+// design: the numbers are derived, and letting them be typed over would leave
+// a move claiming "light damage" while hitting for heavy.
+function DerivedNumbers({ m }) {
+  const bits = [`${m.startup}f start`, `${m.recovery}f rec`, `${fmtPlus(m.onBlock)} on block`]
+  if (m.damage) bits.push(`${m.damage} dmg`)
+  if (m.chip) bits.push(`${m.chip} chip`)
+  if (m.meterCost) bits.push(`${m.meterCost} meter`)
+  if (m.duration) bits.push(`${m.duration}s`)
+  return <span className="dim small">{bits.join(' · ')}</span>
+}
+
+// A labelled dropdown, compact enough to sit in a wrapping row.
+function TierPick({ label, value, options, onChange }) {
+  return (
+    <label className="tierpick">
+      <span className="dim">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((t) => <option key={t}>{t}</option>)}
+      </select>
+    </label>
+  )
+}
+
+/**
+ * One move, as a card. This used to be a row in a very wide table — adding the
+ * guard property made it fourteen columns and the whole editor scrolled
+ * sideways. Cards wrap instead, so the sheet fits any width and each move
+ * reads as its own little design statement.
+ */
+function MoveCard({ m, patchMove, onDelete }) {
+  const set = (key, value) => patchMove(m.id, (x) => {
+    x.d = { ...x.d, [key]: value }
+    applyMoveDescriptors(x) // descriptors are the truth; re-derive the numbers
+  })
+  const note = GUARD_NOTE[m.d?.guard]
+  return (
+    <div className="movecard">
+      <div className="row spread" style={{ marginBottom: 6 }}>
+        <div className="row" style={{ gap: 4 }}>
+          <input value={m.name} style={{ minWidth: 150 }}
+            onChange={(e) => patchMove(m.id, (x) => { x.name = e.target.value })} />
+          <button className="small" title="random name for this type"
+            onClick={() => patchMove(m.id, (x) => { x.name = generateMoveNameForType(x.type) })}>🎲</button>
+          <select value={m.type} onChange={(e) => patchMove(m.id, (x) => {
+            x.type = e.target.value
+            Object.assign(x, generateMoveData(x.type)) // a fresh description for the new kind
+          })}>
+            {MOVE_TYPES.map((t) => <option key={t}>{t}</option>)}
+          </select>
+          <select value={m.d?.form ?? ''} onChange={(e) => set('form', e.target.value)}>
+            {(MOVE_FORMS[m.type] || MOVE_FORMS['melee']).map((fm) => <option key={fm}>{fm}</option>)}
+          </select>
+        </div>
+        <button className="small danger" onClick={onDelete}>×</button>
+      </div>
+
+      <div className="row" style={{ gap: 8 }}>
+        {D_FIELDS.map(([k, label, tiers]) => (
+          <TierPick key={k} label={label} value={m.d?.[k] ?? tiers[0]} options={tiers}
+            onChange={(v) => set(k, v)} />
+        ))}
+        {TIMED_KINDS.includes(m.type) && (
+          <TierPick label="Lasts" value={m.d?.duration ?? 'none'} options={DURATION_TIERS}
+            onChange={(v) => set('duration', v)} />
+        )}
+      </div>
+
+      <div className="row" style={{ gap: 6, marginTop: 6 }}>
+        {(m.d?.effects || []).map((fx, i) => (
+          <span className="row" key={i} style={{ gap: 2 }}>
+            <select value={fx.trigger} onChange={(e) => patchMove(m.id, (x) => {
+              const next = [...x.d.effects]
+              next[i] = { ...next[i], trigger: e.target.value }
+              x.d = { ...x.d, effects: next }
+              applyMoveDescriptors(x)
+            })}>
+              {EFFECT_TRIGGERS.map((t) => <option key={t}>{t}</option>)}
+            </select>
+            <select value={fx.effect} onChange={(e) => patchMove(m.id, (x) => {
+              const next = [...x.d.effects]
+              next[i] = { ...next[i], effect: e.target.value }
+              x.d = { ...x.d, effects: next }
+              applyMoveDescriptors(x)
+            })}>
+              {EFFECT_KINDS.map((t) => <option key={t}>{t}</option>)}
+            </select>
+            <button className="small danger" onClick={() => patchMove(m.id, (x) => {
+              x.d = { ...x.d, effects: x.d.effects.filter((_, j) => j !== i) }
+              applyMoveDescriptors(x)
+            })}>×</button>
+          </span>
+        ))}
+        <button className="small" title="add an extra effect to this move"
+          onClick={() => patchMove(m.id, (x) => {
+            x.d = {
+              ...x.d,
+              effects: [...(x.d?.effects || []), { trigger: EFFECT_TRIGGERS[1], effect: EFFECT_KINDS[0] }],
+            }
+            applyMoveDescriptors(x)
+          })}>+ rider</button>
+        <DerivedNumbers m={m} />
+        {note && <span className="small" style={{ color: note.color }}>· {note.label}</span>}
+      </div>
+    </div>
+  )
+}
+
+// The movelist sheet. Moves are DESCRIBED, not numbered — pick what the move
+// is like and the game works out the frame data.
 function MovelistEditor({ char, patchChar }) {
   const patchMove = (id, fn) => patchChar((c) => {
     const m = c.moves.find((x) => x.id === id)
@@ -656,47 +809,11 @@ function MovelistEditor({ char, patchChar }) {
         if (!moves.length) return null
         return (
           <div key={slot}>
-            <p className="dim small" style={{ margin: '8px 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</p>
-            <div className="table-scroll"><table>
-              <thead>
-                <tr>
-                  <th>Move</th><th>Type</th>
-                  {FD_FIELDS.map(([k, l]) => <th key={k} title={k}>{l}</th>)}
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {moves.map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      <div className="row" style={{ flexWrap: 'nowrap', gap: 4 }}>
-                        <input value={m.name} style={{ minWidth: 110 }}
-                          onChange={(e) => patchMove(m.id, (x) => { x.name = e.target.value })} />
-                        <button className="small" title="random name for this type"
-                          onClick={() => patchMove(m.id, (x) => { x.name = generateMoveNameForType(x.type) })}>🎲</button>
-                      </div>
-                    </td>
-                    <td>
-                      <select value={m.type} onChange={(e) => patchMove(m.id, (x) => {
-                        x.type = e.target.value
-                        Object.assign(x, generateMoveData(x.type)) // fresh realistic data for the new type
-                      })}>
-                        {MOVE_TYPES.map((t) => <option key={t}>{t}</option>)}
-                      </select>
-                    </td>
-                    {FD_FIELDS.map(([k]) => (
-                      <td key={k}>
-                        <input type="number" className="fd" value={m[k] ?? 0}
-                          onChange={(e) => patchMove(m.id, (x) => { x[k] = Number(e.target.value) })} />
-                      </td>
-                    ))}
-                    <td><button className="small danger" onClick={() => patchChar((c) => {
-                      c.moves = c.moves.filter((x) => x.id !== m.id)
-                    })}>×</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
+            <p className="dim small" style={{ margin: '10px 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</p>
+            {moves.map((m) => (
+              <MoveCard key={m.id} m={m} patchMove={patchMove}
+                onDelete={() => patchChar((c) => { c.moves = c.moves.filter((x) => x.id !== m.id) })} />
+            ))}
           </div>
         )
       })}
@@ -707,14 +824,45 @@ function MovelistEditor({ char, patchChar }) {
         <button className="small" onClick={() => patchChar((c) => {
           c.moves.push(newMove({ name: generateMoveNameForType(addType), type: addType }))
         })}>+ Add {addType}</button>
-        <span className="dim small">frame data is generated realistic-by-type; tune every number</span>
+        <span className="dim small">
+          describe what the move is like — the game derives the frame data
+        </span>
       </div>
     </div>
   )
 }
 
-// Named routes: pick real moves, get real (scaled) damage numbers.
+// Whether a step actually connects to the next one, in a colour you can scan.
+const LINK_STYLE = {
+  cancel: { color: 'var(--cyan)', mark: '▸' },
+  links: { color: 'var(--green)', mark: '▸' },
+  counter: { color: 'var(--gold)', mark: '▸' },
+  no: { color: 'var(--red)', mark: '✕' },
+}
+
+function LinkChip({ status }) {
+  const st = LINK_STYLE[status] || LINK_STYLE.no
+  return (
+    <span className="small" style={{ color: st.color, whiteSpace: 'nowrap' }}
+      title={status === 'cancel' ? 'a normal cancelled into a special — always works'
+        : status === 'links' ? 'the advantage on hit covers the next move\'s startup'
+          : status === 'counter' ? 'only connects on counter-hit'
+            : 'they recover first — the combo drops here'}>
+      {st.mark} {LINK_LABEL[status]}
+    </span>
+  )
+}
+
+/**
+ * Named routes, built from the real movelist and validated against the real
+ * frame data. A route stops paying out at the first broken link, so the
+ * block-advantage and speed choices made upstairs decide what's buildable.
+ */
 function CombosEditor({ char, patchChar }) {
+  const editCombo = (id, fn) => patchChar((c) => {
+    const x = (c.combos || []).find((y) => y.id === id)
+    if (x) fn(x, c)
+  })
   return (
     <div style={{ marginTop: 12 }}>
       <div className="row spread">
@@ -724,31 +872,71 @@ function CombosEditor({ char, patchChar }) {
           if (combo) { c.combos = c.combos || []; c.combos.push(combo) }
         })}>🎲 New combo</button>
       </div>
-      <p className="dim small">Named routes built from the movelist. Damage scales per hit, like a real fighter. These show up in match commentary.</p>
-      {(char.combos || []).map((combo) => (
-        <div className="card sub" key={combo.id}>
-          <div className="row spread">
-            <div className="row">
-              <input value={combo.name} style={{ minWidth: 150 }}
-                onChange={(e) => patchChar((c) => {
-                  const x = (c.combos || []).find((y) => y.id === combo.id); if (x) x.name = e.target.value
-                })} />
-              <span className="gold small">{comboDamage(char, combo)} dmg</span>
+      <p className="dim small">
+        Routes are checked against the frame data you wrote. A move only follows another if it
+        cancels, or if the previous move leaves enough advantage on hit to cover its startup —
+        so making a button safer or faster is what opens new routes up.
+      </p>
+      {(char.combos || []).map((combo) => {
+        const moves = comboMoves(char, combo)
+        const links = comboLinks(char, combo)
+        const breakAt = links.indexOf('no')
+        return (
+          <div className="card sub" key={combo.id}>
+            <div className="row spread">
+              <div className="row">
+                <input value={combo.name} style={{ minWidth: 150 }}
+                  onChange={(e) => editCombo(combo.id, (x) => { x.name = e.target.value })} />
+                <span className="gold small">{comboDamage(char, combo)} dmg</span>
+                {breakAt >= 0 && (
+                  <span className="small" style={{ color: 'var(--red)' }}>
+                    drops after hit {breakAt + 1} — the rest doesn't count
+                  </span>
+                )}
+              </div>
+              <div className="row">
+                <button className="small" title="reroll the route" onClick={() => patchChar((c) => {
+                  const x = (c.combos || []).find((y) => y.id === combo.id)
+                  const fresh = generateCombo(c, [])
+                  if (x && fresh) x.moveIds = fresh.moveIds
+                })}>🎲</button>
+                <button className="small danger" onClick={() => patchChar((c) => {
+                  c.combos = (c.combos || []).filter((y) => y.id !== combo.id)
+                })}>×</button>
+              </div>
             </div>
-            <div className="row">
-              <button className="small" title="reroll the route" onClick={() => patchChar((c) => {
-                const x = (c.combos || []).find((y) => y.id === combo.id)
-                const fresh = generateCombo(c, [])
-                if (x && fresh) x.moveIds = fresh.moveIds
-              })}>🎲</button>
-              <button className="small danger" onClick={() => patchChar((c) => {
-                c.combos = (c.combos || []).filter((y) => y.id !== combo.id)
-              })}>×</button>
+
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
+              {moves.map((m, i) => (
+                <span className="row" key={`${combo.id}-${i}`} style={{ gap: 4, alignItems: 'center' }}>
+                  {i > 0 && <LinkChip status={links[i - 1]} />}
+                  <select value={m.id}
+                    style={breakAt >= 0 && i > breakAt ? { opacity: 0.45 } : undefined}
+                    onChange={(e) => editCombo(combo.id, (x) => {
+                      const next = [...x.moveIds]; next[i] = e.target.value; x.moveIds = next
+                    })}>
+                    {char.moves.map((opt) => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                  <button className="small danger" title="drop this hit"
+                    onClick={() => editCombo(combo.id, (x) => {
+                      x.moveIds = x.moveIds.filter((_, j) => j !== i)
+                    })}>×</button>
+                </span>
+              ))}
+              <button className="small" onClick={() => editCombo(combo.id, (x) => {
+                const last = moves[moves.length - 1]
+                // Offer something that actually connects, if anything does.
+                const fits = char.moves.filter((o) => !x.moveIds.includes(o.id) && linkStatus(last, o) !== 'no')
+                const pick = fits[0] || char.moves.find((o) => !x.moveIds.includes(o.id)) || char.moves[0]
+                if (pick) x.moveIds = [...x.moveIds, pick.id]
+              })}>+ hit</button>
             </div>
+            {!moves.length && <p className="small dim" style={{ margin: '4px 0 0' }}>route uses deleted moves</p>}
           </div>
-          <p className="small dim" style={{ margin: '4px 0 0' }}>{comboRoute(char, combo) || 'route uses deleted moves'}</p>
-        </div>
-      ))}
+        )
+      })}
       {!(char.combos || []).length && <p className="dim small">No combos named yet.</p>}
     </div>
   )
@@ -1243,6 +1431,202 @@ export function ScheduleEditor({ save, update }) {
         </div>
       ))}
       {save.arcade.schedule.length === 0 && <p className="dim">Nothing scheduled yet.</p>}
+    </div>
+  )
+}
+
+/**
+ * The universal mechanics: the rules every character plays by. Changing one of
+ * these re-tunes the whole cast at once — give everyone a burst and pressure
+ * characters get worse without a single move being touched — which is exactly
+ * why they're patchable.
+ */
+export function RulesEditor({ save, update }) {
+  const rules = { ...defaultRules(), ...(save.game.rules || {}) }
+  const setRule = (key, value) => update((s) => {
+    s.game.rules = { ...defaultRules(), ...(s.game.rules || {}), [key]: value }
+  })
+  const taunt = netcodeTaunt(rules)
+
+  return (
+    <div className="card">
+      <h3>Universal Mechanics</h3>
+      <p className="dim small">
+        The systems the whole cast shares. These change what a character IS without
+        touching the character — and every one of them can be altered in a patch.
+      </p>
+
+      {RULE_FAMILIES.map((fam) => (
+        <div className="card sub" key={fam.key}>
+          <h4 style={{ margin: '0 0 2px' }}>{fam.label}</h4>
+          <p className="dim small" style={{ margin: '0 0 8px' }}>{fam.blurb}</p>
+          <div className="row" style={{ gap: 10 }}>
+            {fam.rules.map((r) => (
+              <label className="tierpick" key={r.key} title={r.note || r.label}>
+                <span className="dim">{r.label}</span>
+                <select value={rules[r.key]} onChange={(e) => setRule(r.key, e.target.value)}>
+                  {r.options.map((o) => <option key={o}>{o}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          {fam.rules.some((r) => r.note) && (
+            <ul className="dim small" style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+              {fam.rules.filter((r) => r.note).map((r) => (
+                <li key={r.key}><strong>{r.label}</strong> — {r.note}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+
+      <NetcodeRow rules={rules} update={update} taunt={taunt} />
+    </div>
+  )
+}
+
+/**
+ * The netcode selector does not work, and that is the feature.
+ *
+ * The revert is DELAYED on purpose: picking rollback has to visibly land for a
+ * beat before the game quietly puts it back, because an instant snap just
+ * reads as a broken dropdown. A quarter of a second is long enough to see it
+ * happen to you.
+ */
+function NetcodeRow({ rules, update, taunt }) {
+  // Shows the choice that was just made, before the game takes it back.
+  const [pending, setPending] = useState(null)
+
+  const choose = (choice) => {
+    setPending(choice)
+    // The revert is DELAYED on purpose: picking rollback has to visibly land
+    // for a beat before the game quietly puts it back, because an instant snap
+    // just reads as a broken dropdown. A quarter second is long enough to see
+    // it happen to you.
+    //
+    // Plain setTimeout rather than an effect: `update` is rebuilt on every
+    // parent render, so an effect depending on it reschedules its own timer
+    // forever and the revert never lands.
+    setTimeout(() => {
+      update((s) => {
+        const cur = { ...defaultRules(), ...(s.game.rules || {}) }
+        s.game.rules = { ...cur, ...tryNetcode(cur, choice) }
+      })
+      setPending(null)
+    }, 260)
+  }
+
+  return (
+    <div className="card sub">
+      <h4 style={{ margin: '0 0 2px' }}>Netcode</h4>
+      <p className="dim small" style={{ margin: '0 0 8px' }}>How the game handles online play.</p>
+      <div className="row" style={{ gap: 10 }}>
+        <label className="tierpick">
+          <span className="dim">Netcode</span>
+          <select value={pending ?? rules.netcode} onChange={(e) => choose(e.target.value)}>
+            {NETCODE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </label>
+      </div>
+      {taunt && <p className="small" style={{ color: 'var(--red)', margin: '8px 0 0' }}>{taunt}</p>}
+    </div>
+  )
+}
+
+const ROLE_COLOR = {
+  'keep-out': 'var(--cyan)',
+  'grappler': 'var(--red)',
+  'rushdown': 'var(--gold)',
+  'balanced': 'var(--dim)',
+}
+const ROLE_BLURB = {
+  'keep-out': 'holds the ground and makes you come to them',
+  'grappler': 'has to get close, and ends it when they do',
+  'rushdown': 'gets in fast and refuses to leave',
+  'balanced': 'sits outside the wheel — no free wins, no free losses',
+}
+
+/**
+ * The style triangle, made visible. Fighting-game matchups aren't a ladder —
+ * they're a wheel, and the wheel is the thing a designer needs to be able to
+ * see. This shows the rule, which of THIS cast sits where, and the matchup
+ * percentages those styles actually produce in this game right now (rules and
+ * frame data included, so it moves when you patch).
+ */
+export function StyleWheel({ save }) {
+  const chars = save.game.characters
+  const rules = save.game.rules
+  const roles = ['keep-out', 'grappler', 'rushdown', 'balanced']
+  const byRole = Object.fromEntries(roles.map((r) => [r, chars.filter((c) => styleRoleOf(c) === r)]))
+
+  // What these two styles actually average against each other in this cast.
+  const between = (a, b) => {
+    const pairs = []
+    for (const x of byRole[a]) for (const y of byRole[b]) if (x !== y) pairs.push(computeMatchup(x, y, rules))
+    if (!pairs.length) return null
+    return Math.round(pairs.reduce((s, v) => s + v, 0) / pairs.length)
+  }
+
+  return (
+    <div className="card">
+      <h3>Style Matchups</h3>
+      <p className="dim small">
+        Matchups aren&apos;t a ladder — they&apos;re a wheel. Each style has a style it beats and one
+        that beats it, on top of whatever the frame data says. Balanced styles sit outside it.
+      </p>
+
+      <div className="row" style={{ gap: 10, alignItems: 'stretch' }}>
+        {['keep-out', 'grappler', 'rushdown'].map((role) => {
+          const prey = STYLE_BEATS[role]
+          const measured = between(role, prey)
+          return (
+            <div className="card sub" key={role} style={{ flex: '1 1 220px', margin: 0, borderColor: ROLE_COLOR[role] }}>
+              <div style={{ color: ROLE_COLOR[role], fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
+                {role}
+              </div>
+              <div className="small dim" style={{ marginBottom: 6 }}>{ROLE_BLURB[role]}</div>
+              <div className="small">
+                beats <strong style={{ color: ROLE_COLOR[prey] }}>{prey}</strong>
+                {measured != null && <span className="gold"> · {measured}% in your game</span>}
+              </div>
+              <div className="small dim" style={{ fontStyle: 'italic', marginTop: 2 }}>
+                {STYLE_WHY[`${role}|${prey}`]}
+              </div>
+              <div className="small" style={{ marginTop: 6 }}>
+                {byRole[role].length
+                  ? byRole[role].map((c) => c.name).join(', ')
+                  : <span className="dim">nobody in your cast plays this style</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {byRole.balanced.length > 0 && (
+        <p className="small" style={{ marginTop: 8 }}>
+          <span className="dim">Outside the wheel — </span>
+          {byRole.balanced.map((c) => c.name).join(', ')}
+          <span className="dim"> ({ROLE_BLURB.balanced})</span>
+        </p>
+      )}
+
+      {roles.every((r) => !byRole[r].length || r === 'balanced') && (
+        <p className="small" style={{ color: 'var(--gold)', marginTop: 8 }}>
+          ⚠ Your whole cast sits outside the wheel. Nothing counters anything — every matchup
+          comes down to raw numbers.
+        </p>
+      )}
+
+      <details style={{ marginTop: 10 }}>
+        <summary className="small dim" style={{ cursor: 'pointer' }}>▸ which archetype is which style</summary>
+        <div className="row" style={{ gap: 6, marginTop: 6 }}>
+          {Object.entries(STYLE_ROLES).map(([arch, role]) => (
+            <span className="pill small" key={arch} style={{ borderColor: ROLE_COLOR[role] }}>
+              {arch} <span style={{ color: ROLE_COLOR[role] }}>· {role}</span>
+            </span>
+          ))}
+        </div>
+      </details>
     </div>
   )
 }

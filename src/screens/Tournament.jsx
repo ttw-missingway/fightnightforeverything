@@ -1,8 +1,6 @@
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
-import StreamChat from '../components/StreamChat.jsx'
-import { SpeechLine } from '../components/ui.jsx'
-import MatchHud from '../components/MatchHud.jsx'
+import MatchPlayback from '../components/MatchPlayback.jsx'
 
 export default function Tournament() {
   const { save, screen, nav, mutate } = useStore()
@@ -163,10 +161,8 @@ export default function Tournament() {
  * (winner only announced by the final line), with stream chat playing along.
  */
 function NowPlaying({ m, roundTitle, onFinished }) {
-  const [lines, setLines] = useState(0) // 0 = not started
-  const total = m.narration?.length || 0
-  const started = lines > 0
-  const finished = started && lines >= total
+  const [started, setStarted] = useState(false)
+  const [finished, setFinished] = useState(false)
   const isTeamMatch = !!m.duels
 
   return (
@@ -175,39 +171,34 @@ function NowPlaying({ m, roundTitle, onFinished }) {
         {started ? 'Now playing' : 'Up next'} — {roundTitle}
         {m.stream && started && <span className="small"> · 👁 {m.stream.viewers}</span>}
       </h3>
-      {isTeamMatch ? (
+      {isTeamMatch && (
         <p style={{ fontSize: 18 }}>
           {m.aName} <span className="dim">vs</span> {m.bName}
         </p>
-      ) : (
-        <MatchHud m={m} revealed={lines} />
       )}
 
-      {!started && <button className="primary" onClick={() => setLines(1)}>▶ Play the match</button>}
-
-      {started && (
-        <div className={m.stream ? 'stream-split' : ''}>
-          <div className="narration" style={{ marginTop: 0 }}>
-            {m.narration.slice(0, lines).map((l, i) => <p key={i}>{l}</p>)}
-            {!finished && (
-              <button className="small" onClick={() => setLines(lines + 1)}>▶ What happens next?</button>
-            )}
-            {finished && isTeamMatch && m.duels.map((d, i) => (
+      <MatchPlayback
+        m={m}
+        showHud={!isTeamMatch}
+        startLabel="Play the match"
+        onStart={() => setStarted(true)}
+        onComplete={() => setFinished(true)}
+        footer={(
+          <>
+            {isTeamMatch && m.duels.map((d, i) => (
               <p key={`d${i}`} className="small" style={{ fontStyle: 'normal' }}>
                 {d.tiebreaker ? '⚔ tiebreaker: ' : `seat ${i + 1}: `}
                 {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
               </p>
             ))}
-            {finished && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
-            {finished && m.probA != null && (
+            {m.probA != null && (
               <p className="dim small" style={{ fontStyle: 'normal' }}>
                 odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
               </p>
             )}
-          </div>
-          {m.stream && <StreamChat stream={m.stream} revealed={lines} />}
-        </div>
-      )}
+          </>
+        )}
+      />
 
       {finished && (
         <button className="primary" style={{ marginTop: 8 }} onClick={onFinished}>
@@ -257,24 +248,27 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext, onJump }) {
       {m.score && <div className="gold small">{m.score}</div>}
       {m.stream && <div className="dim small">👁 {m.stream.viewers}</div>}
       {open && (
-        <div className="narration" onClick={(e) => e.stopPropagation()}>
-          <MatchHud m={m} />
-          {(m.narration || []).map((l, i) => <p key={i}>{l}</p>)}
-          {m.duels && m.duels.map((d, i) => (
-            <p key={i} className="small" style={{ fontStyle: 'normal' }}>
-              {d.tiebreaker ? '⚔ tiebreaker: ' : `seat ${i + 1}: `}
-              {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
-            </p>
-          ))}
-          {(m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
-          {m.probA != null && (
-            <p className="dim small" style={{ fontStyle: 'normal' }}>
-              odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-            </p>
-          )}
-          {m.stream && m.stream.comments.length > 0 && (
-            <StreamChat stream={m.stream} revealed={(m.narration || []).length} />
-          )}
+        <div onClick={(e) => e.stopPropagation()}>
+          {/* This set already aired — show it whole, with a replay option. */}
+          <MatchPlayback
+            m={m}
+            spoil
+            footer={(
+              <>
+                {m.duels && m.duels.map((d, i) => (
+                  <p key={i} className="small" style={{ fontStyle: 'normal' }}>
+                    {d.tiebreaker ? '⚔ tiebreaker: ' : `seat ${i + 1}: `}
+                    {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
+                  </p>
+                ))}
+                {m.probA != null && (
+                  <p className="dim small" style={{ fontStyle: 'normal' }}>
+                    odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+                  </p>
+                )}
+              </>
+            )}
+          />
         </div>
       )}
     </div>
@@ -288,6 +282,14 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext, onJump }) {
  */
 function MoneyMatchVod({ t, nav, mutate }) {
   const m = t.match
+  const total = m?.narration?.length ?? 0
+  // Playback is LOCAL. Writing the cursor through mutate() on every line
+  // would structuredClone and re-persist the whole save once a second; the
+  // save only needs to learn that this VOD got watched, which it does once,
+  // at the end. Rewatching replays without un-marking it.
+  const alreadyWatched = (t.revealed ?? 0) >= total
+  // Hooks run before the missing-VOD bail-out — they can't be conditional.
+  const [finished, setFinished] = useState(alreadyWatched)
   if (!m) {
     return (
       <div className="card">
@@ -296,13 +298,10 @@ function MoneyMatchVod({ t, nav, mutate }) {
       </div>
     )
   }
-  const total = m.narration.length
-  const revealed = Math.min(t.revealed ?? 0, total)
-  const started = revealed > 0
-  const finished = revealed >= total
-  const setRevealed = (val) => mutate((s) => {
-    for (const v of s.vods || []) if (v.id === t.id) v.revealed = val
-  })
+  const markWatched = () => {
+    setFinished(true)
+    mutate((s) => { for (const v of s.vods || []) if (v.id === t.id) v.revealed = total })
+  }
 
   return (
     <div>
@@ -318,7 +317,6 @@ function MoneyMatchVod({ t, nav, mutate }) {
           )}
         </div>
         <div className="row">
-          {!finished && started && <button onClick={() => setRevealed(999999)}>⏭ Skip to result</button>}
           <button onClick={() => nav('vods')}>Back to VODs →</button>
         </div>
       </div>
@@ -328,31 +326,17 @@ function MoneyMatchVod({ t, nav, mutate }) {
           {m.aName} ({m.charAName}) vs {m.bName} ({m.charBName})
           {finished && <span> — {m.winnerName} wins {m.setScore || ''}</span>}
         </h3>
-        <MatchHud m={m} revealed={revealed} />
-        {(m.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
-        {!started && <button className="primary" onClick={() => setRevealed(1)}>▶ Play the match</button>}
-        {started && (
-          <div className={m.stream ? 'stream-split' : ''}>
-            <div className="narration" style={{ marginTop: 0 }}>
-              {m.narration.slice(0, revealed).map((l, i) => (
-                <Fragment key={i}>
-                  <p>{l}</p>
-                  {(m.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
-                </Fragment>
-              ))}
-              {!finished && (
-                <button className="small" onClick={() => setRevealed(revealed + 1)}>▶ What happens next?</button>
-              )}
-              {finished && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
-              {finished && m.probA != null && (
-                <p className="dim small" style={{ fontStyle: 'normal' }}>
-                  odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-                </p>
-              )}
-            </div>
-            {m.stream && <StreamChat stream={m.stream} revealed={revealed} />}
-          </div>
-        )}
+        <MatchPlayback
+          m={m}
+          spoil={alreadyWatched}
+          startLabel="Play the match"
+          onComplete={markWatched}
+          footer={m.probA != null && (
+            <p className="dim small" style={{ fontStyle: 'normal' }}>
+              odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+            </p>
+          )}
+        />
       </div>
     </div>
   )

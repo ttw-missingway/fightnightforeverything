@@ -2,6 +2,7 @@ import { uid, rollStat, clamp } from './util.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
+import { defaultRules, migrateRules } from './rules.js'
 import { computeMatchups } from './balance.js'
 
 export function newCharacter(partial = {}) {
@@ -12,6 +13,8 @@ export function newCharacter(partial = {}) {
     spriteKey: null, // pixel-art sprite name (null = auto-pick by archetype)
     difficulty: 5, // 1-10, how hard to learn
     popularity: 5, // 1-10, how likely players gravitate to them
+    vitality: 'normal', // glass|light|normal|heavy|tank — how big a health bar
+    size: 'normal', // tiny|small|normal|big|boss — hurtbox, throw range, mobility
     description: '',
     moves: [], // full movelist with frame data — see design.js
     combos: [], // {id, name, moveIds} — named routes, used in narration
@@ -280,6 +283,7 @@ export function newSave(partial = {}) {
       tags: [], // character tags (plain strings)
       playerTags: [], // player vibe tags (plain strings)
       matchups: {}, // "charIdA|charIdB" -> win % for the lower-sorted id (50 = even)
+      rules: defaultRules(), // universal mechanics — see rules.js
     },
     gameDraft: null, // in-progress patch: a clone of game being edited in the Studio
     scheduledPatch: null, // {absDay, version, announcedAbs} — announced release date for the draft
@@ -646,8 +650,17 @@ export function migrateSave(save) {
   // and the matchup chart is recomputed from the designs — the movesets are
   // the source of truth for power now.
   for (const game of [save.game, save.gameDraft].filter(Boolean)) {
+    // Universal mechanics: a save from before they existed keeps playing by
+    // the defaults, which are deliberately the behaviour it already had.
+    game.rules = migrateRules(game.rules)
     for (const c of game.characters) {
       c.tags ??= []
+      // Descriptor overhaul: everyone was a "normal" body before it existed,
+      // so old casts keep the balance they had.
+      c.vitality ??= 'normal'
+      c.size ??= 'normal'
+      // migrateMove backfills `d` from the hand-written numbers and re-derives
+      // them, so descriptors and frame data agree from here on.
       c.moves = (c.moves || []).map(migrateMove)
       if (!c.combos) {
         c.combos = []

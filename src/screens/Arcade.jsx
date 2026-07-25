@@ -1,12 +1,12 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf,
   IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
-import StreamChat from '../components/StreamChat.jsx'
 import MatchHud from '../components/MatchHud.jsx'
+import MatchPlayback from '../components/MatchPlayback.jsx'
 import { displayName } from '../game/util.js'
 import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
 import { revealState } from '../game/tournament.js'
@@ -152,10 +152,8 @@ function LiveTournament({ save, nav }) {
             {latest.m.narrationHud && <MatchHud m={latest.m} />}
             {(latest.m.narration || []).length > 0 && (
               <Expandable summary={<span className="small pink">▸ watch the set back</span>}>
-                <div className="narration" style={{ marginTop: 6 }}>
-                  {latest.m.narration.map((l, i) => <p key={i}>{l}</p>)}
-                  {(latest.m.postMatch || []).map((s, i) => <SpeechLine key={`p${i}`} s={s} />)}
-                </div>
+                {/* The HUD is already on screen above, so this is narration only. */}
+                <MatchPlayback m={latest.m} showHud={false} autoStart />
               </Expandable>
             )}
           </div>
@@ -504,8 +502,8 @@ function ZoneView({ meta, zone, save, nav, hourIdx, isCurrent, gameName, channel
  */
 function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
   const [open, setOpen] = useState(false)
-  const [revealed, setRevealed] = useState(spoil ? m.narration.length : 0)
-  const fullyRevealed = revealed >= m.narration.length
+  const [started, setStarted] = useState(spoil)
+  const [fullyRevealed, setFullyRevealed] = useState(spoil)
 
   return (
     <div className={`event match clickable ${m.moneyMatch ? 'moneymatch' : ''}`} onClick={() => setOpen(!open)}>
@@ -518,7 +516,7 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
         {fullyRevealed
           ? <span className="gold">— {m.winnerName} wins</span>
           : <span className="dim small">— in progress…</span>}
-        {canStream && revealed === 0 && (m.streamTags || []).length > 0 && (
+        {canStream && !started && (m.streamTags || []).length > 0 && (
           <span className="small" style={{ color: 'var(--gold)' }}>
             {' '}· {m.streamTags.join(' · ')}
           </span>
@@ -527,42 +525,34 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
         {m.watcherNames?.length > 0 && <span className="dim small"> · {m.watcherNames.length} railbirds</span>}
       </span>
       {open && (
-        <div className="narration" onClick={(e) => e.stopPropagation()}>
-          <MatchHud m={m} revealed={revealed} />
-          {canStream && revealed === 0 && (
-            <button className="small primary" style={{ marginBottom: 8 }} onClick={onStream}>
-              📡 Put this match on stream <span className="small">(before watching — no take-backs)</span>
-            </button>
-          )}
-          <div className={m.stream ? 'stream-split' : ''}>
-            <div>
-              {(m.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
-              {m.narration.slice(0, revealed).map((l, i) => (
-                <Fragment key={i}>
-                  <p>{l}</p>
-                  {(m.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
-                </Fragment>
-              ))}
-              {!fullyRevealed && (
-                <button className="small" onClick={() => setRevealed(revealed + 1)}>
-                  ▶ {revealed === 0 ? 'Watch the match' : 'What happens next?'}
-                </button>
-              )}
-              {fullyRevealed && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
-              {fullyRevealed && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <MatchPlayback
+            m={m}
+            spoil={spoil}
+            // A streamable match waits for you: putting it on stream has to
+            // happen BEFORE the first line, so it can't start on its own.
+            autoStart={!canStream}
+            onStart={() => setStarted(true)}
+            onComplete={() => setFullyRevealed(true)}
+            beforeStart={canStream && (
+              <button className="small primary" style={{ marginBottom: 8 }} onClick={onStream}>
+                📡 Put this match on stream <span className="small">(before watching — no take-backs)</span>
+              </button>
+            )}
+            footer={(
+              <>
                 <p className="dim small" style={{ fontStyle: 'normal' }}>
                   win chance was {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}% · ±{m.eloDelta} elo
                   {m.watcherNames?.length > 0 && <> · railbirds: {m.watcherNames.join(', ')}</>}
                 </p>
-              )}
-              {fullyRevealed && m.stream && (
-                <p className="small pink" style={{ fontStyle: 'normal' }}>
-                  📡 stream quality {m.stream.quality}/100 · channel hype {m.stream.gain >= 0 ? '+' : ''}{m.stream.gain}
-                </p>
-              )}
-            </div>
-            {m.stream && <StreamChat stream={m.stream} revealed={revealed} />}
-          </div>
+                {m.stream && (
+                  <p className="small pink" style={{ fontStyle: 'normal' }}>
+                    📡 stream quality {m.stream.quality}/100 · channel hype {m.stream.gain >= 0 ? '+' : ''}{m.stream.gain}
+                  </p>
+                )}
+              </>
+            )}
+          />
         </div>
       )}
     </div>
@@ -749,19 +739,17 @@ function RecapEvent({ ev }) {
           </span>
         }
       >
-        <div className="narration">
-          <MatchHud m={ev} />
-          {(ev.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
-          {ev.narration.map((l, i) => (
-            <Fragment key={i}>
-              <p>{l}</p>
-              {(ev.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
-            </Fragment>
-          ))}
-          {(ev.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
-          <p className="dim small" style={{ fontStyle: 'normal' }}>
-            win chance {Math.round(ev.probA * 100)}%–{Math.round((1 - ev.probA) * 100)}% · ±{ev.eloDelta} elo
-          </p>
+        <div>
+          {/* Already decided — show it whole, but offer the replay. */}
+          <MatchPlayback
+            m={ev}
+            spoil
+            footer={(
+              <p className="dim small" style={{ fontStyle: 'normal' }}>
+                win chance {Math.round(ev.probA * 100)}%–{Math.round((1 - ev.probA) * 100)}% · ±{ev.eloDelta} elo
+              </p>
+            )}
+          />
         </div>
       </Expandable>
     )

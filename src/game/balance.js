@@ -8,9 +8,15 @@
 // (win probability, charPower, patch diffs) works unchanged.
 
 import { clamp, hash01, uid, choice, randInt } from './util.js'
-import { comboDamage } from './design.js'
+import { comboDamage, healthMultOf, sizeModOf } from './design.js'
+import { defaultRules } from './rules.js'
 
 const by = (char, type) => (char.moves || []).filter((m) => m.type === type)
+
+// Scales damage-per-frame into the same 0-100 band as the other ratings.
+// Tuned so an ordinary generated kit sits below its own biggest-hit score and
+// only an unusually fast/hard/safe button pushes past it.
+const EFFICIENCY_WEIGHT = 6
 
 // Soft cap instead of a hard clamp: linear up to 100 ("as good as sane
 // design gets"), then logarithmic overflow so a 4000-damage jab is no
@@ -34,36 +40,112 @@ function soft(x) {
  *  mobility — movement tools and general pace
  *  meter    — super damage per bar and install access
  */
-export function ratings(char) {
+export function ratings(char, rules = null) {
+  // The universal mechanics change what a character IS without touching the
+  // character: give everyone a burst and pressure gets worse; let chip finish
+  // and every zoner gets better.
+  const R = { ...defaultRules(), ...(rules || {}) }
   const mv = char.moves || []
   const normals = mv.filter((m) => m.slot === 'normal' || ['light', 'melee', 'heavy'].includes(m.type))
 
   const fastest = Math.min(...normals.map((m) => m.startup ?? 8), 13)
   const speed = soft(100 - (fastest - 3) * 10) // frame 1 lands above the cap
 
-  const bestHit = Math.max(...mv.map((m) => m.damage ?? 0), 0)
-  const bestCombo = Math.max(...(char.combos || []).map((c) => comboDamage(char, c)), 0)
-  const offense = soft(Math.max(bestHit, bestCombo * 0.85) / 4)
+  // Supers are deliberately excluded: their damage is already what the `meter`
+  // rating measures, and letting them set `offense` too meant the biggest
+  // number in every kit was a metered one — which is why buffing a meterless
+  // button could never move this score.
+  const bestHit = Math.max(0, ...mv.filter((m) => (m.meterCost ?? 0) === 0).map((m) => m.damage ?? 0))
+  const bestCombo = Math.max(...(char.combos || []).map((c) => comboDamage(char, c, R)), 0)
+  // REWARD PER FRAME OF COMMITMENT — the thing that actually breaks a fighting
+  // game. Reading only the biggest single hit is blind to it, because the
+  // biggest hit is always the super: a jab buffed to heavy damage at 4 frames
+  // never becomes the max, so the old model saw a game-breaking button as no
+  // change at all. A fast, safe, damaging button is worth far more than a slow
+  // one that hits the same, and being plus on top of it is the whole problem.
+  // Meterless only — a super's damage is already paid for.
+  // Counters are excluded: their damage isn't reward for pressing a button,
+  // it's reward for the OPPONENT pressing one. Counting them made a
+  // huge-damage instant-startup parry read as the best move in the game.
+  const efficiency = Math.max(0, ...mv
+    .filter((m) => (m.meterCost ?? 0) === 0 && (m.damage ?? 0) > 0 && m.type !== 'counter')
+    .map((m) => {
+      const startup = Math.max(3, m.startup ?? 11)
+      const safety = clamp(1 + (m.onBlock ?? -4) / 16, 0.3, 1.6)
+      return ((m.damage ?? 0) / startup) * safety
+    }))
+  const offense = soft(
+    Math.max(bestHit / 4, (bestCombo * 0.85) / 4, efficiency * EFFICIENCY_WEIGHT)
+    * (1 + sizeModOf(char).comboEase * 0.5))
 
   // Being plus matters; being ABSURDLY plus matters more.
   const plusMoves = mv.filter((m) => (m.onBlock ?? -5) >= 1)
-  const plusMagnitude = plusMoves.reduce((s, m) => s + Math.max(0, m.onBlock ?? 0), 0)
+  // A plus button that comes out in 4 frames is a different animal from a plus
+  // one that takes 16 — you can't contest the first one at all.
+  const plusMagnitude = plusMoves.reduce((s, m) => {
+    const fast = (m.startup ?? 11) <= 6 ? 1.9 : (m.startup ?? 11) <= 10 ? 1.35 : 1
+    // ...and one you can't even walk up to is worse again.
+    const far = (m.range ?? 50) >= 72 ? 1.4 : 1
+    return s + Math.max(0, m.onBlock ?? 0) * fast * far
+  }, 0)
   const setupTime = ['set up', 'trap', 'install'].flatMap((t) => by(char, t))
     .reduce((s, m) => s + (m.duration || 0), 0)
-  const pressure = soft(plusMoves.length * 10 + plusMagnitude * 3 + setupTime * 3.5)
+  // The high/low guess. Owning a fast overhead AND a fast low is the whole
+  // mix-up game — far more than the sum of having either one alone, because
+  // the defender has to choose before they can see which is coming.
+  const fastOverhead = mv.some((m) => m.d?.guard === 'overhead' && (m.startup ?? 99) <= 18)
+  const fastLow = mv.some((m) => m.d?.guard === 'low' && (m.startup ?? 99) <= 12)
+  const unblockables = mv.filter((m) => m.d?.guard === 'unblockable').length
+  // A universal overhead hands everyone half the mix-up for free, so owning
+  // one stops being a distinguishing advantage.
+  const mixupRaw = (fastOverhead && fastLow ? 20 : (fastOverhead || fastLow ? 6 : 0)) + unblockables * 8
+  const mixup = R.universalOverhead === 'on' ? mixupRaw * 0.5 : mixupRaw
+  // Escapes cut pressure off at the knees — that's the entire point of them.
+  const escapes = (R.burst !== 'none' ? 0.82 : 1)
+    * (R.pushblock === 'on' ? 0.9 : 1)
+    * (R.guardCancel !== 'off' ? 0.92 : 1)
+  // A guard gauge pushes the other way: blocking forever stops being an answer.
+  const gauge = R.guardGauge !== 'off' ? 1.15 : 1
+  const pressure = soft((plusMoves.length * 10 + plusMagnitude * 3 + setupTime * 3.5 + mixup) * escapes * gauge)
 
+  // If chip can finish a round, every point of it is suddenly worth far more.
+  const chipWorth = R.chipKO === 'chip can finish' ? 2.2 : 1
+  // FOOTSIES: a long, safe poke controls the ground without ever touching
+  // anyone. Space control isn't only projectiles — reach is the other half of
+  // it, and a grappler's point-blank kit is exactly why they have to work.
+  // NOT simply your longest button — a 16-frame heavy that reaches is not a
+  // poke. Footsies are won by a button that is long AND quick AND safe, so
+  // all three have to be true before this pays. (Measuring raw max reach made
+  // 57 of 60 generated characters identical, because they all carry a heavy.)
+  const footsies = Math.max(0, ...mv
+    .filter((m) => (m.meterCost ?? 0) === 0 && (m.damage ?? 0) > 0 && m.type !== 'projectile')
+    .map((m) => {
+      const reach = (m.range ?? 50) / 50
+      const quick = clamp(1.6 - (m.startup ?? 11) / 14, 0.4, 1.3)
+      const safe = clamp(1 + (m.onBlock ?? -4) / 22, 0.5, 1.4)
+      return (reach - 0.8) * 55 * quick * safe
+    }))
   const zoning = soft(
-    by(char, 'projectile').reduce((s, m) => s + 34 - (m.startup ?? 14) / 2 - (m.recovery ?? 26) / 4 + (m.chip ?? 0), 0) +
-    by(char, 'trap').length * 14)
+    by(char, 'projectile').reduce((s, m) => s + 34 - (m.startup ?? 14) / 2 - (m.recovery ?? 26) / 4 + (m.chip ?? 0) * chipWorth, 0) +
+    by(char, 'trap').length * 14 + footsies)
 
   const fastSuper = by(char, 'super').some((m) => (m.startup ?? 12) <= 7)
   const safeButton = normals.some((m) => (m.recovery ?? 15) <= 8)
   const defense = soft(
-    by(char, 'anti-air').reduce((s, m) => s + 30 - (m.startup ?? 6) * 2, 0) +
-    by(char, 'counter').length * 20 + (fastSuper ? 22 : 0) + (safeButton ? 14 : 0))
+    (by(char, 'anti-air').reduce((s, m) => s + 30 - (m.startup ?? 6) * 2, 0) +
+      by(char, 'counter').length * 20 + (fastSuper ? 22 : 0) + (safeButton ? 14 : 0)
+      // A bigger bar is defence nobody had to earn; glass is the opposite.
+      + (healthMultOf(char) - 1) * 90
+      // A small hurtbox is harder to open up in the first place.
+      - sizeModOf(char).comboEase * 60))
 
+  // Body type is a real balance lever, not decoration: a big target eats
+  // longer routes and moves worse, a small one is slippery, and a tank's
+  // extra bar is defence you don't have to earn.
+  const sz = sizeModOf(char)
   const mobility = soft(
-    by(char, 'movement').reduce((s, m) => s + 44 - (m.startup ?? 5) * 2 - (m.recovery ?? 10), 0) + Math.min(speed, 100) / 4)
+    by(char, 'movement').reduce((s, m) => s + 44 - (m.startup ?? 5) * 2 - (m.recovery ?? 10), 0)
+    + Math.min(speed, 100) / 4 + sz.mobility)
 
   const meter = soft(
     by(char, 'super').reduce((s, m) => s + (m.damage ?? 0) / Math.max(m.meterCost ?? 100, 25), 0) * 11 +
@@ -74,17 +156,85 @@ export function ratings(char) {
 
 // How far past sane design a kit goes, summed across every axis. This is
 // the "your numbers are illegal" score — 0 for anything reasonable.
+//
+// Re-tuned for the descriptor overhaul (2026-07-25). Frame data and damage
+// used to be typed in, so a 4000-damage frame-1 jab was expressible and the
+// overflow ran away to ~155+. Descriptors cap what can be BUILT, so the
+// ceiling fell to ~124 — but the typical design still sits around 85, exactly
+// where it did before. So the threshold stays at 100 (dropping it flattens
+// the damage factor, because almost every kit clears 88) and the weight rises
+// instead, keeping the "your numbers are illegal" signal as loud as it was
+// across a smaller overflow band.
+const OVERTUNE_FLOOR = 100
+
 export function overtune(r) {
   return ['speed', 'offense', 'pressure', 'zoning', 'defense', 'mobility', 'meter']
-    .reduce((s, k) => s + Math.max(0, r[k] - 100), 0)
+    .reduce((s, k) => s + Math.max(0, r[k] - OVERTUNE_FLOOR), 0) * 1.7
 }
 
-// The rock-paper-scissors of fighting games, in factor form. Archetype
-// interactions read the sane band; the 'tuning' factor reads everything
-// past it — raw numbers that outgrow design get an edge no archetype
-// advantage can answer.
+// ---------- The style triangle ----------
+// The stat factors below are all TRANSITIVE: every one of them reduces to
+// "my total minus your total" (keepout expands to 0.06*((za-zb)+(ma-mb))),
+// which can only ever produce a linear power ranking. Measured across 16
+// archetypes it did exactly that — everyone's best matchup was the same
+// archetype and everyone's worst was the same one. No cycles anywhere.
+//
+// Real rock-paper-scissors needs a term that is genuinely non-transitive, so
+// here it is, explicit and designed rather than emergent:
+//
+//     KEEP-OUT beats GRAPPLER   — they can't walk through it
+//     GRAPPLER beats RUSHDOWN   — the grab beats blocking and mashing
+//     RUSHDOWN beats KEEP-OUT   — they're fast enough to get in
+//
+// Balanced styles sit outside the wheel: no free win, no free loss.
+export const STYLE_ROLES = {
+  'Zoner': 'keep-out',
+  'Weapon Master': 'keep-out',
+  'Charge': 'keep-out',
+  'Setplay': 'keep-out',
+  'Puppet': 'keep-out',
+  'Rushdown': 'rushdown',
+  'Aerial': 'rushdown',
+  'Mix-up': 'rushdown',
+  'Glass Cannon': 'rushdown',
+  'Grappler': 'grappler',
+  'Big Body': 'grappler',
+  'Counter-Puncher': 'grappler',
+  'Shoto': 'balanced',
+  'All-Rounder': 'balanced',
+  'Footsies': 'balanced',
+  'Stance Switch': 'balanced',
+}
+
+export const STYLE_BEATS = { 'keep-out': 'grappler', 'grappler': 'rushdown', 'rushdown': 'keep-out' }
+
+export const STYLE_WHY = {
+  'keep-out|grappler': 'walls them out — a grappler that can\'t walk forward has no game',
+  'grappler|rushdown': 'the grab beats blocking, and rushdown has to stop eventually',
+  'rushdown|keep-out': 'fast enough to get in, and once in the wall means nothing',
+}
+
+const STYLE_EDGE = 7
+
+export function styleRoleOf(char) {
+  return STYLE_ROLES[char?.archetype] || 'balanced'
+}
+
+/** +STYLE_EDGE if a's style beats b's, negative if it loses, 0 otherwise. */
+export function styleEdge(a, b) {
+  const ra = styleRoleOf(a)
+  const rb = styleRoleOf(b)
+  if (ra === rb || ra === 'balanced' || rb === 'balanced') return 0
+  if (STYLE_BEATS[ra] === rb) return STYLE_EDGE
+  if (STYLE_BEATS[rb] === ra) return -STYLE_EDGE
+  return 0
+}
+
+// The stat side of a matchup. Archetype interactions read the sane band; the
+// 'tuning' factor reads everything past it — raw numbers that outgrow design
+// get an edge no archetype advantage can answer.
 function factors(ra, rb) {
-  const band = (v) => Math.min(v, 100)
+  const band = (v) => Math.min(v, OVERTUNE_FLOOR)
   return [
     { key: 'keepout', edge: (band(ra.zoning) - band(rb.mobility)) * 0.06 - (band(rb.zoning) - band(ra.mobility)) * 0.06 },
     { key: 'pressure', edge: (band(ra.pressure) - band(rb.defense)) * 0.06 - (band(rb.pressure) - band(ra.defense)) * 0.06 },
@@ -95,10 +245,10 @@ function factors(ra, rb) {
   ]
 }
 
-export function computeMatchup(a, b) {
-  const ra = ratings(a)
-  const rb = ratings(b)
-  let edge = factors(ra, rb).reduce((s, f) => s + f.edge, 0)
+export function computeMatchup(a, b, rules = null) {
+  const ra = ratings(a, rules)
+  const rb = ratings(b, rules)
+  let edge = factors(ra, rb).reduce((s, f) => s + f.edge, 0) + styleEdge(a, b)
   // Irreducible matchup jank: some pairs are just weird, consistently.
   edge += (hash01(`${a.id}|${b.id}:mu`) - 0.5) * 4
   // The wide clamp only comes into play for genuinely broken numbers —
@@ -107,10 +257,10 @@ export function computeMatchup(a, b) {
 }
 
 // Why the number is what it is — the dominant factor, in plain speech.
-export function matchupExplanation(a, b) {
-  const ra = ratings(a)
-  const rb = ratings(b)
-  const fs = factors(ra, rb)
+export function matchupExplanation(a, b, rules = null) {
+  const ra = ratings(a, rules)
+  const rb = ratings(b, rules)
+  const fs = [...factors(ra, rb), { key: 'style', edge: styleEdge(a, b) }]
   const top = fs.reduce((best, f) => (Math.abs(f.edge) > Math.abs(best.edge) ? f : best))
   if (Math.abs(top.edge) < 1) return 'a genuinely even fight'
   const winner = top.edge > 0 ? a : b
@@ -122,6 +272,11 @@ export function matchupExplanation(a, b) {
     case 'speed': return `${winner.name} is simply faster where it counts`
     case 'meter': return `${winner.name}'s meter cashouts decide the close rounds`
     case 'tuning': return `${winner.name}'s numbers are simply not legal — ${loser.name} is playing a different game`
+    case 'style': {
+      const w = styleRoleOf(winner)
+      const l = styleRoleOf(loser)
+      return `${winner.name} ${STYLE_WHY[`${w}|${l}`] || 'has the stylistic edge'}`
+    }
     default: return 'stylistic edge'
   }
 }
@@ -146,7 +301,7 @@ export function balanceConfidence(save) {
  * is, so their projections use confidence 0.
  */
 export function observedMatchup(save, game, a, b, confOverride = null) {
-  const truth = computeMatchup(a, b)
+  const truth = computeMatchup(a, b, game?.rules)
   const conf = confOverride ?? balanceConfidence(save)
   const noise = (hash01(`${a.id}|${b.id}|${game.version}:obs`) - 0.5) * 2 // -1..1
   return clamp(Math.round(truth + noise * (1 - conf) * 9), 10, 90)
@@ -254,7 +409,7 @@ export function computeMatchups(game) {
       const a = chars[i]
       const b = chars[j]
       const [lo, hi] = a.id < b.id ? [a, b] : [b, a]
-      table[`${lo.id}|${hi.id}`] = computeMatchup(lo, hi)
+      table[`${lo.id}|${hi.id}`] = computeMatchup(lo, hi, game.rules)
     }
   }
   game.matchups = table
