@@ -363,6 +363,101 @@ const LINES = {
       ],
     },
   },
+  // A conviction, said out loud. {x} is whatever they've got an opinion about
+  // — a character, this arcade, another player. The stance decides the pool,
+  // because "broken" and "beloved" are not the same sentence.
+  takeBroken: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is broken and I'm tired of pretending otherwise.",
+        "Whoever signed off on {x} has never played this game.",
+        "I'll say it again: {x} is not balanced. Not close.",
+        "Every single time I lose it's to {x}. Every time. Draw your own conclusions.",
+        "{x} does not belong in this game and everybody here knows it.",
+      ],
+    },
+  },
+  takeWeak: {
+    dimension: null,
+    pools: {
+      any: [
+        "Nobody plays {x} because {x} does not work. Simple as that.",
+        "{x} needs help. Genuinely, someone give {x} something.",
+        "I'd main {x} in a heartbeat if {x} had a single winning matchup.",
+      ],
+    },
+  },
+  takeOverrated: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is not as good as everyone says. It's the players, not the character.",
+        "Everybody's scared of {x} and I genuinely don't see it.",
+        "{x} is carried by reputation at this point.",
+      ],
+    },
+  },
+  takeUnderrated: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is the most slept-on thing in this game and I hope it stays that way.",
+        "One day somebody's going to figure out {x} and it'll be too late for the rest of you.",
+        "You all keep ignoring {x}. Keep doing that.",
+      ],
+    },
+  },
+  takeBoring: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is effective and {x} is boring and both things are true.",
+        "Watching {x} is like watching someone do their taxes correctly.",
+        "No shade, but {x} has never once made me sit forward.",
+      ],
+    },
+  },
+  takeBeloved: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is the reason I still come here. I'll hear nothing against {x}.",
+        "Say what you like — {x} is perfect and I love {x}.",
+        "I've been on {x} since day one and I'm not moving.",
+      ],
+    },
+  },
+  takeArcade: {
+    dimension: null,
+    pools: {
+      any: [
+        "This place is home. I don't care what it costs.",
+        "Best room in town and it isn't close.",
+        "The prices in here are a joke and somebody should say so.",
+        "Somebody clean this place. I'm serious. Somebody.",
+      ],
+    },
+  },
+  takePlayer: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is the best player in this building. It's not up for debate.",
+        "Everyone rates {x}. I've beaten {x}. Draw your own conclusions.",
+        "If {x} enters, {x} wins. That's just the situation.",
+      ],
+    },
+  },
+  takeFood: {
+    dimension: null,
+    pools: {
+      any: [
+        "The {x} here is the only thing keeping me alive.",
+        "I have eaten {x} every single day for a year and I'd do it again.",
+      ],
+    },
+  },
   // Small talk at the counter — the game falls away for a second and people
   // are just people. This is what keeps the cast from reading as stat blocks.
   lifeChat: {
@@ -662,6 +757,7 @@ export function speak(player, kind, ctx = {}) {
     .replaceAll('{w}', ctx.w ?? '0')
     .replaceAll('{l}', ctx.l ?? '0')
     .replaceAll('{n}', ctx.n ?? '0')
+    .replaceAll('{x}', ctx.x ?? 'that')
   return applyVoice(filled, v, tier, [ctx.t, ctx.self])
 }
 

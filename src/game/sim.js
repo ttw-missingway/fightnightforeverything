@@ -1,7 +1,7 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
-import { newInnovation, remember, chronicle, pushVod, awardMilestone } from './model.js'
+import { newInnovation, remember, chronicle, pushVod, awardMilestone, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
@@ -14,6 +14,7 @@ import {
 } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand } from './socialmedia.js'
 import { speak, isFirstMeeting, noteMeeting } from './dialogue.js'
+import { noteMatchOutcome, reconcileTakes, loudestTake, isConviction, takeKind, takeSubjectLabel } from './takes.js'
 import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
@@ -363,6 +364,28 @@ function makeBeats(save, group, where, results) {
           if (reply) beats.push({ speaker: pName(save, b), text: reply })
           break outer
         }
+      }
+    }
+  }
+
+  // Somebody airs a conviction. The more firmly it's held the more likely it
+  // is to come out unprompted — that's what having an opinion looks like.
+  if (group.length >= 2 && chance(0.3)) {
+    const holders = group.filter((p) => loudestTake(p))
+    if (holders.length) {
+      const p = choice(holders)
+      const take = loudestTake(p)
+      const kind = takeKind(take)
+      const label = takeSubjectLabel(save, take, (x) => pName(save, x))
+      // A conviction gets aired even when nobody asked; a mild opinion needs
+      // a nudge.
+      if (kind && (label || take.topic === 'arcade') && (isConviction(take) || chance(0.5))) {
+        const other = group.find((x) => x !== p)
+        const line = speak(p, kind, {
+          self: pName(save, p), x: label, t: other ? pName(save, other) : 'you',
+          to: other, absDay: absDayOf(save),
+        })
+        if (line) beats.push({ speaker: pName(save, p), text: line })
       }
     }
   }
@@ -987,6 +1010,9 @@ export function simHour(save) {
       if (bCharId === b.mainCharId && b.settledMain && (b.pocketPicks || []).length && chance(0.08)) bCharId = choice(b.pocketPicks)
       const probA = winProbability(save, a, aCharId, b, bCharId)
       const result = resolveMatch(save, a, b, aCharId, bCharId)
+      // Losing to something is where most real opinions come from.
+      noteMatchOutcome(save, a, bCharId, result.aWins)
+      noteMatchOutcome(save, b, aCharId, !result.aWins)
       const charA = save.game.characters.find((c) => c.id === aCharId)
       const charB = save.game.characters.find((c) => c.id === bCharId)
       const grudge = getRel(a, b) < -40 || getRel(b, a) < -40
@@ -1221,6 +1247,16 @@ export function endDay(save) {
   if (!dip) return
   const events = []
   const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
+
+  // Opinions meet reality — very gently. A take the game disagrees with loses
+  // a sliver a day and nothing more, so somebody who decided a character was
+  // broken is still saying it long after the patch that fixed it.
+  const powerOf = (charId) => {
+    const others = save.game.characters.filter((c) => c.id !== charId)
+    if (!others.length) return null
+    return others.reduce((sum, o) => sum + getMatchup(save.game, charId, o.id), 0) / others.length
+  }
+  for (const p of Object.values(save.players)) reconcileTakes(save, p, powerOf)
 
   // How pleasant the venue itself is today — a clean floor and happy staff
   // are part of why people enjoy being here (or don't). Nudges every

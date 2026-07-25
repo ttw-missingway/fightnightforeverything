@@ -1,5 +1,6 @@
 import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
 import { newPlayer, newCharacter } from './model.js'
+import { seedTakes } from './takes.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
@@ -163,7 +164,7 @@ export function generatePlayer(save, overrides = {}) {
   const putOffBy = pTags.length
     ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1))
     : []
-  return newPlayer({
+  const player = newPlayer({
     firstName: first,
     lastName: last,
     alias,
@@ -189,6 +190,11 @@ export function generatePlayer(save, overrides = {}) {
     slob,
     ...overrides,
   })
+  // Everyone walks in with something to argue about. Without this, filler only
+  // ever forms opinions by LOSING, so the whole room ends up believing exactly
+  // one thing: that everything is broken.
+  seedTakes(save, player)
+  return player
 }
 
 // Seed the WHOLE finite cast up front. The roster is fixed the day the run
@@ -198,12 +204,18 @@ export function generatePlayer(save, overrides = {}) {
 // generated pool still work.
 export function populateRoster(save) {
   const sandbox = save.settings.mode === 'sandbox'
-  if (!sandbox || !save.settings.allowGeneratedPlayers) return
-  const cpuCount = () => Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
-  let guard = 0
-  while (cpuCount() < save.settings.maxGeneratedPlayers && guard++ < 200) {
-    const p = generatePlayer(save)
-    save.players[p.id] = p
+  if (sandbox && save.settings.allowGeneratedPlayers) {
+    const cpuCount = () => Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
+    let guard = 0
+    while (cpuCount() < save.settings.maxGeneratedPlayers && guard++ < 200) {
+      const p = generatePlayer(save)
+      save.players[p.id] = p
+    }
+  }
+  // Everyone walks in with opinions already formed. A roster that had to spend
+  // a month working up to its first thought would have nothing to say.
+  for (const p of Object.values(save.players)) {
+    if (!(p.takes || []).length) seedTakes(save, p)
   }
 }
 

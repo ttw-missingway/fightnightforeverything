@@ -89,6 +89,7 @@ export function newPlayer(partial = {}) {
     h2h: {}, // otherPlayerId -> {w, l} lifetime head-to-head record
     memories: [], // {day, year, kind, text} — defining moments, capped
     met: {}, // otherId -> {firstDay, count} — who they've actually spoken to
+    takes: [], // {topic, subject, stance, strength, formedAbs} — see takes.js
     said: [], // recent line ids, so they don't repeat themselves
     voice: null, // {energy, humor, speech, quirk} — derived from stats if null
     teamId: null,
@@ -679,6 +680,7 @@ export function migrateSave(save) {
   // two-year save would have everyone introducing themselves again.
   for (const p of Object.values(save.players || {})) {
     p.said ??= []
+    p.takes ??= []
     if (!p.met) {
       p.met = {}
       for (const [otherId, h] of Object.entries(p.h2h || {})) {
