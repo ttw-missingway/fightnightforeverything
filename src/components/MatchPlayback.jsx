@@ -118,11 +118,13 @@ export default function MatchPlayback({
     onComplete?.()
   }, [finished, onComplete])
 
-  // Keep the newest line in view while it's running.
+  // Keep the newest line in view — by scrolling the NARRATION BOX, never the
+  // page. Newest sits at the top of the list, so that's scrollTop 0.
   useEffect(() => {
-    if (!playing || !started) return
-    tailRef.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' })
-  }, [revealed, playing, started, reduce])
+    const el = tailRef.current
+    if (!el) return
+    el.scrollTo?.({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
+  }, [revealed, reduce])
 
   // Space toggles pause, as long as you're not typing into something.
   useEffect(() => {
@@ -183,25 +185,34 @@ export default function MatchPlayback({
   const rewatch = () => { setLive(true); setTick(1); setTickIndex(0); setRevealed(0); setPlaying(true) }
   const skip = () => { setTick(1); setRevealed(total) }
 
-  const body = (
-    <div className="narration" style={{ marginTop: 0 }}>
-      {(m.preMatch || []).map((s, i) => <SpeechLine key={`pre${i}`} s={s} />)}
-      {lines.slice(0, revealed).map((l, i) => (
-        <Fragment key={i}>
-          <p>{l}</p>
-          {(m.chatter || []).filter((c) => c.at === i).map((c, j) => <SpeechLine key={`c${j}`} s={c} />)}
-        </Fragment>
-      ))}
-      <div ref={tailRef} />
+  // Everything that has happened, oldest first, then flipped for display.
+  // Newest-at-top means the line that just landed is always in the same place
+  // — right under the fight screen — instead of marching down the page and
+  // dragging your eye off the footage.
+  const blocks = []
+  for (const [i, sp] of (m.preMatch || []).entries()) {
+    blocks.push({ key: `pre${i}`, node: <SpeechLine s={sp} /> })
+  }
+  for (let i = 0; i < revealed; i++) {
+    blocks.push({ key: `l${i}`, node: <p>{lines[i]}</p> })
+    for (const [j, c] of (m.chatter || []).filter((c) => c.at === i).entries()) {
+      blocks.push({ key: `c${i}-${j}`, node: <SpeechLine s={c} /> })
+    }
+  }
+  if (finished) {
+    for (const [i, sp] of (m.postMatch || []).entries()) {
+      blocks.push({ key: `post${i}`, node: <SpeechLine s={sp} /> })
+    }
+  }
+  blocks.reverse()
 
+  const controls = (
+    <div className="playback-controls">
       {!started && !spoil && (
-        <div className="row" style={{ gap: 6, marginTop: 4 }}>
-          <button className="small primary" onClick={() => { setLive(true); setPlaying(true) }}>▶ {startLabel}</button>
-        </div>
+        <button className="small primary" onClick={() => { setLive(true); setPlaying(true) }}>▶ {startLabel}</button>
       )}
-
       {started && !finished && (
-        <div className="row" style={{ gap: 6, marginTop: 4, alignItems: 'center' }}>
+        <>
           <button className="small" onClick={() => setPlaying((p) => !p)}>
             {playing ? '⏸ Pause' : '▶ Resume'}
           </button>
@@ -214,16 +225,23 @@ export default function MatchPlayback({
           </button>
           <button className="small" onClick={skip}>⏭ Skip to result</button>
           <span className="dim small">{revealed}/{total}</span>
-        </div>
+        </>
       )}
-
-      {finished && (m.postMatch || []).map((s, i) => <SpeechLine key={`post${i}`} s={s} />)}
-      {finished && footer}
       {finished && total > 0 && (
-        <div className="row" style={{ gap: 6, marginTop: 4 }}>
-          <button className="small" onClick={rewatch}>↻ Rewatch</button>
-        </div>
+        <button className="small" onClick={rewatch}>↻ Rewatch</button>
       )}
+    </div>
+  )
+
+  const body = (
+    <div>
+      {controls}
+      {/* Fixed height, own scrollbar: the page never grows, so the fight
+          screen above stays exactly where it is for the whole match. */}
+      <div className="narration narration-scroll" ref={tailRef}>
+        {blocks.map((b) => <Fragment key={b.key}>{b.node}</Fragment>)}
+      </div>
+      {finished && footer}
     </div>
   )
 

@@ -704,3 +704,39 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   text-transform: uppercase;
   letter-spacing: 0.6px;
 }
+
+/* The narration box scrolls itself, so a long match never grows the page and
+   pushes the fight screen out of view. Newest line renders first (top), so
+   the thing that just happened is always in the same place. */
+.narration-scroll {
+  /* Fixed, not just capped: a min-height means the box doesn't reflow the
+     page as it fills up, so nothing below the fight screen jumps either. */
+  min-height: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+}
+/* The newest line leads: a touch larger and bolder so your eye lands on the
+   thing that just happened without hunting for it. */
+.narration-scroll > *:first-child {
+  animation: narration-in 0.28s ease-out;
+  font-size: 1.09em;
+  font-weight: 600;
+  color: var(--text);
+}
+@keyframes narration-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.playback-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .narration-scroll > *:first-child { animation: none; }
+}
+@media (max-width: 800px) { .narration-scroll { max-height: 240px; } }
