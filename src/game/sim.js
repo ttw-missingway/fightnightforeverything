@@ -13,7 +13,7 @@ import {
   adAwarenessBoost, adHypePerDay, playerStaffAppeal,
 } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand } from './socialmedia.js'
-import { speak } from './dialogue.js'
+import { speak, isFirstMeeting, noteMeeting } from './dialogue.js'
 import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
@@ -340,6 +340,52 @@ function makeBeats(save, group, where, results) {
   const say = (p, kind, ctx = {}, note = null) => {
     const text = speak(p, kind, { self: pName(save, p), absDay: absDayOf(save), ...ctx })
     if (text) beats.push({ speaker: pName(save, p), text, note })
+  }
+
+  // Before anything else: has anyone in this circle never met before? People
+  // introduce themselves ONCE, and it has to happen before any other line —
+  // speak() records the meeting, so a joke firing first would quietly consume
+  // the introduction.
+  if (group.length >= 2) {
+    outer: for (const a of group) {
+      for (const b of group) {
+        if (a === b || !isFirstMeeting(a, b)) continue
+        const line = speak(a, 'intro', {
+          self: pName(save, a), t: pName(save, b), to: b, absDay: absDayOf(save),
+        })
+        if (line) {
+          beats.push({ speaker: pName(save, a), text: line })
+          // Both sides now know each other, whoever did the talking.
+          noteMeeting(b, a, absDayOf(save))
+          const reply = speak(b, 'greet', {
+            self: pName(save, b), t: pName(save, a), to: a, absDay: absDayOf(save),
+          })
+          if (reply) beats.push({ speaker: pName(save, b), text: reply })
+          break outer
+        }
+      }
+    }
+  }
+
+  // People who've played each other a lot talk about the record.
+  if (group.length >= 2 && chance(0.3)) {
+    const pairs = []
+    for (const a of group) {
+      for (const b of group) {
+        if (a === b) continue
+        const h = a.h2h?.[b.id]
+        const n = h ? (h.w || 0) + (h.l || 0) : 0
+        if (n >= 4) pairs.push({ a, b, h, n })
+      }
+    }
+    if (pairs.length) {
+      const { a, b, h, n } = choice(pairs)
+      const line = speak(a, 'callback', {
+        self: pName(save, a), t: pName(save, b), to: b, absDay: absDayOf(save),
+        w: h.w, l: h.l, n,
+      })
+      if (line) beats.push({ speaker: pName(save, a), text: line })
+    }
   }
 
   const glow = group.find((p) => results[p.id] === 'won' && p.mood >= 6)

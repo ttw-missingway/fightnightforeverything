@@ -69,6 +69,24 @@ const LINES = {
         "We've all been {t} today at least once. Be honest, everyone.",
       ],
     },
+    tiers: {
+      stranger: [
+        "Not being funny, {t}, but that last one looked rough.",
+        "{t} — that input did not go in. I saw it from here.",
+        "Sorry, is that on purpose? The jumping? Genuinely asking.",
+      ],
+      close: [
+        "{t} has been playing this game for years and still blocks like a lawn chair.",
+        "I've watched {t} lose that exact way since before either of us had jobs.",
+        "{t}, my friend, my brother — that was the worst thing I've ever seen.",
+        "Somebody check on {t}. Not because of the loss. Just generally.",
+      ],
+      hostile: [
+        "{t} plays like they've got somewhere better to be. Wish they'd go.",
+        "I'd explain {t}'s mistake but I don't think they'd follow.",
+        "Nobody's impressed, {t}. Nobody has ever been impressed.",
+      ],
+    },
   },
   jokeLanded: {
     dimension: null,
@@ -109,6 +127,21 @@ const LINES = {
       chill: [
         "No rush, {t}. The runback will be just as embarrassing tomorrow.",
         "It's okay, {t}. Some people peak early.",
+      ],
+    },
+    tiers: {
+      stranger: [
+        "I'll give you a game if you want one, {t}. No money on it.",
+        "Happy to run some sets, {t}. See where we're both at.",
+      ],
+      close: [
+        "{t}. Cabinet. Now. Same as every week and you'll lose the same way.",
+        "You're not beating me today, {t}, and we both already know it.",
+        "I've had a WEEK, {t}, and I'm taking all of it out on you.",
+      ],
+      hostile: [
+        "Put your money where your mouth is, {t}. If you can find it.",
+        "I don't want a friendly. I want the set, and I want people watching.",
       ],
     },
   },
@@ -201,6 +234,21 @@ const LINES = {
         "Good games, {t}. That was fun.",
       ],
     },
+    tiers: {
+      stranger: [
+        "Good games. {t}, was it? Nice sets.",
+        "GGs — thanks for the games. You'll get me next time.",
+      ],
+      close: [
+        "GGs. Now go home and think about what you've done.",
+        "Same time next week, {t}, and I'll do it again.",
+        "That's the one I needed. You've been beating me for a month.",
+      ],
+      hostile: [
+        "GGs. *does not offer the handshake*",
+        "That's the set. Nothing else to say.",
+      ],
+    },
   },
   ggLossGood: {
     dimension: null,
@@ -238,6 +286,80 @@ const LINES = {
       chill: [
         "No speeches. Let's just play, {t}.",
         "Hope you warmed up, {t}.",
+      ],
+    },
+  },
+  // The first words two people ever exchange. Fires once, on first meeting,
+  // and it's the clearest proof the room remembers who knows who.
+  intro: {
+    dimension: 'energy',
+    pools: {
+      fiery: [
+        "I'm {self}. You play? Because I play.",
+        "{self}. Haven't seen you in here — put your name down, let's go.",
+        "New face! {self}. Whose cabinet are we taking?",
+      ],
+      neutral: [
+        "Hey — {self}. Don't think we've met.",
+        "{self}. You're new, right? Welcome to the best room in town.",
+        "I'm {self}. Grab a stick, nobody bites. Mostly.",
+      ],
+      chill: [
+        "...{self}. Hey.",
+        "{self}. You're new. It's alright here.",
+        "Hey. {self}. Sit wherever.",
+      ],
+    },
+  },
+  // Saying hello to somebody you already know — entirely about how well.
+  greet: {
+    dimension: null,
+    pools: { any: ['Hey.', 'Alright?', "You're here."] },
+    tiers: {
+      acquaintance: [
+        "Hey — {t}, right?",
+        "Alright {t}. Good to see you again.",
+        "{t}. You were here last week too, yeah?",
+      ],
+      familiar: [
+        "{t}! You made it.",
+        "There he is. Alright {t}.",
+        "{t}, come here, I want to show you something.",
+      ],
+      close: [
+        "Oh thank god, {t}'s here. I was going to have to talk to strangers.",
+        "{t}!! Where have you BEEN.",
+        "There's my favourite problem. Alright {t}.",
+        "{t}. Sit down. I've been thinking about our set all week.",
+      ],
+      hostile: [
+        "{t}.",
+        "Oh. You're here.",
+        "*sees {t}, picks a different cabinet*",
+      ],
+    },
+  },
+  // The shared record, said out loud. What people who've played each other a
+  // hundred times actually talk about.
+  callback: {
+    dimension: null,
+    pools: { any: ["We've done this before, {t}."] },
+    tiers: {
+      familiar: [
+        "{n} sets, {t}. I'm {w}–{l} up and I'm not letting you forget it.",
+        "That's {n} games between us now. Neither of us has learned anything.",
+        "{t} and me are {w}–{l} lifetime. Every single one of them close.",
+      ],
+      close: [
+        "{w}–{l}, {t}. I could play you in my sleep and I'd still lose the ones that matter.",
+        "{n} sets deep and you STILL do that on wakeup. Every time.",
+        "Me and {t} have played {n} times. I know what they had for breakfast.",
+        "{w}–{l}. And every single one of those {l} losses is a personal insult.",
+      ],
+      hostile: [
+        "{w}–{l}. Look it up.",
+        "I'm {w}–{l} against {t}. That's the whole conversation.",
+        "{n} games. {l} of them I'd like back.",
       ],
     },
   },
@@ -504,6 +626,14 @@ export function speak(player, kind, ctx = {}) {
   const softening = tier === 'stranger' && kind === 'joke' && spec.pools.earnest && chance(0.6)
   const dimVal = softening ? 'earnest' : (spec.dimension ? v[spec.dimension] : 'any')
   let candidates = [...(spec.pools[dimVal] || []), ...(spec.pools.any || [])]
+
+  // A pool written FOR this relationship outranks the voice's usual register
+  // most of the time — this is where the difference between a stranger and
+  // somebody you've played two hundred sets with actually lives. Not always,
+  // so the voice still colours who they are.
+  const tierPool = spec.tiers?.[tier]
+  if (tierPool?.length && chance(0.62)) candidates = tierPool
+
   const quirkPool = QUIRK_LINES[v.quirk]?.[kind]
   if (quirkPool && chance(0.5)) candidates = quirkPool
   if (!candidates.length) return null
@@ -529,6 +659,9 @@ export function speak(player, kind, ctx = {}) {
     .replaceAll('{c}', ctx.c ?? 'your character')
     .replaceAll('{mem}', ctx.mem ?? 'that one time')
     .replaceAll('{self}', ctx.self ?? 'they')
+    .replaceAll('{w}', ctx.w ?? '0')
+    .replaceAll('{l}', ctx.l ?? '0')
+    .replaceAll('{n}', ctx.n ?? '0')
   return applyVoice(filled, v, tier, [ctx.t, ctx.self])
 }
 
