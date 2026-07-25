@@ -327,7 +327,7 @@ function PointStats({ player, patch, group, rows, budget, spent, chosenRow }) {
     return (
       <div className="row" key={key} title={STAT_DESC[key]} style={{ marginBottom: 4 }}>
         <span className="small" style={{ width: 110, color: val === 0 ? 'var(--dim)' : 'inherit' }}>{key}</span>
-        <input type="range" min={floor} max={STAT_MAX_POINTS} value={val} style={{ flex: 1 }}
+        <input type="range" min={0} max={STAT_MAX_POINTS} value={val} style={{ flex: 1 }}
           onChange={(e) => patch((p) => {
             let next = Math.max(floor, Number(e.target.value))
             if (budget != null && next > val) next = Math.min(next, val + Math.max(0, budget - spent))
