@@ -11,6 +11,11 @@
 
 import { choice, chance } from './util.js'
 
+// NOTE ON IMPORTS: this file must not import social.js. model.js imports
+// dialogue.js (for deriveVoice) and social.js imports model.js, so reaching
+// for getRel here would close the cycle. Relationships are read straight off
+// the player instead — it's a one-line lookup either way.
+
 export const VOICE_ENERGIES = ['chill', 'neutral', 'fiery']
 export const VOICE_HUMORS = ['dry', 'earnest', 'clowning']
 export const VOICE_SPEECHES = ['terse', 'plain', 'chatty']
@@ -321,31 +326,210 @@ const QUIRK_LINES = {
   },
 }
 
+// ---------- Who are we talking to? ----------
+// People don't speak to a stranger the way they speak to someone they've
+// played a hundred sets against. Everything downstream — which lines are even
+// allowed, how much hedging goes on the front, whether a name gets used —
+// hangs off this.
+
+export const FAMILIARITY_TIERS = ['stranger', 'acquaintance', 'familiar', 'close', 'hostile']
+
+/**
+ * How well `a` knows `b`, from the record they've already built: games played,
+ * how they feel about each other, and how many times they've actually spoken.
+ */
+export function familiarity(a, b) {
+  if (!a || !b || a.id === b.id) return 'familiar'
+  const rel = a.relationships?.[b.id] || 0
+  const h = a.h2h?.[b.id]
+  const games = h ? (h.w || 0) + (h.l || 0) : 0
+  const spoken = a.met?.[b.id]?.count || 0
+  // Bad blood overrides everything: you can know someone very well and still
+  // talk to them like an enemy.
+  if (rel <= -45) return 'hostile'
+  // Thresholds set from a measured 120-day scene rather than guessed: contact
+  // per pair runs min 0 / median 2 / p75 4 / p90 7 / max 20, because
+  // matchmaking spreads a roster of thirty people thin. The first pass used
+  // 2/8/24 and left 88% of the room stuck on "acquaintance" with nobody ever
+  // reaching "close".
+  const contact = games + spoken
+  if (contact >= 9 || rel >= 45) return 'close'
+  if (contact >= 4 || rel >= 20) return 'familiar'
+  if (contact >= 1 || rel !== 0) return 'acquaintance'
+  return 'stranger'
+}
+
+/** Record that these two actually spoke. Cheap, and it feeds familiarity. */
+export function noteMeeting(a, b, absDay = 0) {
+  if (!a || !b || a.id === b.id) return
+  if (!a.met) a.met = {}
+  const prior = a.met[b.id]
+  if (prior) prior.count++
+  else a.met[b.id] = { firstDay: absDay, count: 1 }
+}
+
+/** True the first time these two have ever exchanged a word. */
+export function isFirstMeeting(a, b) {
+  if (!a || !b || a.id === b.id) return false
+  if (a.met?.[b.id]) return false
+  const h = a.h2h?.[b.id]
+  return !((h ? (h.w || 0) + (h.l || 0) : 0) > 0)
+}
+
+// ---------- Not saying the same thing twice ----------
+// Templates are identified by hashing them BEFORE substitution, so the same
+// sentence about two different opponents still counts as a repeat. No content
+// refactor needed — the pools stay plain strings.
+
+const SAID_RING = 14 // per person
+const ROOM_RING = 26 // and the room as a whole
+
+function lineId(template) {
+  let h = 5381
+  for (let i = 0; i < template.length; i++) h = ((h * 33) ^ template.charCodeAt(i)) >>> 0
+  return h.toString(36)
+}
+
+// The arcade's short-term memory. Not persisted: it only has to stop everyone
+// saying the same thing within one stretch of simulation.
+const roomRecent = []
+
+function rememberLine(player, id) {
+  if (!player.said) player.said = []
+  player.said.push(id)
+  while (player.said.length > SAID_RING) player.said.shift()
+  roomRecent.push(id)
+  while (roomRecent.length > ROOM_RING) roomRecent.shift()
+}
+
+// ---------- The render pipeline ----------
+// This is the variety multiplier. One template becomes many different voices
+// without writing a single new line: a tic on the front, a casing habit, a
+// hedge for someone you've just met, a nickname for someone you haven't.
+
+const TICS = {
+  fiery: ['Yo—', 'Nah,', 'Listen—', 'Bro,'],
+  neutral: ['Look,', 'Okay so,', 'I mean,'],
+  chill: ['I mean,', 'Honestly,', 'Eh—'],
+}
+
+// What you say to somebody you barely know before you say the actual thing.
+const HEDGES = [
+  'No offence,', 'Sorry—', "Don't take this the wrong way, but", 'Genuinely,',
+]
+
+// ...and the tag you put on the end for someone you know far too well.
+const CLOSE_TAGS = [', man.', ', dude.', ' lol.', ", I'm serious."]
+const HOSTILE_TAGS = [' Whatever.', ' Yeah.', ' Sure.']
+
+/**
+ * Lowercase the opening letter — but never when the sentence starts with
+ * somebody's name or "I". Blindly decapitalising turned "P91 plays defense"
+ * into "p91 plays defense", which reads like a typo rather than a voice.
+ */
+function decap(line, names) {
+  const first = line.split(/[\s,.!?]/)[0]
+  // "I", and every contraction of it — the apostrophe isn't a split point, so
+  // a bare `first === 'I'` check let "I'm" through and produced "i'm".
+  if (/^I(['\u2019]|$)/.test(first)) return line
+  if (names.some((n) => n && first === n.split(/\s/)[0])) return line
+  if (/^[A-Z][a-z]*[A-Z]/.test(first)) return line // CamelCase gamertags
+  return line.charAt(0).toLowerCase() + line.slice(1)
+}
+
+function applyVoice(line, v, tier, names = []) {
+  let out = line
+
+  // A signature filler. Same person, same tic — that's what makes it theirs.
+  if (chance(0.18)) {
+    const pool = TICS[v.energy] || TICS.neutral
+    out = `${choice(pool)} ${decap(out, names)}`
+  }
+
+  // Talking to someone you've just met takes the edge off.
+  if (tier === 'stranger' && chance(0.35)) {
+    out = `${choice(HEDGES)} ${decap(out, names)}`
+  } else if (tier === 'close' && chance(0.25) && /[.!?]$/.test(out)) {
+    out = out.replace(/[.!?]$/, choice(CLOSE_TAGS))
+  } else if (tier === 'hostile' && chance(0.25)) {
+    out += choice(HOSTILE_TAGS)
+  }
+
+  // Casing habits. Loud people get loud; quiet people don't bother with caps.
+  if (v.energy === 'fiery' && out.length < 46 && chance(0.14)) out = out.toUpperCase()
+  else if (v.energy === 'chill' && chance(0.14)) out = decap(out, names)
+
+  // Politeness reads as not contracting. Used sparingly — it's stiff on purpose.
+  if (v.humor === 'earnest' && tier === 'stranger' && chance(0.3)) {
+    out = out.replace(/\bdon't\b/g, 'do not').replace(/\bcan't\b/g, 'cannot')
+      .replace(/\bI'm\b/g, 'I am').replace(/\bit's\b/g, 'it is')
+  }
+  return out
+}
+
+// A joke that crosses the line needs a licence: either you know them well
+// enough to get away with it, or you're the sort who doesn't care.
+//
+// Deliberately a PROBABILITY, not a ban. Refusing outright meant a dry-voiced
+// regular never once joked with someone new, which didn't soften the
+// interaction — it deleted it, and the whole beat went silent.
+function allowedByTier(kind, tier, v) {
+  if (kind !== 'joke' && kind !== 'trashTalk') return true
+  if (tier === 'close' || tier === 'hostile') return true
+  if (v.quirk === 'menace' || v.humor === 'clowning') return true
+  if (tier === 'stranger') return chance(kind === 'trashTalk' ? 0.3 : 0.55)
+  if (tier === 'acquaintance') return chance(kind === 'trashTalk' ? 0.7 : 0.9)
+  return true
+}
+
 /**
  * The single entry point: a player says something appropriate to the moment,
- * in their own voice. Returns null when no line fits.
- * ctx: {t: other name, m: move, c: character, mem: memory text, self: own name}
+ * in their own voice, to whoever is listening. Returns null when no line fits.
+ *
+ * ctx: {
+ *   t: other's display name, to: the other PLAYER (unlocks familiarity),
+ *   m: move, c: character, mem: memory text, self: own name, absDay
+ * }
  */
 export function speak(player, kind, ctx = {}) {
   const v = player.voice || DEFAULT_VOICE
   const spec = LINES[kind]
   if (!spec) return null
-  const dimVal = spec.dimension ? v[spec.dimension] : 'any'
+  const listener = ctx.to || null
+  const tier = listener ? familiarity(player, listener) : 'familiar'
+  if (!allowedByTier(kind, tier, v)) return null
+
+  // Talking to someone new, a joke reaches for the gentlest register the
+  // pools have rather than whatever this voice would normally pick.
+  const softening = tier === 'stranger' && kind === 'joke' && spec.pools.earnest && chance(0.6)
+  const dimVal = softening ? 'earnest' : (spec.dimension ? v[spec.dimension] : 'any')
   let candidates = [...(spec.pools[dimVal] || []), ...(spec.pools.any || [])]
   const quirkPool = QUIRK_LINES[v.quirk]?.[kind]
   if (quirkPool && chance(0.5)) candidates = quirkPool
   if (!candidates.length) return null
+
+  // Drop anything this person (or the room) has said lately. If that empties
+  // the pool, fall back rather than going silent.
+  const stale = new Set([...(player.said || []), ...roomRecent])
+  const fresh = candidates.filter((c) => !stale.has(lineId(c)))
+  const pool = fresh.length ? fresh : candidates
+
   // Speech length: terse players find the short version, chatty ones commit.
-  const picks = [choice(candidates), choice(candidates), choice(candidates)]
-  let line = v.speech === 'terse' ? picks.reduce((a, b) => (a.length <= b.length ? a : b))
+  const picks = [choice(pool), choice(pool), choice(pool)]
+  const template = v.speech === 'terse' ? picks.reduce((a, b) => (a.length <= b.length ? a : b))
     : v.speech === 'chatty' ? picks.reduce((a, b) => (a.length >= b.length ? a : b))
     : picks[0]
-  return line
+
+  rememberLine(player, lineId(template))
+  if (listener) noteMeeting(player, listener, ctx.absDay ?? 0)
+
+  const filled = template
     .replaceAll('{t}', ctx.t ?? 'you')
     .replaceAll('{m}', ctx.m ?? 'that')
     .replaceAll('{c}', ctx.c ?? 'your character')
     .replaceAll('{mem}', ctx.mem ?? 'that one time')
     .replaceAll('{self}', ctx.self ?? 'they')
+  return applyVoice(filled, v, tier, [ctx.t, ctx.self])
 }
 
 export function voiceSummary(voice) {

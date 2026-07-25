@@ -88,6 +88,8 @@ export function newPlayer(partial = {}) {
     relationships: {}, // otherPlayerId -> -100..100
     h2h: {}, // otherPlayerId -> {w, l} lifetime head-to-head record
     memories: [], // {day, year, kind, text} — defining moments, capped
+    met: {}, // otherId -> {firstDay, count} — who they've actually spoken to
+    said: [], // recent line ids, so they don't repeat themselves
     voice: null, // {energy, humor, speech, quirk} — derived from stats if null
     teamId: null,
     attractedTags: [],
@@ -671,6 +673,19 @@ export function migrateSave(save) {
       }
     }
     computeMatchups(game)
+  }
+  // Dialogue infrastructure: people who have already played each other are
+  // NOT strangers, so seed `met` from the head-to-head record. Without this a
+  // two-year save would have everyone introducing themselves again.
+  for (const p of Object.values(save.players || {})) {
+    p.said ??= []
+    if (!p.met) {
+      p.met = {}
+      for (const [otherId, h] of Object.entries(p.h2h || {})) {
+        const games = (h?.w || 0) + (h?.l || 0)
+        if (games > 0) p.met[otherId] = { firstDay: 0, count: games }
+      }
+    }
   }
   save.game.techniques ??= [] // dormant — designed techniques are retired
   for (const t of save.arcade.schedule) {

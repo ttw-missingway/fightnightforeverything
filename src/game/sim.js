@@ -338,7 +338,7 @@ function makeBeats(save, group, where, results) {
   const beats = []
   // Speech beats carry a speaker and render as actual dialogue.
   const say = (p, kind, ctx = {}, note = null) => {
-    const text = speak(p, kind, { self: pName(save, p), ...ctx })
+    const text = speak(p, kind, { self: pName(save, p), absDay: absDayOf(save), ...ctx })
     if (text) beats.push({ speaker: pName(save, p), text, note })
   }
 
@@ -356,17 +356,17 @@ function makeBeats(save, group, where, results) {
       0.45 + joker.social.charisma * 0.04 + getRel(target, joker) * 0.003 +
       (target.mood - 5) * 0.03 - (results[target.id] === 'lost' ? 0.15 : 0),
       0.1, 0.92)
-    say(joker, 'joke', { t: pName(save, target) })
+    say(joker, 'joke', { t: pName(save, target), to: target })
     if (chance(landChance)) {
       const dm = 0.2 + target.social.sensitivity * 0.06
       target.mood = clamp(target.mood + dm, 0, 10)
       shiftRel(target, joker, 1.5)
-      say(target, 'jokeLanded', { t: pName(save, joker) }, `(+${dm.toFixed(1)} mood)`)
+      say(target, 'jokeLanded', { t: pName(save, joker), to: joker }, `(+${dm.toFixed(1)} mood)`)
     } else {
       const dm = 0.3 + target.social.sensitivity * 0.12
       target.mood = clamp(target.mood - dm, 0, 10)
       shiftRel(target, joker, -2.5)
-      say(target, 'jokeBombed', { t: pName(save, joker) }, `(−${dm.toFixed(1)} mood)`)
+      say(target, 'jokeBombed', { t: pName(save, joker), to: joker }, `(−${dm.toFixed(1)} mood)`)
     }
   }
 
@@ -377,14 +377,14 @@ function makeBeats(save, group, where, results) {
     target.mood = clamp(target.mood + dm, 0, 10)
     shiftRel(target, kind, 1.2)
     const char = save.game.characters.find((c) => c.id === target.mainCharId)
-    say(kind, 'compliment', { t: pName(save, target), c: char?.name }, `(+${dm.toFixed(1)} mood for ${pName(save, target)})`)
+    say(kind, 'compliment', { t: pName(save, target), to: target, c: char?.name }, `(+${dm.toFixed(1)} mood for ${pName(save, target)})`)
   }
 
   const loudmouth = group.find((p) => p.social.politeness <= 3 && p.personal.dominance >= 6)
   if (loudmouth && group.length >= 2 && chance(0.3)) {
     const target = choice(group.filter((p) => p !== loudmouth))
     shiftRel(target, loudmouth, -1.5)
-    say(loudmouth, 'trashTalk', { t: pName(save, target) }, `(${pName(save, target)} files it away for later)`)
+    say(loudmouth, 'trashTalk', { t: pName(save, target), to: target }, `(${pName(save, target)} files it away for later)`)
   }
 
   // Hygiene. Nobody says anything. Everybody notices.
@@ -409,7 +409,7 @@ function makeBeats(save, group, where, results) {
   if (where === 'at the concession stand' && chance(0.5)) {
     const talker = choice(group)
     const other = group.find((p) => p !== talker)
-    const line = speak(talker, 'lifeChat', { self: pName(save, talker), t: other ? pName(save, other) : 'someone' })
+    const line = speak(talker, 'lifeChat', { self: pName(save, talker), to: other, absDay: absDayOf(save), t: other ? pName(save, other) : 'someone' })
     if (line) beats.push({ speaker: pName(save, talker), text: line })
   }
 
@@ -509,15 +509,15 @@ function runMoneyMatch(save, mm, present, events) {
   const preMatch = []
   for (const p of [a, b]) {
     const opp = p === a ? b : a
-    const line = speak(p, 'mmPre', { t: pName(save, opp), self: pName(save, p) })
+    const line = speak(p, 'mmPre', { t: pName(save, opp), to: opp, self: pName(save, p), absDay: absDayOf(save) })
     if (line) preMatch.push({ speaker: pName(save, p), text: line })
   }
   // And the words after — a money match always ends with words.
   const postMatch = []
-  const wl = speak(winner, 'ggWin', { t: pName(save, loser), self: pName(save, winner) })
+  const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save) })
   if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
   const goodSport = loser.social.sportsmanship >= 6
-  const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), self: pName(save, loser) })
+  const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save) })
   if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
 
   const ev = {
@@ -1007,12 +1007,12 @@ export function simHour(save) {
       // The set ends; sometimes words are exchanged.
       const postMatch = []
       if (chance(0.55)) {
-        const wl = speak(winner, 'ggWin', { t: pName(save, loser), self: pName(save, winner) })
+        const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save) })
         if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
       }
       if (chance(0.55)) {
         const goodSport = loser.social.sportsmanship >= 6 || (loser.social.sportsmanship >= 4 && loser.mood >= 6)
-        const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), self: pName(save, loser) })
+        const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save) })
         if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
       }
 

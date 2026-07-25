@@ -132,12 +132,12 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
   const postMatch = []
   if (bothArcade) {
     if (chance(0.55)) {
-      const wl = speak(winner.ref, 'ggWin', { t: loser.name, self: winner.name })
+      const wl = speak(winner.ref, 'ggWin', { t: loser.name, to: loser.ref, self: winner.name })
       if (wl) postMatch.push({ speaker: winner.name, text: wl })
     }
     if (chance(0.55)) {
       const goodSport = loser.ref.social.sportsmanship >= 6
-      const ll = speak(loser.ref, goodSport ? 'ggLossGood' : 'ggLossBad', { t: winner.name, self: loser.name })
+      const ll = speak(loser.ref, goodSport ? 'ggLossGood' : 'ggLossBad', { t: winner.name, to: winner.ref, self: loser.name })
       if (ll) postMatch.push({ speaker: loser.name, text: ll })
     }
   }
