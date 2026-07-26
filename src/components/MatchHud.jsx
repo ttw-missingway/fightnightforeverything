@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
-import { charArt, charArtFor, playerArt, playerArtFor, stageArt } from './art.js'
+import { charArtFor, lookArt, playerArt, playerArtFor, stageArt } from './art.js'
+import { lookOf } from '../game/skins.js'
 import { Portrait } from './ui.jsx'
 import FxLayer, { shakeClassFor } from './fx.jsx'
 
@@ -56,8 +57,16 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
   const formB = st.fB ? save.game.characters.find((c) => c.id === st.fB) : null
   const chA = formA || pickedA
   const chB = formB || pickedB
-  const charAName = formA?.name ?? pickedAName
-  const charBName = formB?.name ?? pickedBName
+
+  // …and on top of WHO they are, HOW they look: the fight screen is a person
+  // playing a character, so it wears that player's preferred skin. Skins are
+  // cosmetic only — the name here can differ from the tier list, and that's
+  // the point. Resolved live from (player, character) rather than stored on
+  // the match, so a skin added later shows up in old VODs too.
+  const lookA = lookOf(m.aId, chA)
+  const lookB = lookOf(m.bId, chB)
+  const charAName = chA ? lookA.name : pickedAName
+  const charBName = chB ? lookB.name : pickedBName
 
   const stage = m.stageName ? save.game.stages.find((s) => s.name === m.stageName) : null
   const backdrop = stageArt(stage, m.stageName ?? `${m.aId ?? m.aName}|${m.bId ?? m.bName}`)
@@ -67,8 +76,8 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
     ...[...backdrop.layers].reverse().map((u) => `url(${u})`),
   ].join(', ')
 
-  const spriteA = chA ? charArt(chA) : charAName ? charArtFor(charAName, null) : null
-  const spriteB = chB ? charArt(chB) : charBName ? charArtFor(charBName, null) : null
+  const spriteA = chA ? lookArt(chA, m.aId) : charAName ? charArtFor(charAName, null) : null
+  const spriteB = chB ? lookArt(chB, m.bId) : charBName ? charArtFor(charBName, null) : null
   const playerA = playerArt(save.players[m.aId]) ?? playerArtFor(m.aId ?? m.aName)
   const playerB = playerArt(save.players[m.bId]) ?? playerArtFor(m.bId ?? m.bName)
 

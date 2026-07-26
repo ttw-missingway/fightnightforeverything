@@ -29,6 +29,7 @@ import {
 import {
   FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
 } from '../game/forms.js'
+import { newSkin, skinsOf } from '../game/skins.js'
 import { CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample, displayName } from '../game/util.js'
 import {
@@ -39,7 +40,7 @@ import {
   playerStaffAppeal,
 } from '../game/economy.js'
 import { SpritePicker, StagePicker } from './SpritePicker.jsx'
-import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArtFor, stageArt } from './art.js'
+import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArt, charArtFor, stageArt } from './art.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
@@ -502,6 +503,55 @@ function FormLink({ save, sel, update, setSelId }) {
   )
 }
 
+/**
+ * Skins: alternate looks for the same fighter. Deliberately thin — a name and
+ * a sprite, nothing that could affect a match. There is no balance surface
+ * here to get wrong, because a skin is not a character and never enters
+ * `game.characters`.
+ */
+function SkinsEditor({ sel, patchChar }) {
+  const skins = skinsOf(sel)
+  return (
+    <Field label={`Skins (${skins.length})`}>
+      <p className="dim small" style={{ margin: '0 0 6px' }}>
+        A different face on the same fighter — its own name and sprite, identical in every other way.
+        Skins never appear on the tier list or the balance chart, and nobody talks about them: the
+        discourse is about <strong>{sel.name}</strong>. Players settle on a look they like, so this is
+        what you'll see next to their name once they main {sel.name}.
+      </p>
+      {skins.map((sk) => (
+        <div className="card sub" key={sk.id}>
+          <div className="row spread">
+            <input value={sk.name} style={{ minWidth: 150 }}
+              onChange={(e) => patchChar((c) => {
+                const x = (c.skins || []).find((y) => y.id === sk.id)
+                if (x) x.name = e.target.value
+              })} />
+            <button className="small danger" title="remove this skin"
+              onClick={() => patchChar((c) => { c.skins = (c.skins || []).filter((y) => y.id !== sk.id) })}>×</button>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <SpritePicker
+              catalog={CHAR_SPRITE_CATALOG}
+              groups={CHAR_SPRITE_GROUPS}
+              value={sk.spriteKey || null}
+              autoUrl={charArt(sel)}
+              onChange={(k) => patchChar((c) => {
+                const x = (c.skins || []).find((y) => y.id === sk.id)
+                if (x) x.spriteKey = k
+              })}
+            />
+          </div>
+        </div>
+      ))}
+      <button className="small" style={{ marginTop: 6 }}
+        onClick={() => patchChar((c) => {
+          c.skins = [...(c.skins || []), newSkin({ name: `${c.name} Alt ${(c.skins || []).length + 1}` })]
+        })}>+ Add skin</button>
+    </Field>
+  )
+}
+
 export function CharactersEditor({ save, update }) {
   const [selId, setSelId] = useState(null)
   const importRef = useRef(null)
@@ -696,6 +746,7 @@ export function CharactersEditor({ save, update }) {
               onChange={(k) => patchChar((c) => { c.spriteKey = k })}
             />
           </Field>
+          <SkinsEditor sel={sel} patchChar={patchChar} />
           {/* No popularity dial. It still exists and still does the heavy
               lifting in `charAppeal` — it's the biggest term deciding who
               gravitates to a character — but typing a number for it was

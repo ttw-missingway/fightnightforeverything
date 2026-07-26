@@ -242,6 +242,20 @@ export function diffGame(oldGame, draft, observer = null) {
     }
     if ((old.spriteKey || null) !== (c.spriteKey || null)) notes.push(`${cn}: updated character art`)
     if ((old.description || '') !== (c.description || '')) notes.push(`${cn}: bio updated`)
+    // Skins are pure content: no balance delta, but a new look for a popular
+    // character is exactly the sort of thing a patch gets talked about for.
+    const oldSkins = new Map((old.skins || []).map((x) => [x.id, x]))
+    const newSkins = new Map((c.skins || []).map((x) => [x.id, x]))
+    for (const [id, sk] of newSkins) {
+      const os = oldSkins.get(id)
+      if (!os) notes.push(`NEW SKIN: ${cn} — ${sk.name}`)
+      else if (os.name !== sk.name) notes.push(`${cn}: skin "${os.name}" renamed to "${sk.name}"`)
+      else if ((os.spriteKey || null) !== (sk.spriteKey || null)) notes.push(`${cn}: new art for the ${sk.name} skin`)
+    }
+    for (const [id, sk] of oldSkins) {
+      if (!newSkins.has(id)) notes.push(`${cn}: removed the ${sk.name} skin`)
+    }
+
     const tagDiff = listDiff(old.tags, c.tags)
     if (tagDiff.added.length) notes.push(`${cn} tagged: ${tagDiff.added.join(', ')}`)
     if (tagDiff.removed.length) notes.push(`${cn} untagged: ${tagDiff.removed.join(', ')}`)

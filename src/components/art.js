@@ -5,6 +5,8 @@
 // Lives in components/ (not game/) because import.meta.glob is a Vite
 // feature — the game engine must stay runnable in plain node.
 
+import { preferredSkin } from '../game/skins.js'
+
 const charFiles = import.meta.glob('../assets/pixel/chars/*.png', { eager: true, import: 'default' })
 const faceFiles = import.meta.glob('../assets/pixel/faces/*.png', { eager: true, import: 'default' })
 const stageFiles = import.meta.glob('../assets/pixel/stages/*.png', { eager: true, import: 'default' })
@@ -91,9 +93,23 @@ export function charArtFor(key, archetype) {
 }
 
 // A user-picked spriteKey wins; otherwise the deterministic archetype pick.
+// This is the character's OWN look — use it wherever the subject is the
+// character (tier list, codex, balance). For a PERSON playing them, see
+// `lookArt`.
 export function charArt(char) {
   if (!char) return null
   return charSpriteUrl(char.spriteKey) || charArtFor(char.id, char.archetype)
+}
+
+/**
+ * The sprite a particular player wears on this character — their preferred
+ * skin, or the base look if the character has no skins (or the skin's art has
+ * gone missing). Use anywhere a person is shown WITH their character.
+ */
+export function lookArt(char, playerId) {
+  if (!char) return null
+  const skin = preferredSkin(playerId, char)
+  return (skin && charSpriteUrl(skin.spriteKey)) || charArt(char)
 }
 
 /** Deterministic player mugshot from any stable key (EVO elites, old events). */

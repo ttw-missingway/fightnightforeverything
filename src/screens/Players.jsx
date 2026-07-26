@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useStore, downloadJson, fileStem } from '../state/store.jsx'
 import { StatBar, moodFace, Portrait } from '../components/ui.jsx'
-import { playerArt, charArt } from '../components/art.js'
+import { playerArt, lookArt } from '../components/art.js'
+import { lookOf } from '../game/skins.js'
 import PlayerForm from '../components/PlayerForm.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from '../game/constants.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
@@ -120,8 +121,11 @@ export default function Players() {
                   </span>
                 </td>
                 <td className="cyan">
-                  {main && <Portrait url={charArt(main)} size={20} alt={main.name} />}{main && ' '}
-                  {main ? main.name : '—'}
+                  {/* A person shown WITH their character wears their skin —
+                      that's Jade's Ryu, and Jade plays the red one. The tier
+                      list and the chart keep the base name. */}
+                  {main && <Portrait url={lookArt(main, p.id)} size={20} alt={lookOf(p.id, main).name} />}{main && ' '}
+                  {main ? lookOf(p.id, main).name : '—'}
                   {main && !p.settledMain && <span className="dim small"> (trying out)</span>}
                 </td>
                 <td>{Math.round(p.elo)}</td>
@@ -296,8 +300,8 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           <span className="pill" title={`what they think of ${save.arcade.name}`}>
             🕹 {opinionLabel(arcadeOpinionOf(save, p))}
           </span>
-          {main && p.settledMain && <span className="pill on">Mains {main.name}{p.lockedMain ? ' 🔒' : ''}</span>}
-          {main && !p.settledMain && <span className="pill">🔍 Exploring — {main.name} today ({(p.exploredChars || []).length} tried)</span>}
+          {main && p.settledMain && <span className="pill on">Mains {lookOf(p.id, main).name}{p.lockedMain ? ' 🔒' : ''}</span>}
+          {main && !p.settledMain && <span className="pill">🔍 Exploring — {lookOf(p.id, main).name} today ({(p.exploredChars || []).length} tried)</span>}
           {team && <span className="pill gold">{team.name} [{team.acronym}]</span>}
           {p.tournamentWins > 0 && <span className="pill gold">🏆 ×{p.tournamentWins}</span>}
         </div>

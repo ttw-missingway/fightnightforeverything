@@ -5,6 +5,7 @@ import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { defaultRules, migrateRules } from './rules.js'
 import { computeMatchups } from './balance.js'
 import { pruneForms, formsOf, FORM_MOVE_TYPE } from './forms.js'
+import { reskinFresh } from './skins.js'
 
 export function newCharacter(partial = {}) {
   return {
@@ -24,6 +25,10 @@ export function newCharacter(partial = {}) {
     // fighter. A form is unpickable — it's reached through a `form change`
     // move and lasts until the bell. See src/game/forms.js.
     formOf: null,
+    // Cosmetic variants: [{id, name, spriteKey}]. Purely a different face on
+    // the same fighter — never a separate entry on the tier list or the
+    // chart. Players settle on one they like. See src/game/skins.js.
+    skins: [],
     ...partial,
   }
 }
@@ -251,6 +256,7 @@ export function awardMilestone(save, key, points, text) {
 export function cloneCharacterFresh(char) {
   const c = structuredClone(char)
   c.id = uid('char')
+  reskinFresh(c)
   const moveIdMap = {}
   for (const m of c.moves || []) {
     const fresh = uid('move')
@@ -802,6 +808,7 @@ export function migrateSave(save) {
       c.tags ??= []
       // Nobody was anybody's form before forms existed.
       c.formOf ??= null
+      c.skins ??= []
       // Descriptor overhaul: everyone was a "normal" body before it existed,
       // so old casts keep the balance they had.
       c.vitality ??= 'normal'
