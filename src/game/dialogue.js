@@ -498,6 +498,137 @@ const LINES = {
       ],
     },
   },
+  // ---- replies: the second half of an exchange ----
+  // These only ever run in response to something somebody just said, which is
+  // what turns a column of quotes into a room where people are talking.
+  agreeTake: {
+    dimension: null,
+    pools: {
+      any: [
+        "THANK you. Somebody finally said it.",
+        "Right? I've been saying this for months and everyone looks at me funny.",
+        "See, {t} gets it. That's exactly what I've been on about.",
+        "Finally. I thought I was the only one.",
+      ],
+    },
+  },
+  // Somebody says a character is too strong.
+  disputeBroken: {
+    dimension: null,
+    pools: {
+      any: [
+        "Absolute nonsense. You lost to it twice and now it's the character's fault.",
+        "That's a you problem, {t}, not a balance problem.",
+        "Every time. Every single time somebody loses, suddenly it's broken.",
+        "You've been saying that since before the patch. It got NERFED, {t}.",
+        "I'll take that matchup all day and you know it.",
+      ],
+    },
+    tiers: {
+      close: [
+        "You have been wrong about this for a year and I love you but you are wrong.",
+        "Here we go. Same argument, different week.",
+        "{t}, I have beaten you WITH {x}. Sit down.",
+      ],
+      hostile: ["Of course you'd say that.", "Nobody agrees with you. Nobody has ever agreed with you."],
+    },
+  },
+  // Somebody says a character is too weak, or nobody's noticed it yet.
+  disputeWeak: {
+    dimension: null,
+    pools: {
+      any: [
+        "{x} is fine. You just don't know the matchup.",
+        "Plenty of people do just fine with {x}. You're not one of them.",
+        "It's not the character that needs help, {t}.",
+        "Slept on? Everyone here knows exactly what {x} does.",
+      ],
+    },
+    tiers: {
+      close: ["You say that about everything you can't play, {t}.", "Every character is secretly good according to you."],
+      hostile: ["Sure. Blame the tier list."],
+    },
+  },
+  // An argument about taste, which nobody has ever won.
+  disputeTaste: {
+    dimension: null,
+    pools: {
+      any: [
+        "Boring? {x} is the most interesting thing in this game and you know it.",
+        "You have no taste, {t}. You've never had taste.",
+        "That's the worst opinion I've heard all week, and I've been here all week.",
+        "Genuinely cannot believe you'd say that out loud.",
+      ],
+    },
+    tiers: {
+      close: ["We are never going to agree about this and I've made peace with it.", "Wrong. Beautifully, confidently wrong."],
+      hostile: ["Figures."],
+    },
+  },
+  // Arcade takes cut both ways, so the rebuttal has to know which way it's
+  // cutting: telling somebody who just called the place home that they'd
+  // complain about a free arcade answers an argument nobody made.
+  disputeArcadePraise: {
+    dimension: null,
+    pools: {
+      any: [
+        "Have you SEEN the floor? Be serious.",
+        "Say that when the machines aren't eating your money.",
+        "Best room in town is a low bar, {t}.",
+        "You've clearly never been anywhere else.",
+      ],
+    },
+    tiers: {
+      close: ["Love the optimism. Wrong, but love it."],
+      hostile: ["Sure it is."],
+    },
+  },
+  disputeArcadeComplaint: {
+    dimension: null,
+    pools: {
+      any: [
+        "It's not that bad. You just like complaining.",
+        "You'd complain about a free arcade, {t}.",
+        "Nobody's making you stand here, and yet.",
+        "Say one nice thing. One. I'll wait.",
+      ],
+    },
+    tiers: {
+      close: ["Every week with this. Every single week."],
+      hostile: ["Then leave."],
+    },
+  },
+  disputePlayer: {
+    dimension: null,
+    pools: {
+      any: [
+        "They're good. They're not THAT good.",
+        "Beatable. Everyone's beatable, {t}.",
+        "You only think that because you've never taken a set off them.",
+      ],
+    },
+  },
+  memoryConfirm: {
+    dimension: null,
+    pools: {
+      any: [
+        "I'm never living that down, am I.",
+        "Alright, yes. It happened. Move on.",
+        "You bring that up every single time you see me.",
+        "I was there too, you know. I remember it differently.",
+      ],
+    },
+  },
+  memoryDeny: {
+    dimension: null,
+    pools: {
+      any: [
+        "That is NOT how that went and you know it.",
+        "Convenient how the story changes every time you tell it.",
+        "Ask literally anyone else who was there.",
+      ],
+    },
+  },
   // Small talk at the counter — the game falls away for a second and people
   // are just people. This is what keeps the cast from reading as stat blocks.
   lifeChat: {
@@ -798,7 +929,10 @@ export function speak(player, kind, ctx = {}) {
     .replaceAll('{l}', ctx.l ?? '0')
     .replaceAll('{n}', ctx.n ?? '0')
     .replaceAll('{x}', ctx.x ?? 'that')
-  return applyVoice(filled, v, tier, [ctx.t, ctx.self])
+  // {x} is a proper noun too — a character, a player, a food. Without it in
+  // the guard list, a chill-voice decap turns "Piper is the reason I come
+  // here" into "piper is the reason I come here".
+  return applyVoice(filled, v, tier, [ctx.t, ctx.self, ctx.x])
 }
 
 export function voiceSummary(voice) {

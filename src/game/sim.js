@@ -14,7 +14,7 @@ import {
 } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand } from './socialmedia.js'
 import { speak, isFirstMeeting, noteMeeting } from './dialogue.js'
-import { noteMatchOutcome, reconcileTakes, loudestTake, isConviction, takeKind, takeSubjectLabel } from './takes.js'
+import { noteMatchOutcome, reconcileTakes, loudestTake, isConviction, takeKind, takeSubjectLabel, findTake, pushTake, disputeKind } from './takes.js'
 import { generateTierList } from './balance.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
@@ -385,7 +385,45 @@ function makeBeats(save, group, where, results) {
           self: pName(save, p), x: label, t: other ? pName(save, other) : 'you',
           to: other, absDay: absDayOf(save),
         })
-        if (line) beats.push({ speaker: pName(save, p), text: line })
+        if (line) {
+          beats.push({ speaker: pName(save, p), text: line })
+
+          // ...and somebody answers. An opinion said into silence is a quote;
+          // an opinion somebody argues with is a conversation. Who replies and
+          // how depends on what THEY believe, so the argument is real.
+          const responders = group.filter((x) => x !== p)
+          const backer = responders.find((x) => findTake(x, take.topic, take.subject)?.stance === take.stance)
+          const objector = responders.find((x) => {
+            const t2 = findTake(x, take.topic, take.subject)
+            if (t2 && t2.stance !== take.stance) return true
+            // Defending your own main is the most natural objection there is.
+            return take.topic === 'character' && x.mainCharId === take.subject
+          })
+
+          if (backer && chance(0.7)) {
+            const reply = speak(backer, 'agreeTake', {
+              self: pName(save, backer), t: pName(save, p), to: p, x: label, absDay: absDayOf(save),
+            })
+            if (reply) {
+              beats.push({ speaker: pName(save, backer), text: reply })
+              // Being agreed with is how an opinion hardens into a position.
+              pushTake(p, take.topic, take.subject, take.stance, absDayOf(save), 5)
+              pushTake(backer, take.topic, take.subject, take.stance, absDayOf(save), 5)
+              shiftRel(backer, p, 2)
+              shiftRel(p, backer, 2)
+            }
+          } else if (objector && chance(0.65)) {
+            const reply = speak(objector, disputeKind(take), {
+              self: pName(save, objector), t: pName(save, p), to: p, x: label, absDay: absDayOf(save),
+            })
+            if (reply) {
+              beats.push({ speaker: pName(save, objector), text: reply })
+              // Being argued with makes people dig in, not reconsider.
+              pushTake(p, take.topic, take.subject, take.stance, absDayOf(save), 4)
+              shiftRel(p, objector, -1.5)
+            }
+          }
+        }
       }
     }
   }
@@ -483,6 +521,11 @@ function makeBeats(save, group, where, results) {
     const subjName = subject ? pName(save, subject) : null
     const memText = subjName ? mem.text.replaceAll(subjName, 'you') : mem.text
     say(p, 'memoryToFace', { mem: memText, t: subjName, to: subject })
+    // And they answer for it — owning it or flatly disputing the retelling.
+    if (subject && chance(0.6)) {
+      const owns = (subject.social?.sportsmanship ?? 5) >= 5
+      say(subject, owns ? 'memoryConfirm' : 'memoryDeny', { t: pName(save, p), to: p })
+    }
   } else {
     const storyteller = group.find((p) => (p.memories || []).length > 0)
     if (storyteller && group.length >= 2 && chance(0.15)) {

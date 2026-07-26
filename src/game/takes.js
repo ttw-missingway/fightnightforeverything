@@ -202,6 +202,25 @@ const STANCE_KIND = {
   beloved: 'takeBeloved',
 }
 
+/**
+ * Which rebuttal fits. A dispute has to answer the claim that was actually
+ * made — "you lost to it twice" is no answer at all to "this arcade is home",
+ * and telling somebody their beloved main got nerfed doesn't address anything
+ * they said.
+ */
+export function disputeKind(take) {
+  if (!take) return null
+  if (take.topic === 'arcade') {
+    const praise = take.stance === 'home' || take.stance === 'the best room in town'
+    return praise ? 'disputeArcadePraise' : 'disputeArcadeComplaint'
+  }
+  if (take.topic === 'food') return 'disputeTaste'
+  if (take.topic === 'player') return 'disputePlayer'
+  if (take.stance === 'broken' || take.stance === 'overrated') return 'disputeBroken'
+  if (take.stance === 'weak' || take.stance === 'underrated') return 'disputeWeak'
+  return 'disputeTaste' // boring / beloved — an argument about taste, not power
+}
+
 export function takeKind(take) {
   if (!take) return null
   if (take.topic === 'arcade') return 'takeArcade'
