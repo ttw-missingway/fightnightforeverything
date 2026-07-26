@@ -127,8 +127,8 @@ export function tryFoundTeam(save, founder, cofounder, day, year, events) {
   cofounder.teamId = team.id
   founder.respect += 3
   teamLog(save, team, `Founded by ${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName}`)
-  remember(save, founder, 'team', `founding ${name}`)
-  remember(save, cofounder, 'team', `founding ${name}`)
+  remember(save, founder, 'team', `founding ${name}`, { subjectIds: [cofounder.id] })
+  remember(save, cofounder, 'team', `founding ${name}`, { subjectIds: [founder.id] })
   events.push({
     type: 'team',
     text: `${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName} founded a new team: ${name} [${acronym}]!`,

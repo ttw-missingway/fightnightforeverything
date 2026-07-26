@@ -1,7 +1,7 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
-import { newInnovation, remember, chronicle, pushVod, awardMilestone, getMatchup } from './model.js'
+import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
@@ -466,11 +466,29 @@ function makeBeats(save, group, where, results) {
     ]))
   }
 
-  // Old war stories: defining moments get retold. Forever. Aloud.
-  const storyteller = group.find((p) => (p.memories || []).length > 0)
-  if (storyteller && group.length >= 2 && chance(0.15)) {
-    const mem = choice(storyteller.memories)
-    say(storyteller, 'memoryRetell', { mem: mem.text })
+  // Old war stories: defining moments get retold. Forever. Aloud. And if
+  // somebody the story is ABOUT happens to be standing here, it gets told to
+  // their face instead — which is the version that makes a room feel like it
+  // has a history rather than a log.
+  const presentIds = group.map((p) => p.id)
+  const toFace = group
+    .map((p) => ({ p, mem: memoryAbout(p, presentIds.filter((id) => id !== p.id)) }))
+    .filter((x) => x.mem)
+  if (toFace.length && group.length >= 2 && chance(0.35)) {
+    const { p, mem } = choice(toFace)
+    const subject = group.find((o) => o !== p && (mem.subjectIds || []).includes(o.id))
+    // The memory names them, and they're standing right here — so say "you".
+    // "watching CrossUp beat PopOff in that money match" told TO PopOff should
+    // be "watching CrossUp beat you in that money match".
+    const subjName = subject ? pName(save, subject) : null
+    const memText = subjName ? mem.text.replaceAll(subjName, 'you') : mem.text
+    say(p, 'memoryToFace', { mem: memText, t: subjName, to: subject })
+  } else {
+    const storyteller = group.find((p) => (p.memories || []).length > 0)
+    if (storyteller && group.length >= 2 && chance(0.15)) {
+      const mem = choice(storyteller.memories)
+      say(storyteller, 'memoryRetell', { mem: mem.text })
+    }
   }
 
   // At the counter, the game falls away for a beat — someone says something
@@ -628,8 +646,12 @@ function runMoneyMatch(save, mm, present, events) {
   loser.mood = clamp(loser.mood - 1.5, 0, 10)
   bumpPassion(winner, 8) // a marquee win reminds you why you play
   bumpPassion(loser, 2) // even losing one this big is a story worth staying for
-  remember(save, winner, 'moneymatch', `winning the money match against ${pName(save, loser)}`)
-  remember(save, loser, 'moneymatch', `losing the money match to ${pName(save, winner)}`)
+  remember(save, winner, 'moneymatch', `winning the money match against ${pName(save, loser)}`, { subjectIds: [loser.id] })
+  remember(save, loser, 'moneymatch', `losing the money match to ${pName(save, winner)}`, { subjectIds: [winner.id] })
+  // A money match is the whole arcade's memory, not just the two principals'.
+  witnessed(save, watchers, 'moneymatch',
+    `watching ${pName(save, winner)} beat ${pName(save, loser)} in that money match`,
+    { subjectIds: [winner.id, loser.id] })
   chronicle(save, '💸', `${pName(save, winner)} beat ${pName(save, loser)} ${nar.score} in the money match everyone still talks about`)
   if (chance(0.3)) {
     shiftRel(winner, loser, 12)
@@ -1041,8 +1063,11 @@ export function simHour(save) {
       dip.gamesToday[b.id] = (dip.gamesToday[b.id] || 0) + 1
       // Shock results become part of both players' personal legends.
       if (upsetSeverityOf(probA, result.aWins) === 'severe' && chance(0.5)) {
-        remember(save, winner, 'upset', `the upset win over ${pName(save, loser)}`)
-        remember(save, loser, 'upset', `that loss to ${pName(save, winner)}`)
+        remember(save, winner, 'upset', `the upset win over ${pName(save, loser)}`, { subjectIds: [loser.id] })
+        remember(save, loser, 'upset', `that loss to ${pName(save, winner)}`, { subjectIds: [winner.id] })
+        witnessed(save, watcherGroup, 'upset',
+          `${pName(save, winner)} taking that one off ${pName(save, loser)}`,
+          { subjectIds: [winner.id, loser.id], exclude: [winner.id, loser.id] })
       }
       // A frustrating, unbalanced meta makes every loss feel unfair — bad
       // blood spreads, and a healthy rivalry can curdle into real toxicity.

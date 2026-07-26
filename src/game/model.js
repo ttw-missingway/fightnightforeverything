@@ -496,10 +496,64 @@ export function setMatchup(game, aId, bId, winPctForA) {
  * A defining moment a player will keep bringing up. Text should read as a
  * noun phrase ("the 3–0 upset over GodFist", "winning Sunday Showdown").
  */
-export function remember(save, player, kind, text) {
+// How much a moment is worth keeping. When the shelf is full it's the DULLEST
+// memory that gets forgotten, not the oldest — winning EVO should still be in
+// there long after a routine upset has faded.
+const MEMORY_WEIGHT = {
+  evo: 100, moneymatch: 70, tournament: 60, upset: 40, team: 35, retire: 90, witness: 25,
+}
+const MEMORY_CAP = 12
+
+/**
+ * Record a defining moment. `subjectIds` are the OTHER people it involves —
+ * that's what lets somebody bring it up when the person it's about is
+ * standing right there.
+ */
+export function remember(save, player, kind, text, opts = {}) {
   if (!player.memories) player.memories = []
-  player.memories.push({ day: save.day, year: save.year, kind, text })
-  if (player.memories.length > 12) player.memories.shift()
+  player.memories.push({
+    day: save.day,
+    year: save.year,
+    absDay: absDayOf(save),
+    kind,
+    text,
+    subjectIds: opts.subjectIds || [],
+    weight: opts.weight ?? MEMORY_WEIGHT[kind] ?? 30,
+  })
+  if (player.memories.length > MEMORY_CAP) {
+    // Drop the least significant, tie-broken by age.
+    let worst = 0
+    for (let i = 1; i < player.memories.length; i++) {
+      const a = player.memories[i]
+      const b = player.memories[worst]
+      if ((a.weight ?? 30) < (b.weight ?? 30)
+        || ((a.weight ?? 30) === (b.weight ?? 30) && (a.absDay ?? 0) < (b.absDay ?? 0))) worst = i
+    }
+    player.memories.splice(worst, 1)
+  }
+}
+
+/**
+ * Everyone in the room remembers the big ones. A moment only the two people
+ * involved recall isn't scene history — it's a stat line. Witnesses keep a
+ * fainter version, from the outside.
+ */
+export function witnessed(save, watchers, kind, text, opts = {}) {
+  for (const w of watchers || []) {
+    if (!w || opts.exclude?.includes(w.id)) continue
+    remember(save, w, 'witness', text, {
+      subjectIds: opts.subjectIds || [],
+      weight: Math.round(((MEMORY_WEIGHT[kind] ?? 30)) * 0.45),
+    })
+  }
+}
+
+/** A memory involving somebody who is standing here right now. */
+export function memoryAbout(player, presentIds) {
+  const here = new Set(presentIds)
+  const hits = (player.memories || []).filter((m) => (m.subjectIds || []).some((id) => here.has(id)))
+  if (!hits.length) return null
+  return hits.reduce((best, m) => ((m.weight ?? 30) > (best.weight ?? 30) ? m : best))
 }
 
 /**

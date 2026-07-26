@@ -196,6 +196,46 @@ const LINES = {
       ],
     },
   },
+  // The same memory, except the person it's ABOUT is standing right there.
+  // This is the one that makes a room feel like it has a history.
+  memoryToFace: {
+    dimension: null,
+    // {mem} is a NOUN PHRASE ("the upset win over you"), never a sentence, so
+    // every template here has to embed it mid-clause. Used as a standalone
+    // sentence it produced things like "ResetRat knows what I'm talking
+    // about. the upset win over ResetRat."
+    // EVERY template here addresses them DIRECTLY, because the caller swaps
+    // their name inside {mem} for "you". Mixing in a third-person line
+    // produced "Ask WhiffPunish about watching you beat MashPro" — second and
+    // third person in the same breath.
+    pools: {
+      any: [
+        "{t}. Every time I see you I think about {mem}.",
+        "You and me, {t} — I'm still not over {mem}.",
+        "You know exactly what I mean, {t}. I'm talking about {mem}.",
+      ],
+    },
+    tiers: {
+      acquaintance: [
+        "You're the one from {mem}, right? Thought so.",
+        "{t} — that was you, wasn't it. {mem}, I mean.",
+      ],
+      familiar: [
+        "{t}, we're never not going to talk about {mem}, are we.",
+        "Go on {t}, tell them about {mem}.",
+        "I only have to say {mem} and look at your face, {t}.",
+      ],
+      close: [
+        "You and me have been arguing about {mem} for what feels like years, {t}.",
+        "Don't get me started, {t} — I still see {mem} when I close my eyes.",
+        "One day you're going to admit what really happened with {mem}, {t}.",
+      ],
+      hostile: [
+        "I haven't forgotten {mem}, {t}. Nobody has.",
+        "There's nothing to say to you that {mem} doesn't already cover, {t}.",
+      ],
+    },
+  },
   watcherHype: {
     dimension: null,
     pools: {
