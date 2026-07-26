@@ -474,8 +474,16 @@ export function playerSpending(save, attendees, gamesToday, events) {
 
 /**
  * Consequential only: every day the account sits in the red, the landlord's
- * patience shrinks. Three weeks of it and the arcade is foreclosed — the UI
+ * patience shrinks. Run out of it and the arcade is foreclosed — the UI
  * prompts a reset (which converts fame into prestige points).
+ *
+ * How long that patience lasts is a difficulty lever. The other two ways a run
+ * can end — the empty room (`collapseGrace`) and being forgotten (`fadeGrace`)
+ * — have always scaled with difficulty; this one was a hardcoded 21 days for
+ * everyone, which left Master's "the landlord is already drafting the notice"
+ * as flavour text with nothing behind it. The two warning beats scale with the
+ * grace so the notice and the phone call still land at the same points in the
+ * slide no matter how long the slide is.
  */
 export function landlordDaily(save, events) {
   const e = save.economy
@@ -484,12 +492,15 @@ export function landlordDaily(save, events) {
     e.redDays = 0
     return
   }
+  const grace = difficultyOf(save).foreclosureGrace ?? 21
+  const notice = Math.max(2, Math.round(grace * 0.48))
+  const secondCall = Math.max(notice + 1, Math.round(grace * 0.81))
   e.redDays = (e.redDays || 0) + 1
-  if (e.redDays === 10) {
+  if (e.redDays === notice) {
     events.push({ type: 'economy', text: '📮 A FINAL NOTICE is taped to the door. The landlord wants the account settled — soon.' })
-  } else if (e.redDays === 17) {
+  } else if (e.redDays === secondCall) {
     events.push({ type: 'economy', text: '📞 The landlord called twice today. The second call was shorter.' })
-  } else if (e.redDays > 21) {
+  } else if (e.redDays > grace) {
     e.foreclosed = true
     events.push({ type: 'economy', text: '🔒 The locks were changed overnight. The landlord has foreclosed on the arcade.' })
     chronicle(save, '🔒', `${save.arcade.name} was foreclosed on. The last night, nobody wanted to go home.`)

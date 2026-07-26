@@ -565,8 +565,12 @@ function InteractionEvent({ ev }) {
       className="interaction"
       summary={<span>💬 {ev.memberNames.join(', ')} {ev.memberNames.length > 2 ? 'hang out' : 'chat'} {ev.where}</span>}
     >
+      {/* No "Talking about: X" header. The topic it printed was rolled
+          INDEPENDENTLY of the beats underneath it — pickTopic's result was
+          never passed to makeBeats — so it was a label with no causal link to
+          the conversation it labelled, and it read as wrong nearly every time.
+          The beats say what they're about on their own. */}
       <div className="narration">
-        <p style={{ fontStyle: 'normal' }} className="dim">Talking about: <span className="cyan">{ev.topic}</span></p>
         {(ev.beats || []).map((b, i) => (
           typeof b === 'string'
             ? <p key={`b${i}`} style={{ fontStyle: 'normal' }}>

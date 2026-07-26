@@ -4,7 +4,7 @@ import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyO
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { generateEvoRoster, populateRoster } from '../game/generate.js'
-import { migrateSave, newSave, resetPlayerForNewRun } from '../game/model.js'
+import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
@@ -134,7 +134,15 @@ export function resetSaveById(id) {
     game,
     arcade,
     evoRoster: structuredClone(save.evoRoster || []),
-    prestige: { points: (save.prestige?.points || 0) + prestigeGain, runs: runNumber },
+    // `rungPoints` is how much of the one-time early-rung allowance this
+    // lineage has already spent. It has to survive the reset that ends a run,
+    // or the bootstrap rungs would pay out again every restart — which is
+    // exactly the farm this cap exists to prevent.
+    prestige: {
+      points: (save.prestige?.points || 0) + prestigeGain,
+      runs: runNumber,
+      rungPoints: (save.prestige?.rungPoints || 0) + rungPointsThisRun(save),
+    },
     archives: [...(save.archives || []), archive].slice(-5),
   })
   if (save.stream?.channelName) world.stream.channelName = save.stream.channelName

@@ -14,6 +14,7 @@ import Manage from './screens/Manage.jsx'
 import Vods from './screens/Vods.jsx'
 import { formatDay } from './game/constants.js'
 import { isVodWatched } from './game/model.js'
+import DangerBanner from './components/dangers.jsx'
 
 export default function App() {
   const { save, screen, nav, closeSave } = useStore()
@@ -61,6 +62,10 @@ export default function App() {
         <span className="dim small">{formatDay(save.day, save.year)}</span>
         <button className="small" onClick={closeSave}>Save & Quit</button>
       </div>
+
+      {/* Above the tab content, so a run about to end is visible from every
+          page rather than only in a recap line the owner already clicked past. */}
+      <DangerBanner />
 
       {screen.name === 'arcade' && <Arcade />}
       {screen.name === 'players' && <Players />}

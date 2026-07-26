@@ -912,3 +912,30 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 @media (prefers-reduced-motion: reduce) {
   .fs-slot { transition: none; }
 }
+
+/* Run-ending warnings. Loud on purpose: these were invisible until the
+   game-over modal, so the whole point is that you cannot scroll past them. */
+.dangers { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.danger {
+  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 8px; padding: 9px 13px; border: 1px solid;
+}
+.danger .d-icon { font-size: 18px; line-height: 1.2; flex-shrink: 0; }
+.danger .d-title { font-weight: 700; }
+.danger .d-detail { font-size: 13px; opacity: 0.92; }
+.danger .d-fix { font-size: 12px; opacity: 0.72; margin-top: 2px; }
+.danger .d-go {
+  margin-left: auto; align-self: center; flex-shrink: 0;
+  font-size: 12px; padding: 4px 10px; white-space: nowrap;
+}
+.danger.watch { background: rgba(255, 206, 79, 0.10); border-color: rgba(255, 206, 79, 0.55); color: var(--gold); }
+.danger.warning { background: rgba(255, 140, 60, 0.13); border-color: rgba(255, 140, 60, 0.7); color: var(--orange, #ff8c3c); }
+.danger.critical {
+  background: rgba(255, 77, 106, 0.15); border-color: var(--red); color: var(--red);
+  animation: danger-pulse 1.9s ease-in-out infinite;
+}
+@keyframes danger-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 106, 0); }
+  50% { box-shadow: 0 0 14px 0 rgba(255, 77, 106, 0.45); }
+}
+@media (prefers-reduced-motion: reduce) { .danger.critical { animation: none; } }

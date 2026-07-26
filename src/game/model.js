@@ -203,6 +203,34 @@ export function legalizeBuild(player, budgetUi) {
  * when the run ends. Deeper runs → more points → stronger created players next
  * run. Losing is expected; the cast you can build grows anyway.
  */
+/**
+ * The bottom rungs of the legacy ladder, and how much each is worth.
+ *
+ * These exist so Difficult and Master can fund their way out of themselves —
+ * every other milestone is pitched at a scene that got somewhere, so those
+ * tiers used to bank literally nothing and could never escape.
+ *
+ * They are a BOOTSTRAP ALLOWANCE, not an income. A lineage can collect
+ * `RUNG_ALLOWANCE` points from them in total, ever; past that they pay zero and
+ * only the real milestones count. That cap is what stops "start a run, grab the
+ * cheap points, reset, repeat" from being the best way to play — measured, an
+ * uncapped version beat playing properly by nearly 2x on Normal.
+ */
+export const EARLY_RUNGS = { 'six-weeks': 1, 'season-1': 2, 'first-trophy': 2, 'half-year': 3 }
+export const RUNG_ALLOWANCE = 24
+
+/** Rung points banked by THIS run so far. */
+export function rungPointsThisRun(save) {
+  return Object.keys(save.milestones || {})
+    .reduce((sum, k) => sum + (EARLY_RUNGS[k] || 0), 0)
+}
+
+/** Whether the lineage has any bootstrap allowance left to spend. */
+export function rungAllowanceLeft(save) {
+  const spent = (save.prestige?.rungPoints || 0) + rungPointsThisRun(save)
+  return Math.max(0, RUNG_ALLOWANCE - spent)
+}
+
 export function awardMilestone(save, key, points, text) {
   save.milestones ??= {}
   if (save.milestones[key]) return false

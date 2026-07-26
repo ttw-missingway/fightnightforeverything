@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw art staging. Sprite rips and portrait sources live here while they're
+# being picked over; nothing in src/ reads from them. Keeping them out of the
+# history means the repo doesn't carry megabytes of GIFs it never serves.
+fighter-packs/
+headshots/

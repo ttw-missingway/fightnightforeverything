@@ -178,29 +178,51 @@ export const AUTO_STREAM_CADENCES = [
 // `collapseGrace` is how many dead nights the scene survives, `fadeGrace` how
 // long the world can ignore you, and `rentEscalation` is the annual rent hike
 // that makes standing still a losing move.
+// The difficulty ladder. EVERY lever here must be monotonic across the four
+// tiers, and the one that matters is `rentBase * rentMult` — the effective nut
+// — not either column alone. That product is where this table last went wrong:
+// the 2026-07-24 attendance rework raised Master's popularity and starting cash
+// to make it survivable and left Difficult at its pre-rework values, so
+// Difficult was measurably HARDER than Master for a month (competent play died
+// at 0.18yr on Difficult vs 0.24yr on Master, and autopilot outlived skill on
+// both). Effective rent read 201 vs 204 — near-identical where it should have
+// been a clear step.
+//
+// Rent is the lever that carries this table. It's a flat cost with no feedback
+// loop, so relief lands entirely on the owner who is actually running the
+// place: cutting Normal's rent lifted competent play from 10% to 27% survival
+// at four years and moved the autopilot bot NOT AT ALL (0% alive at every rent
+// level tested). That's the property the whole ladder is built on — below Easy,
+// difficulty should be a test of play, not a countdown that skill can't affect.
+//
+// `popularityMult` deliberately does NOT carry it. More bodies through the door
+// without staff to match overwhelms cleaning (dirt scales with attendance while
+// a solo owner's cleaning shrinks against it), which feeds back into the
+// attendance multiplier and health inspections — so past ~1.1 it cancels itself
+// and a bigger crowd is worth less than it looks.
 export const DIFFICULTIES = [
   {
     key: 'easy', label: 'Easy', statPoints: 10,
-    startingMoney: 2200, rentMult: 0.7, rentBase: 120, popularityMult: 1.35, receptionBias: 4,
-    collapseGrace: 60, fadeGrace: 120, rentEscalation: 0, relevanceDecayMult: 0.6,
+    startingMoney: 2200, rentMult: 0.7, rentBase: 100, popularityMult: 1.35, receptionBias: 4,
+    collapseGrace: 60, fadeGrace: 120, foreclosureGrace: 30, rentEscalation: 0, relevanceDecayMult: 0.6,
     blurb: 'Generous funds, cheap rent, a forgiving community.',
   },
   {
     key: 'normal', label: 'Normal', statPoints: 5,
-    startingMoney: 1500, rentMult: 1, rentBase: 150, popularityMult: 0.95, receptionBias: -1,
-    collapseGrace: 30, fadeGrace: 50, rentEscalation: 0.12, relevanceDecayMult: 1.32,
+    startingMoney: 1500, rentMult: 1, rentBase: 95, popularityMult: 0.95, receptionBias: -1,
+    collapseGrace: 30, fadeGrace: 50, foreclosureGrace: 21, rentEscalation: 0.12, relevanceDecayMult: 1.32,
     blurb: 'The intended experience: a scene you have to keep alive on purpose.',
   },
   {
     key: 'difficult', label: 'Difficult', statPoints: 3,
-    startingMoney: 850, rentMult: 1.15, rentBase: 175, popularityMult: 0.6, receptionBias: -5,
-    collapseGrace: 21, fadeGrace: 38, rentEscalation: 0.16, relevanceDecayMult: 1.35,
+    startingMoney: 1000, rentMult: 1.15, rentBase: 105, popularityMult: 0.8, receptionBias: -5,
+    collapseGrace: 21, fadeGrace: 38, foreclosureGrace: 17, rentEscalation: 0.16, relevanceDecayMult: 1.5,
     blurb: 'Thin margins, a skeptical internet, a hungry landlord.',
   },
   {
     key: 'master', label: 'Master', statPoints: 0,
-    startingMoney: 1050, rentMult: 1.2, rentBase: 170, popularityMult: 0.95, receptionBias: -9,
-    collapseGrace: 16, fadeGrace: 30, rentEscalation: 0.16, relevanceDecayMult: 1.7,
+    startingMoney: 700, rentMult: 1.25, rentBase: 115, popularityMult: 0.68, receptionBias: -9,
+    collapseGrace: 16, fadeGrace: 30, foreclosureGrace: 13, rentEscalation: 0.2, relevanceDecayMult: 1.7,
     blurb: 'Nearly impossible. The landlord is already drafting the notice.',
   },
 ]
@@ -296,23 +318,5 @@ export function intensityLabel(v) {
   if (v >= 3) return 'casual'
   return 'just here to hang out'
 }
-
-// Floor talk: game-brained nerd chatter over the side cabinets.
-export const TOPICS = [
-  'frame data', 'the current meta', 'a controversial tier list', 'an old tournament moment',
-  'controller vs stick', 'a rumor about a patch', 'their favorite anime', 'the best combo route',
-  'a legendary comeback', 'training routines', 'matchup theory', 'the worst stage in the game',
-  'which side cabinet is secretly rigged', 'high score strategies',
-]
-
-// Concession talk: people talk about PEOPLE over food.
-export const GOSSIP_TOPICS = [
-  'salt from a recent set', 'who the best player in the arcade is', 'weekend plans',
-  'who has beef with whom', 'somebody\'s mysterious new practice schedule',
-  'whether the new regular is actually good', 'the drama from last week',
-  'work, life, and everything outside the arcade', 'which team is recruiting',
-  'someone\'s new job', 'a breakup nobody saw coming', 'who\'s been skipping sessions',
-  'the rumor going around the counter', 'who\'s secretly thinking about quitting',
-]
 
 // Preset stat spreads for quick player creation. Every key 1-10.

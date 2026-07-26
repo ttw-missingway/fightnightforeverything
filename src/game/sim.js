@@ -1,7 +1,7 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, TOPICS, GOSSIP_TOPICS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
-import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, getMatchup } from './model.js'
+import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
@@ -728,34 +728,8 @@ function runMoneyMatch(save, mm, present, events) {
   })
 }
 
-function pickTopic(save, where) {
-  // Concession-stand talk is about people; floor talk is about games.
-  const atConcession = where === 'at the concession stand'
-  const pool = atConcession ? GOSSIP_TOPICS : TOPICS
-  // An upcoming money match dominates conversation everywhere.
-  const mm = scheduledMoneyMatch(save)
-  if (mm && chance(0.35)) {
-    const a = save.players[mm.aId]
-    const b = save.players[mm.bId]
-    if (a && b) return `the upcoming ${pName(save, a)} vs ${pName(save, b)} money match`
-  }
-  // Sometimes the gossip is about an actual person.
-  if (atConcession && chance(0.25)) {
-    const regulars = Object.values(save.players).filter((p) => p.isRegular)
-    if (regulars.length) {
-      const top = [...regulars].sort((x, y) => y.elo - x.elo)[0]
-      return choice([
-        `whether ${pName(save, top)} can actually be beaten`,
-        `what ${pName(save, choice(regulars))} said after their last set`,
-        `how good ${pName(save, choice(regulars))} is getting lately`,
-      ])
-    }
-  }
-  return choice(pool)
-}
 
 function runInteraction(save, group, where, events, results = {}) {
-  const topic = pickTopic(save, where)
   const feelings = []
   const outcomes = []
   const beats = makeBeats(save, group, where, results)
@@ -831,7 +805,6 @@ function runInteraction(save, group, where, events, results = {}) {
     where,
     memberIds: group.map((p) => p.id),
     memberNames: group.map((p) => pName(save, p)),
-    topic,
     beats,
     feelings,
     outcomes,
@@ -1271,7 +1244,7 @@ export function endRun(save, funnel, title, text) {
  * and still lose, because the world outside moved on to something else. Letting
  * the game go stale is a decision, and this is its bill.
  */
-export function checkSceneCollapse(save, attendanceToday) {
+export function checkSceneCollapse(save, attendanceToday, events = null) {
   if (save.gameOver || save.settings.mode === 'sandbox') return
   const diff = difficultyOf(save)
 
@@ -1293,6 +1266,18 @@ export function checkSceneCollapse(save, attendanceToday) {
   // once drew is what makes the decline legible instead of a cliff at empty.
   const quiet = established && attendanceToday <= Math.max(2, Math.round(save.peakAttendance * 0.22))
   save.quietDays = quiet ? (save.quietDays || 0) + 1 : 0
+  // Say something on the way down. This funnel used to fire with no warning
+  // whatsoever — the room emptied for weeks and the first word about it was
+  // the modal ending the run.
+  if (events) {
+    const half = Math.round(diff.collapseGrace * 0.5)
+    const late = Math.round(diff.collapseGrace * 0.8)
+    if (save.quietDays === half) {
+      events.push({ type: 'economy', text: `🪑 ${save.quietDays} quiet nights in a row now. The regulars have started asking where everybody went.` })
+    } else if (save.quietDays === late) {
+      events.push({ type: 'economy', text: `🚪 Another dead night. People are saying this place is finished — ${diff.collapseGrace - save.quietDays} more like this and they'll be right.` })
+    }
+  }
   if (save.quietDays >= diff.collapseGrace) {
     endRun(save, 'dynamics', 'The scene has run its course',
       `${save.arcade.name} has sat all but empty for ${save.quietDays} days straight. Word gets around that nobody goes there anymore, and that's the kind of thing a scene doesn't come back from.`)
@@ -1304,6 +1289,15 @@ export function checkSceneCollapse(save, attendanceToday) {
   // owner who set everything up perfectly and then stopped playing.
   const forgotten = (save.relevance ?? 55) <= 12 && communityGameOpinion(save) < 5.6
   save.fadedDays = forgotten ? (save.fadedDays || 0) + 1 : 0
+  if (events) {
+    const half = Math.round(diff.fadeGrace * 0.5)
+    const late = Math.round(diff.fadeGrace * 0.8)
+    if (save.fadedDays === half) {
+      events.push({ type: 'economy', text: `📉 ${save.game.name} hasn't been mentioned anywhere in ${save.fadedDays} days. The channel is quiet and nobody new is turning up.` })
+    } else if (save.fadedDays === late) {
+      events.push({ type: 'economy', text: `🪦 Still nothing. ${diff.fadeGrace - save.fadedDays} more days out of the conversation and the game is done for good.` })
+    }
+  }
   if (save.fadedDays >= diff.fadeGrace) {
     endRun(save, 'opinion', 'The world moved on',
       `${save.game.name} has been out of the conversation for ${save.fadedDays} days. No new blood, no coverage, no reason for anyone to care — the scene didn't blow up, it just faded out.`)
@@ -1373,7 +1367,7 @@ export function endDay(save) {
     save.arcade.crowding = (save.arcade.crowding ?? 0) * 0.75 + turnedAway * 0.25
   }
 
-  checkSceneCollapse(save, attendees.length)
+  checkSceneCollapse(save, attendees.length, events)
 
   // The books: tokens and food the players actually bought, then payroll and
   // cleaning (daily). Weekly upkeep and monthly rent are settled from a ledger
@@ -1561,6 +1555,35 @@ export function advanceDay(save) {
   if (save.settings.mode !== 'sandbox') {
     if ((save.stream?.followers || 0) >= 1000) awardMilestone(save, 'followers-1k', 2, 'A thousand people follow the channel now')
     if ((save.economy?.money ?? 0) >= 3000) awardMilestone(save, 'bank-3k', 2, 'Three grand in the register — the arcade is a real business')
+
+    // EARLY RUNGS. Every milestone above is pitched at a scene that got
+    // somewhere — a thousand followers, skill 50, Year 2 — so a run on
+    // Difficult or Master banked exactly nothing, and those tiers could never
+    // fund their way out of themselves. That's not because nothing happened:
+    // a bank-0 Difficult run is a 92-day scene with forty regulars and four
+    // tournament wins. The ladder just had no bottom rungs.
+    //
+    // ANTI-FARM: cheap rungs must not make "start a run, grab the points,
+    // reset, repeat" the best way to play. Two defences. The first rung costs
+    // SIX WEEKS, so resetting on a whim earns nothing at all; and the rungs are
+    // a one-time bootstrap ALLOWANCE per lineage (see RUNG_ALLOWANCE), so
+    // farming them simply runs out and only real milestones pay after that.
+    //
+    // Both are needed. Uncapped, resetting every 90 days beat playing properly
+    // by nearly 2x on Normal. Gating on beating your best run instead killed
+    // farming AND progression — Difficult froze at 5 points forever, because
+    // beating your record is exactly what a player short on points cannot do.
+    const absDay = absDayOf(save.day, save.year)
+    if (rungAllowanceLeft(save) > 0) {
+      if (absDay >= 42) awardMilestone(save, 'six-weeks', 1, `Six weeks and ${save.arcade.name} is still standing`)
+      if (absDay >= 84) {
+        awardMilestone(save, 'season-1', 2, `A full season at ${save.arcade.name} — the regulars have regulars now`)
+        if (Object.values(save.players).some((p) => !p.npc && (p.tournamentWins || 0) > 0)) {
+          awardMilestone(save, 'first-trophy', 2, 'A player you made won a bracket')
+        }
+      }
+      if (absDay >= 168) awardMilestone(save, 'half-year', 3, "Half a year in. This place is somebody's routine.")
+    }
   }
   save.day += 1
   if (save.day > DAYS_PER_YEAR) {
