@@ -72,16 +72,44 @@ export function charLabel(game, char) {
 
 // ---------- The switch move ----------
 
+/**
+ * Everything this character is allowed to turn INTO.
+ *
+ * An origin reaches its own forms. A FORM reaches exactly one thing — the
+ * origin it came from — so a transformation can be dropped on purpose instead
+ * of only expiring at the bell. That's the whole graph: one hop out, one hop
+ * home, and no route from a form to a sibling form (which would be a
+ * transformation chain by another name).
+ */
+export function switchTargetsOf(game, char) {
+  if (!char) return []
+  if (char.formOf) {
+    const origin = originOf(game, char)
+    return origin ? [origin] : []
+  }
+  return formsOf(game, char.id)
+}
+
 /** Every `form change` move on this character that points somewhere real. */
 export function formSwitchMoves(game, char) {
-  const ids = new Set(formsOf(game, char?.id).map((f) => f.id))
+  const ids = new Set(switchTargetsOf(game, char).map((t) => t.id))
   return (char?.moves || []).filter((m) => m.type === FORM_MOVE_TYPE && ids.has(m.d?.becomes))
 }
 
-/** The form a given move switches into, or null if it points nowhere valid. */
+/** What a given move switches into, or null if it points nowhere valid. */
 export function targetFormOf(game, char, move) {
   if (move?.type !== FORM_MOVE_TYPE || !move.d?.becomes) return null
-  return formsOf(game, char?.id).find((f) => f.id === move.d.becomes) || null
+  return switchTargetsOf(game, char).find((t) => t.id === move.d.becomes) || null
+}
+
+/**
+ * The move a FORM uses to drop back to its origin, if it has one. Reverting is
+ * opt-in per form: a one-way transformation is a real design (commit and live
+ * with it), so a form only comes home if the designer gave it a way to.
+ */
+export function revertMoveOf(game, form) {
+  if (!form?.formOf) return null
+  return (form.moves || []).find((m) => m.type === FORM_MOVE_TYPE && m.d?.becomes === form.formOf) || null
 }
 
 // How readily the origin can actually GET to the form. This is the price of
@@ -134,9 +162,12 @@ export function pruneForms(game) {
     if (c.formOf && !ids.has(c.formOf)) c.formOf = null
   }
   for (const c of game?.characters || []) {
-    const mine = new Set(formsOf(game, c.id).map((f) => f.id))
+    // Valid targets, not just "my forms" — a form's legitimate target is the
+    // origin it returns to, and reading this as formsOf would quietly wipe
+    // every revert move on load.
+    const allowed = new Set(switchTargetsOf(game, c).map((t) => t.id))
     for (const m of c.moves || []) {
-      if (m.type === FORM_MOVE_TYPE && m.d?.becomes && !mine.has(m.d.becomes)) {
+      if (m.type === FORM_MOVE_TYPE && m.d?.becomes && !allowed.has(m.d.becomes)) {
         m.d = { ...m.d, becomes: null }
       }
     }

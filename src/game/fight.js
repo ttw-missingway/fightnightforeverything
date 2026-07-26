@@ -53,7 +53,7 @@
 import { clamp } from './util.js'
 import { ARCHETYPE_FLAVOR, MOVE_VERBS, FORM_VERBS, EFFECT_CLAUSES } from './names.js'
 import { comboDamage, COMBO_SCALING, healthMultOf } from './design.js'
-import { reachableForms } from './forms.js'
+import { reachableForms, revertMoveOf, accessOf } from './forms.js'
 import {
   defaultRules, gutsFactor, timeOverChance, chipCanKill, burstEnabled,
   guardCrushEnabled, cancelsEnabled, stunEnabled, stunRateOf,
@@ -93,6 +93,26 @@ export function fxWordFor(mag, rand = 0.5) {
   const tier = mag >= 0.62 ? 'heavy' : mag >= 0.3 ? 'medium' : 'light'
   const pool = IMPACT_WORDS[tier]
   return pool[Math.floor(rand * pool.length) % pool.length]
+}
+
+/**
+ * Wire each form kit's way HOME.
+ *
+ * Built as an explicit back-pointer rather than by recursing into `kitOf`,
+ * because origin→form→origin is a cycle and any depth limit dressed up as a
+ * guard would just be the same cycle with a fence around it. The origin kit
+ * already exists by the time we get here, so the form simply borrows it.
+ *
+ * A form with no revert move gets nothing, and stays a one-way commitment
+ * until the bell.
+ */
+function withReturnRoutes(kit, game) {
+  for (const entry of kit.forms || []) {
+    const back = game ? revertMoveOf(game, entry.form) : null
+    if (!back) continue
+    entry.kit.revert = { kit, char: kit.char, move: back, access: accessOf(back) }
+  }
+  return kit
 }
 
 /**
@@ -264,8 +284,8 @@ function simulateOnce({
   // `base` is who they picked; `kit` is who they are RIGHT NOW. The two differ
   // only while a form is up, and the bell puts them back — see the reset at
   // the top of each game.
-  const kitA = kitOf(charA, skillA, game)
-  const kitB = kitOf(charB, skillB, game)
+  const kitA = withReturnRoutes(kitOf(charA, skillA, game), game)
+  const kitB = withReturnRoutes(kitOf(charB, skillB, game), game)
   const A = { side: 'A', name: aName, kit: kitA, base: kitA, form: null, stats: statsA || DEFAULT_STATS, max: maxA, hp: maxA, meter: 0, games: 0, stun: 0 }
   const B = { side: 'B', name: bName, kit: kitB, base: kitB, form: null, stats: statsB || DEFAULT_STATS, max: maxB, hp: maxB, meter: 0, games: 0, stun: 0 }
   const winner = winnerIsA ? A : B
@@ -694,6 +714,21 @@ function simulateOnce({
     ]),
   })
 
+  // DROPPING IT. The other half of a two-way transformation: a form with a way
+  // home lets a player leave on purpose instead of waiting out the round. That
+  // makes the form a TOOL rather than a decision — you take the monster for
+  // the exchange you need it for and give it back.
+  const proposeRevert = (att, def, back) => ({
+    raw: 0, kind: 'struggle', actor: att.name, move: back.move.name, momentum: 0.35,
+    fx: 'super', dist: 0.55,
+    text: () => pick([
+      `${att.name} drops the transformation — ${back.move.name}, and that's ${back.char?.name || 'the original'} back on the stick.`,
+      `${back.move.name}. ${att.name} gives the form back on purpose, and ${def.name} has to re-solve the matchup a second time.`,
+      `${att.name} doesn't wait for the bell — they shed it early and return as ${back.char?.name || 'themselves'}.`,
+      `Back to base. ${att.name} cashes ${back.move.name} and the original kit is live again.`,
+    ]),
+  })
+
   // BURST: the universal escape. Nothing lands, but the turn ends — which is
   // exactly what makes pressure characters worse in a game that has one.
   const proposeBurst = (def, att) => ({
@@ -941,7 +976,8 @@ function simulateOnce({
 
   // The cheapest form this side can pay for right now, and what the cheapest
   // route costs at all. Both read `base`, not `kit`: once you've transformed
-  // your current kit is the form's, and a form owns no form changes.
+  // your current kit is the form's, and a form owns no form changes of its
+  // own — only, possibly, the way back (`kit.revert`).
   const affordableForm = (side) => (side.base.forms || [])
     .filter((f) => side.meter >= (f.move.meterCost ?? 0))
     .sort((a, b) => (a.move.meterCost ?? 0) - (b.move.meterCost ?? 0))[0] || null
@@ -949,6 +985,8 @@ function simulateOnce({
     const costs = (side.base.forms || []).map((f) => f.move.meterCost ?? 0)
     return costs.length ? Math.min(...costs) : null
   }
+  // The way home, if this side is transformed and the form has one.
+  const returnRoute = (side) => (side.form && side.kit.revert) ? side.kit.revert : null
 
   // ---------- play the games ----------
   let w = 0
@@ -1028,6 +1066,10 @@ function simulateOnce({
     let neutralLeft = marquee ? irnd(0, 2) : irnd(0, 1)
     let burstsLeft = burstEnabled(R_) ? 1 : 0
     let dizziesLeft = 1 // one per game — a dizzy should be an event, not weather
+    // Transformations and returns draw on ONE allowance. Two-way forms would
+    // otherwise let a round dissolve into costume changes, and the cost of a
+    // form should be the commitment, not just the meter.
+    let switchesLeft = marquee ? 3 : 2
     let crushesLeft = guardCrushEnabled(R_) ? 1 : 0
     // A siege isn't only a zoner holding you out — a pressure character who
     // simply refuses to give the turn back runs the same shape, and runPhase
@@ -1077,7 +1119,8 @@ function simulateOnce({
       // anything — it's the plan. Gated on actually having the meter, so a
       // full-bar transformation genuinely means going without a super, and on
       // having a turn to spend, because the button is not invincible.
-      if (!att.form && (att.base.forms || []).length && att.meter >= (formCost(att) ?? 999)
+      if (!att.form && switchesLeft > 0 && (att.base.forms || []).length
+        && att.meter >= (formCost(att) ?? 999)
         && attSched.budget > 0 && odds(0.55)) {
         // The cheapest route they can currently afford — a player reaches for
         // the form they can get to, not the one they'd like.
@@ -1092,9 +1135,25 @@ function simulateOnce({
           // describes who they WERE.
           att.kit = entry.kit
           att.form = entry.form
+          switchesLeft--
           commit(proposeFormChange(att, def, entry), att, def, sched)
           continue
         }
+      }
+
+      // …and back again. Only a form the designer gave a way home can do
+      // this, and it shares the per-game switch allowance with transforming,
+      // so a round can't become nothing but costume changes. Same
+      // flip-before-commit rule: the HUD snapshots as the line is pushed.
+      const back = returnRoute(att)
+      if (back && switchesLeft > 0 && att.meter >= (back.move.meterCost ?? 0)
+        && attSched.budget > 0 && odds(0.4)) {
+        att.meter -= back.move.meterCost ?? 0
+        att.kit = back.kit
+        att.form = null
+        switchesLeft--
+        commit(proposeRevert(att, def, back), att, def, sched)
+        continue
       }
 
       // The universal defensive escape: available once, and only when the

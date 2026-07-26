@@ -322,6 +322,16 @@ export function duplicateCharacter(game, charId) {
       m.d = { ...m.d, becomes: formIdMap[m.d.becomes] ?? null }
     }
   }
+  // …and the way back. A cloned form's return move still points at the
+  // ORIGINAL origin, which would send the copy's transformation home to
+  // somebody else's character.
+  for (const clone of characters.slice(1)) {
+    for (const m of clone.moves || []) {
+      if (m.type === FORM_MOVE_TYPE && m.d?.becomes === src.id) {
+        m.d = { ...m.d, becomes: copy.id }
+      }
+    }
+  }
   return { characters, id: copy.id, formCount: characters.length - 1 }
 }
 

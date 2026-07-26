@@ -28,6 +28,7 @@ import {
 } from '../game/constants.js'
 import {
   FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
+  switchTargetsOf, revertMoveOf,
 } from '../game/forms.js'
 import { newSkin, skinsOf } from '../game/skins.js'
 import { CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
@@ -457,11 +458,20 @@ function FormLink({ save, sel, update, setSelId }) {
         </div>
       )}
       {origin ? (
-        <p className="dim small" style={{ margin: '4px 0 0' }}>
-          <span className="gold">⟳ Not selectable.</span> {sel.name} only exists as a form of{' '}
-          <strong>{origin.name}</strong> — reached with a <em>form change</em> move, and gone at the bell.
-          Design them like a full character; their power counts as {origin.name}'s.
-        </p>
+        <>
+          <p className="dim small" style={{ margin: '4px 0 0' }}>
+            <span className="gold">⟳ Not selectable.</span> {sel.name} only exists as a form of{' '}
+            <strong>{origin.name}</strong> — reached with a <em>form change</em> move, and gone at the bell.
+            Design them like a full character; their power counts as {origin.name}'s.
+          </p>
+          <p className="small" style={{ margin: '4px 0 0' }}>
+            {revertMoveOf(save.game, sel)
+              ? <>↩ Two-way: <strong>{revertMoveOf(save.game, sel).name}</strong> drops back to {origin.name} early,
+                instead of waiting for the bell.</>
+              : <span className="dim">One-way: {sel.name} holds until the bell. To let them return early, add a{' '}
+                <em>form change</em> move below and point it at {origin.name}.</span>}
+          </p>
+        </>
       ) : myForms.length ? (
         <>
           <p className="small" style={{ margin: '2px 0 4px' }}>
@@ -801,7 +811,7 @@ export function CharactersEditor({ save, update }) {
               patch notes.
             </p>
           </Field>
-          <MovelistEditor char={sel} patchChar={patchChar} forms={formsOf(save.game, sel.id)} />
+          <MovelistEditor char={sel} patchChar={patchChar} forms={switchTargetsOf(save.game, sel)} />
           <CombosEditor char={sel} patchChar={patchChar} />
         </div>
       )}
@@ -934,6 +944,11 @@ function MoveCard({ m, patchMove, onDelete, forms = [] }) {
   })
   const note = GUARD_NOTE[m.d?.guard]
   const isSwitch = m.type === FORM_MOVE_TYPE
+  // `forms` here is whatever this character may switch INTO. An origin's
+  // targets are all forms; a form's single target is its origin, which is the
+  // one entry with no `formOf`. So an unformed target means this is the way
+  // home — no need to thread the owning character down for it.
+  const isReturn = isSwitch && !!m.d?.becomes && forms.some((t) => t.id === m.d.becomes && !t.formOf)
   return (
     <div className="movecard">
       <div className="row spread" style={{ marginBottom: 6 }}>
@@ -966,10 +981,14 @@ function MoveCard({ m, patchMove, onDelete, forms = [] }) {
           </label>
           {!forms.length ? (
             <span className="red small">
-              No forms to switch into. Point another character's <em>Form of</em> at this one first.
+              Nothing to switch into. Point another character's <em>Form of</em> at this one first.
             </span>
           ) : !m.d?.becomes ? (
             <span className="gold small">This move does nothing until it has a target.</span>
+          ) : isReturn ? (
+            <span className="dim small">
+              The way home — drops the form early instead of waiting for the bell.
+            </span>
           ) : (
             <span className="dim small">
               Lasts until the bell — meter, speed and safety are what it costs.
