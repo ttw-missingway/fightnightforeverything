@@ -696,11 +696,14 @@ export function CharactersEditor({ save, update }) {
               onChange={(k) => patchChar((c) => { c.spriteKey = k })}
             />
           </Field>
+          {/* No popularity dial. It still exists and still does the heavy
+              lifting in `charAppeal` — it's the biggest term deciding who
+              gravitates to a character — but typing a number for it was
+              setting the answer rather than designing toward it. The archetype
+              kit gives it a range, and play moves it from there. */}
           <div className="row">
             <NumField label="Difficulty (1-10)" value={sel.difficulty} min={1} max={10}
               onChange={(v) => patchChar((c) => { c.difficulty = v })} />
-            <NumField label="Popularity (1-10)" value={sel.popularity} min={1} max={10}
-              onChange={(v) => patchChar((c) => { c.popularity = v })} />
           </div>
           <div className="row">
             <Field label="Health">
