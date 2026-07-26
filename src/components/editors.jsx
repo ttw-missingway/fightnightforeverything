@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { Field, NumField, StringListEditor, PillPicker } from './ui.jsx'
-import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh } from '../game/model.js'
+import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
 import { canStageExhibition, runExhibition, EXHIBITION_COST } from '../game/tournament.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import {
@@ -624,21 +624,38 @@ export function CharactersEditor({ save, update }) {
         <div className="card">
           <div className="row spread">
             <h3>Edit: {sel.name}</h3>
-            <button className="small danger" onClick={() => {
-              // Deleting an origin does NOT delete its forms — they're complete
-              // designs and throwing them away silently would bin real work.
-              // `pruneForms` sets them loose as ordinary characters instead.
-              const orphans = formsOf(save.game, sel.id)
-              if (orphans.length && !confirm(
-                `${sel.name} has ${orphans.length} form${orphans.length === 1 ? '' : 's'} (${orphans.map((f) => f.name).join(', ')}).\n\n`
-                + `Deleting ${sel.name} keeps them, as ordinary selectable characters. Continue?`)) return
-              setSelId(null)
-              update((s) => {
-                s.game.characters = s.game.characters.filter((c) => c.id !== sel.id)
-                pruneForms(s.game)
-                computeMatchups(s.game)
-              })
-            }}>Delete</button>
+            <div className="row">
+              <button className="small"
+                title="a full copy under fresh ids — moves, combos, body, tags and any forms"
+                onClick={() => {
+                  // Cloned OUTSIDE `update`: in the setup wizard `update` runs
+                  // inside a React state updater, so ids minted in there aren't
+                  // reliably readable afterwards — and we need the new id to
+                  // select the copy.
+                  const dup = duplicateCharacter(save.game, sel.id)
+                  if (!dup) return
+                  update((s) => {
+                    s.game.characters.push(...structuredClone(dup.characters))
+                    computeMatchups(s.game)
+                  })
+                  setSelId(dup.id)
+                }}>⧉ Duplicate</button>
+              <button className="small danger" onClick={() => {
+                // Deleting an origin does NOT delete its forms — they're complete
+                // designs and throwing them away silently would bin real work.
+                // `pruneForms` sets them loose as ordinary characters instead.
+                const orphans = formsOf(save.game, sel.id)
+                if (orphans.length && !confirm(
+                  `${sel.name} has ${orphans.length} form${orphans.length === 1 ? '' : 's'} (${orphans.map((f) => f.name).join(', ')}).\n\n`
+                  + `Deleting ${sel.name} keeps them, as ordinary selectable characters. Continue?`)) return
+                setSelId(null)
+                update((s) => {
+                  s.game.characters = s.game.characters.filter((c) => c.id !== sel.id)
+                  pruneForms(s.game)
+                  computeMatchups(s.game)
+                })
+              }}>Delete</button>
+            </div>
           </div>
           <FormLink save={save} sel={sel} update={update} setSelId={setSelId} />
           <Field label="Name">

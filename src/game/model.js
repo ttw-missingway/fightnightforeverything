@@ -4,7 +4,7 @@ import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { defaultRules, migrateRules } from './rules.js'
 import { computeMatchups } from './balance.js'
-import { pruneForms } from './forms.js'
+import { pruneForms, formsOf, FORM_MOVE_TYPE } from './forms.js'
 
 export function newCharacter(partial = {}) {
   return {
@@ -262,6 +262,61 @@ export function cloneCharacterFresh(char) {
     combo.moveIds = (combo.moveIds || []).map((id) => moveIdMap[id] || id)
   }
   return c
+}
+
+/**
+ * The next free "<name> 2", "<name> 3"… so duplicating twice doesn't produce
+ * two characters with the same name (players main them BY NAME in the codex
+ * and the feed, and two Volts read as a bug).
+ */
+function nextFreeName(name, taken) {
+  const base = String(name ?? 'Fighter').replace(/\s+\d+$/, '').trim() || 'Fighter'
+  for (let n = 2; n < 500; n++) {
+    const candidate = `${base} ${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+  return `${base} ${uid('n').slice(-4)}`
+}
+
+/**
+ * A character cloned under entirely fresh ids, plus anything that only makes
+ * sense alongside it. Returns { characters, id } for the caller to append —
+ * pure, so the ids are decided once rather than inside a state updater.
+ *
+ * FORMS COME WITH IT. A copy of a form origin that still pointed at the
+ * ORIGINAL's forms would be quietly broken: `formSwitchMoves` only accepts a
+ * target belonging to that same character, so the duplicate's transformation
+ * would resolve to nothing and the move would sit in the kit doing nothing.
+ * Cloning the forms and repointing `becomes` keeps the copy a working unit.
+ *
+ * Duplicating a FORM instead just gives you a second form of the same origin.
+ * Nothing switches into it yet, which the editor already flags — that's a
+ * to-do the designer can see, not a silent failure.
+ */
+export function duplicateCharacter(game, charId) {
+  const src = (game.characters || []).find((c) => c.id === charId)
+  if (!src) return null
+  const taken = new Set((game.characters || []).map((c) => c.name))
+  const copy = cloneCharacterFresh(src)
+  copy.name = nextFreeName(src.name, taken)
+  taken.add(copy.name)
+
+  const characters = [copy]
+  const formIdMap = {}
+  for (const form of formsOf(game, charId)) {
+    const clone = cloneCharacterFresh(form)
+    clone.name = nextFreeName(form.name, taken)
+    clone.formOf = copy.id
+    taken.add(clone.name)
+    formIdMap[form.id] = clone.id
+    characters.push(clone)
+  }
+  for (const m of copy.moves || []) {
+    if (m.type === FORM_MOVE_TYPE && m.d?.becomes) {
+      m.d = { ...m.d, becomes: formIdMap[m.d.becomes] ?? null }
+    }
+  }
+  return { characters, id: copy.id, formCount: characters.length - 1 }
 }
 
 export function newTeam(partial = {}) {
