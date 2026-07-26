@@ -7,9 +7,12 @@ import { STAGE_CATALOG } from './art.js'
  * key or null for "auto" (the deterministic pick, previewed via `autoUrl`).
  * Collapsed it shows the current sprite; expanded it shows the whole grid.
  */
-export function SpritePicker({ catalog, value, onChange, autoUrl = null, size = 34 }) {
+export function SpritePicker({ catalog, groups = null, value, onChange, autoUrl = null, size = 34 }) {
   const [open, setOpen] = useState(false)
   const current = value ? catalog.find((c) => c.key === value) : null
+  // `groups` is optional: pass it to get a sectioned picker, omit it and every
+  // sprite lands in one unlabelled grid exactly as before.
+  const sections = groups || [{ key: 'all', name: null, sprites: catalog }]
 
   return (
     <div className="spritepicker">
@@ -19,23 +22,37 @@ export function SpritePicker({ catalog, value, onChange, autoUrl = null, size = 
         <button className="small" onClick={() => setOpen(!open)}>{open ? 'Close' : '✎ Choose sprite'}</button>
       </div>
       {open && (
-        <div className="sprite-grid">
-          <div
-            className={`sprite-cell ${value == null ? 'on' : ''}`}
-            title="auto — picked for you, stable per character"
-            onClick={() => { onChange(null); setOpen(false) }}
-          >
-            <Portrait url={autoUrl} size={size} alt="auto" />
-            <span className="small dim">auto</span>
-          </div>
-          {catalog.map((c) => (
+        <div className="sprite-picker-body">
+          <div className="sprite-grid">
             <div
-              key={c.key}
-              className={`sprite-cell ${value === c.key ? 'on' : ''}`}
-              title={prettyKey(c.key)}
-              onClick={() => { onChange(c.key); setOpen(false) }}
+              className={`sprite-cell ${value == null ? 'on' : ''}`}
+              title="auto — picked for you, stable per character"
+              onClick={() => { onChange(null); setOpen(false) }}
             >
-              <Portrait url={c.url} size={size} alt={prettyKey(c.key)} />
+              <Portrait url={autoUrl} size={size} alt="auto" />
+              <span className="small dim">auto</span>
+            </div>
+          </div>
+          {sections.map((sec) => (
+            <div key={sec.key}>
+              {sec.name && (
+                <p className="sprite-group-head small">
+                  {sec.name}
+                  {sec.note && <span className="dim"> · {sec.note}</span>}
+                </p>
+              )}
+              <div className="sprite-grid">
+                {sec.sprites.map((c) => (
+                  <div
+                    key={c.key}
+                    className={`sprite-cell ${value === c.key ? 'on' : ''}`}
+                    title={prettyKey(c.label ?? c.key)}
+                    onClick={() => { onChange(c.key); setOpen(false) }}
+                  >
+                    <Portrait url={c.url} size={size} alt={prettyKey(c.label ?? c.key)} />
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>

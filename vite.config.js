@@ -8,4 +8,12 @@ export default defineConfig({
   server: {
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
   },
+  build: {
+    // Fighter-pack sprites are never inlined. Vite base64s anything under 4KB
+    // by default, and a pack is dozens of small PNGs — the first one added
+    // 110KB to the JS bundle (76KB gzipped) for art that most sessions never
+    // display. As separate files the browser fetches only the sprites actually
+    // put on screen. Everything else keeps the default behaviour.
+    assetsInlineLimit: (filePath) => (filePath.includes('/assets/packs/') ? false : undefined),
+  },
 })

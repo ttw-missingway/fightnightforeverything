@@ -39,7 +39,7 @@ import {
   playerStaffAppeal,
 } from '../game/economy.js'
 import { SpritePicker, StagePicker } from './SpritePicker.jsx'
-import { CHAR_SPRITE_CATALOG, charArtFor, stageArt } from './art.js'
+import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArtFor, stageArt } from './art.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
@@ -673,6 +673,7 @@ export function CharactersEditor({ save, update }) {
           <Field label="Sprite">
             <SpritePicker
               catalog={CHAR_SPRITE_CATALOG}
+              groups={CHAR_SPRITE_GROUPS}
               value={sel.spriteKey || null}
               autoUrl={charArtFor(sel.id, sel.archetype)}
               onChange={(k) => patchChar((c) => { c.spriteKey = k })}

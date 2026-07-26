@@ -350,6 +350,11 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   image-rendering: pixelated;
   flex-shrink: 0;
   vertical-align: middle;
+  /* The built-in stand-ins are all 32x32, so a square box used to be a safe
+     assumption. Fighter-pack sprites are whatever size they were ripped at
+     (13x15 through 88x91), and without `contain` the width/height attributes
+     stretch a tall thin fighter into a squat one. */
+  object-fit: contain;
 }
 .hud-char {
   background: var(--bg2);
@@ -468,6 +473,11 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   image-rendering: pixelated;
   filter: drop-shadow(0 5px 3px rgba(0, 0, 0, 0.55));
   transition: filter 0.4s ease, opacity 0.4s ease;
+  /* Keep the sprite's real proportions inside the square slot, and stand it on
+     the floor rather than floating it in the middle — `contain` alone leaves a
+     short character hovering at the centre of the box. */
+  object-fit: contain;
+  object-position: 50% 100%;
 }
 .fs-fighter.ko { filter: grayscale(1) brightness(0.6); opacity: 0.5; }
 
@@ -477,12 +487,20 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
-  max-height: 240px;
-  overflow-y: auto;
   padding: 8px;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+/* Scrolling moved to the wrapper: with several packs, each grid capping its
+   own height meant a column of stubby independently-scrolling boxes. */
+.sprite-picker-body { max-height: 300px; overflow-y: auto; margin-top: 8px; }
+.sprite-picker-body .sprite-grid { margin-top: 4px; }
+.sprite-group-head {
+  margin: 10px 0 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--cyan);
 }
 .sprite-cell {
   display: flex;
