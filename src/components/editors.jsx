@@ -26,6 +26,9 @@ import {
   ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES,
   DIFFICULTIES, difficultyOf, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS,
 } from '../game/constants.js'
+import {
+  FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
+} from '../game/forms.js'
 import { CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample, displayName } from '../game/util.js'
 import {
@@ -412,11 +415,102 @@ export function TagsEditor({ save, update }) {
   )
 }
 
+/**
+ * The forms panel: one control on the FORM (who it belongs to) and a read-only
+ * summary on the ORIGIN (what it can become, and how easily).
+ *
+ * There is deliberately no "make this a form origin" switch. Origin-ness is
+ * derived from a form pointing here, so there is no such thing as an origin
+ * with nothing on the other side — the state that would be a lie.
+ */
+function FormLink({ save, sel, update, setSelId }) {
+  const myForms = formsOf(save.game, sel.id)
+  const origin = originOf(save.game, sel)
+  const candidates = canBeFormOf(save.game, sel)
+  const reach = reachableForms(save.game, sel)
+  // A form that nothing switches into is unreachable — it exists in the game
+  // and can never be played. Worth saying out loud, since it's a silent bug
+  // in a design otherwise.
+  const orphaned = myForms.filter((f) => !reach.some((r) => r.form.id === f.id))
+
+  return (
+    <Field label="Forms">
+      {!myForms.length && (
+        <div className="row">
+          <span className="dim small">Form of</span>
+          <select value={sel.formOf || ''} onChange={(e) => update((s) => {
+            const c = s.game.characters.find((x) => x.id === sel.id)
+            if (!c) return
+            c.formOf = e.target.value || null
+            // Becoming a form removes them from every pool at once, so the
+            // chart has to be rebuilt around a smaller cast.
+            pruneForms(s.game)
+            computeMatchups(s.game)
+          })}>
+            <option value="">— nobody, this is a normal character —</option>
+            {candidates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {origin && (
+            <button className="small" onClick={() => setSelId(origin.id)}>↑ {origin.name}</button>
+          )}
+        </div>
+      )}
+      {origin ? (
+        <p className="dim small" style={{ margin: '4px 0 0' }}>
+          <span className="gold">⟳ Not selectable.</span> {sel.name} only exists as a form of{' '}
+          <strong>{origin.name}</strong> — reached with a <em>form change</em> move, and gone at the bell.
+          Design them like a full character; their power counts as {origin.name}'s.
+        </p>
+      ) : myForms.length ? (
+        <>
+          <p className="small" style={{ margin: '2px 0 4px' }}>
+            {sel.name} can become:{' '}
+            {myForms.map((f, i) => {
+              const r = reach.find((x) => x.form.id === f.id)
+              return (
+                <span key={f.id}>
+                  {i > 0 && ', '}
+                  <a className="clickable pink" onClick={() => setSelId(f.id)}>{f.name}</a>
+                  <span className="dim"> ({r ? `${Math.round(r.access * 100)}% access via ${r.move.name}` : 'no move points here'})</span>
+                </span>
+              )
+            })}
+          </p>
+          <p className="dim small" style={{ margin: 0 }}>
+            Access is how cheaply {sel.name} can actually get there — meter cost, startup and safety on
+            block. The balance chart moves {sel.name} toward whatever a form is <em>better</em> at, in
+            proportion to that number, so a free instant transformation is very nearly the form itself
+            and a full-bar punishable one mostly isn't.
+          </p>
+          {orphaned.length > 0 && (
+            <p className="red small" style={{ margin: '4px 0 0' }}>
+              ⚠ {orphaned.map((f) => f.name).join(', ')} {orphaned.length === 1 ? 'has' : 'have'} no way in.
+              Add a <em>form change</em> move below and point it at {orphaned.length === 1 ? 'them' : 'each of them'},
+              or {orphaned.length === 1 ? 'that form' : 'those forms'} can never be played.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="dim small" style={{ margin: '4px 0 0' }}>
+          A form is a whole second character on the other side of a move — its own movelist, body and
+          art — that nobody can pick from character select. To give {sel.name} one: make (or generate)
+          the second character, set its <em>Form of</em> to {sel.name}, then add a <em>form change</em>{' '}
+          move here pointing at it. It lasts until the bell.
+        </p>
+      )}
+    </Field>
+  )
+}
+
 export function CharactersEditor({ save, update }) {
   const [selId, setSelId] = useState(null)
   const importRef = useRef(null)
   const chars = save.game.characters
   const sel = chars.find((c) => c.id === selId) || null
+  const pickable = selectableChars(save.game)
+  // Each selectable character followed by its own forms — the shape the cast
+  // actually has, rather than roster insertion order.
+  const rosterOrder = pickable.flatMap((c) => [c, ...formsOf(save.game, c.id)])
 
   const patchChar = (fn) => update((s) => {
     const c = s.game.characters.find((x) => x.id === selId)
@@ -444,10 +538,27 @@ export function CharactersEditor({ save, update }) {
         // The imported cast's tags come along — they shape who mains whom.
         for (const t of data.tags || []) if (!s.game.tags.includes(t)) s.game.tags.push(t)
         const have = new Set(s.game.characters.map((c) => c.id))
+        // Character ids can change on the way in (a re-import clones under
+        // fresh ones), and forms are stored as ids — both the `formOf` link
+        // and every form change move's target. Remap them together afterwards
+        // or a re-imported cast arrives with all its transformations severed.
+        const idMap = {}
+        const landed = []
         for (const char of data.characters) {
-          // Same id already here (re-import): clone under fresh ids instead of duping.
-          s.game.characters.push(have.has(char.id) ? cloneCharacterFresh(char) : structuredClone(char))
+          const next = have.has(char.id) ? cloneCharacterFresh(char) : structuredClone(char)
+          idMap[char.id] = next.id
+          landed.push(next)
+          s.game.characters.push(next)
         }
+        for (const c of landed) {
+          if (c.formOf) c.formOf = idMap[c.formOf] ?? null
+          for (const m of c.moves || []) {
+            if (m.type === FORM_MOVE_TYPE && m.d?.becomes) {
+              m.d = { ...m.d, becomes: idMap[m.d.becomes] ?? null }
+            }
+          }
+        }
+        pruneForms(s.game) // anything the file pointed at but didn't ship
         computeMatchups(s.game) // the imported designs are matchup data now
       })
     } catch {
@@ -478,26 +589,58 @@ export function CharactersEditor({ save, update }) {
         </div>
         <div className="table-scroll"><table>
           <tbody>
-            {chars.map((c) => (
-              <tr key={c.id} className="clickable" onClick={() => setSelId(c.id)}>
-                <td style={selId === c.id ? { color: 'var(--pink)' } : {}}>{c.name}</td>
-                <td className="dim">{c.archetype}</td>
-                <td className="dim small">diff {c.difficulty} · pop {c.popularity}</td>
-              </tr>
-            ))}
+            {rosterOrder.map((c) => {
+              const form = !!c.formOf
+              return (
+                <tr key={c.id} className="clickable" onClick={() => setSelId(c.id)}>
+                  <td style={{
+                    ...(selId === c.id ? { color: 'var(--pink)' } : {}),
+                    // Forms sit under the character that turns into them, so
+                    // the roster reads as a cast rather than a flat list with
+                    // strangers in it.
+                    ...(form ? { paddingLeft: 18 } : {}),
+                  }}>
+                    {form && <span className="dim" title="a form — not selectable">⟳ </span>}{c.name}
+                  </td>
+                  <td className="dim">{c.archetype}</td>
+                  <td className="dim small">
+                    {form ? 'form' : `diff ${c.difficulty} · pop ${c.popularity}`}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table></div>
         {chars.length === 0 && <p className="dim">No characters yet — a fighting game needs a cast!</p>}
+        {chars.length > pickable.length && (
+          <p className="dim small" style={{ margin: '6px 0 0' }}>
+            {pickable.length} selectable · {chars.length - pickable.length} form{chars.length - pickable.length === 1 ? '' : 's'}.
+            Forms don't appear on character select — you reach them with a <em>form change</em> move, and the bell puts you back.
+          </p>
+        )}
       </div>
 
       {sel && (
         <div className="card">
           <div className="row spread">
             <h3>Edit: {sel.name}</h3>
-            <button className="small danger" onClick={() => { setSelId(null); update((s) => {
-              s.game.characters = s.game.characters.filter((c) => c.id !== sel.id)
-            }) }}>Delete</button>
+            <button className="small danger" onClick={() => {
+              // Deleting an origin does NOT delete its forms — they're complete
+              // designs and throwing them away silently would bin real work.
+              // `pruneForms` sets them loose as ordinary characters instead.
+              const orphans = formsOf(save.game, sel.id)
+              if (orphans.length && !confirm(
+                `${sel.name} has ${orphans.length} form${orphans.length === 1 ? '' : 's'} (${orphans.map((f) => f.name).join(', ')}).\n\n`
+                + `Deleting ${sel.name} keeps them, as ordinary selectable characters. Continue?`)) return
+              setSelId(null)
+              update((s) => {
+                s.game.characters = s.game.characters.filter((c) => c.id !== sel.id)
+                pruneForms(s.game)
+                computeMatchups(s.game)
+              })
+            }}>Delete</button>
           </div>
+          <FormLink save={save} sel={sel} update={update} setSelId={setSelId} />
           <Field label="Name">
             <div className="row">
               <input value={sel.name} onChange={(e) => patchChar((c) => { c.name = e.target.value })} />
@@ -586,7 +729,7 @@ export function CharactersEditor({ save, update }) {
               patch notes.
             </p>
           </Field>
-          <MovelistEditor char={sel} patchChar={patchChar} />
+          <MovelistEditor char={sel} patchChar={patchChar} forms={formsOf(save.game, sel.id)} />
           <CombosEditor char={sel} patchChar={patchChar} />
         </div>
       )}
@@ -599,7 +742,9 @@ export function CharactersEditor({ save, update }) {
 // OBSERVED data that starts blurry after each patch and sharpens as sets
 // get played (pass `observe`, `confidence`, `games`).
 export function MatchupReport({ save, observe = null, confidence = 1, games = 0, changedIds = new Set() }) {
-  const chars = save.game.characters
+  // Forms have no row here. Nobody picks one, so "Origin vs Form" is not a
+  // matchup — the form's power is already inside its origin's numbers.
+  const chars = selectableChars(save.game)
   const pairs = []
   for (let i = 0; i < chars.length; i++) {
     for (let j = i + 1; j < chars.length; j++) pairs.push([chars[i], chars[j]])
@@ -628,7 +773,7 @@ export function MatchupReport({ save, observe = null, confidence = 1, games = 0,
       </p>
       {pairs.length === 0 && <p className="dim">Need at least two characters.</p>}
       {pairs.map(([a, b]) => {
-        const mu = observe ? observe(save.game, a, b) : computeMatchup(a, b)
+        const mu = observe ? observe(save.game, a, b) : computeMatchup(a, b, save.game.rules, save.game)
         const draftPair = changedIds.has(a.id) || changedIds.has(b.id)
         const margin = draftPair ? 9 : Math.round((1 - confidence) * 4.5)
         return (
@@ -648,7 +793,7 @@ export function MatchupReport({ save, observe = null, confidence = 1, games = 0,
             <span className="dim small">
               {draftPair
                 ? 'design spreadsheet math — nobody has played a single set on these numbers'
-                : observe && confidence < 0.25 ? 'too early to say why — the data is still arguing with itself' : matchupExplanation(a, b)}
+                : observe && confidence < 0.25 ? 'too early to say why — the data is still arguing with itself' : matchupExplanation(a, b, save.game.rules, save.game)}
             </span>
           </div>
         )
@@ -710,12 +855,13 @@ function TierPick({ label, value, options, onChange }) {
  * sideways. Cards wrap instead, so the sheet fits any width and each move
  * reads as its own little design statement.
  */
-function MoveCard({ m, patchMove, onDelete }) {
+function MoveCard({ m, patchMove, onDelete, forms = [] }) {
   const set = (key, value) => patchMove(m.id, (x) => {
     x.d = { ...x.d, [key]: value }
     applyMoveDescriptors(x) // descriptors are the truth; re-derive the numbers
   })
   const note = GUARD_NOTE[m.d?.guard]
+  const isSwitch = m.type === FORM_MOVE_TYPE
   return (
     <div className="movecard">
       <div className="row spread" style={{ marginBottom: 6 }}>
@@ -736,6 +882,29 @@ function MoveCard({ m, patchMove, onDelete }) {
         </div>
         <button className="small danger" onClick={onDelete}>×</button>
       </div>
+
+      {isSwitch && (
+        <div className="row" style={{ gap: 8, marginBottom: 6, alignItems: 'center' }}>
+          <label className="tierpick">
+            <span className="dim">Becomes</span>
+            <select value={m.d?.becomes || ''} onChange={(e) => set('becomes', e.target.value || null)}>
+              <option value="">— nothing yet —</option>
+              {forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </label>
+          {!forms.length ? (
+            <span className="red small">
+              No forms to switch into. Point another character's <em>Form of</em> at this one first.
+            </span>
+          ) : !m.d?.becomes ? (
+            <span className="gold small">This move does nothing until it has a target.</span>
+          ) : (
+            <span className="dim small">
+              Lasts until the bell — meter, speed and safety are what it costs.
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="row" style={{ gap: 8 }}>
         {D_FIELDS.map(([k, label, tiers]) => (
@@ -790,7 +959,7 @@ function MoveCard({ m, patchMove, onDelete }) {
 
 // The movelist sheet. Moves are DESCRIBED, not numbered — pick what the move
 // is like and the game works out the frame data.
-function MovelistEditor({ char, patchChar }) {
+function MovelistEditor({ char, patchChar, forms = [] }) {
   const patchMove = (id, fn) => patchChar((c) => {
     const m = c.moves.find((x) => x.id === id)
     if (m) fn(m)
@@ -811,7 +980,7 @@ function MovelistEditor({ char, patchChar }) {
           <div key={slot}>
             <p className="dim small" style={{ margin: '10px 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</p>
             {moves.map((m) => (
-              <MoveCard key={m.id} m={m} patchMove={patchMove}
+              <MoveCard key={m.id} m={m} patchMove={patchMove} forms={forms}
                 onDelete={() => patchChar((c) => { c.moves = c.moves.filter((x) => x.id !== m.id) })} />
             ))}
           </div>
@@ -1554,7 +1723,7 @@ const ROLE_BLURB = {
  * frame data included, so it moves when you patch).
  */
 export function StyleWheel({ save }) {
-  const chars = save.game.characters
+  const chars = selectableChars(save.game)
   const rules = save.game.rules
   const roles = ['keep-out', 'grappler', 'rushdown', 'balanced']
   const byRole = Object.fromEntries(roles.map((r) => [r, chars.filter((c) => styleRoleOf(c) === r)]))
@@ -1562,7 +1731,7 @@ export function StyleWheel({ save }) {
   // What these two styles actually average against each other in this cast.
   const between = (a, b) => {
     const pairs = []
-    for (const x of byRole[a]) for (const y of byRole[b]) if (x !== y) pairs.push(computeMatchup(x, y, rules))
+    for (const x of byRole[a]) for (const y of byRole[b]) if (x !== y) pairs.push(computeMatchup(x, y, rules, save.game))
     if (!pairs.length) return null
     return Math.round(pairs.reduce((s, v) => s + v, 0) / pairs.length)
   }

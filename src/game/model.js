@@ -4,6 +4,7 @@ import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { defaultRules, migrateRules } from './rules.js'
 import { computeMatchups } from './balance.js'
+import { pruneForms } from './forms.js'
 
 export function newCharacter(partial = {}) {
   return {
@@ -19,6 +20,10 @@ export function newCharacter(partial = {}) {
     moves: [], // full movelist with frame data — see design.js
     combos: [], // {id, name, moveIds} — named routes, used in narration
     tags: [], // strings from game.tags — players are attracted/repelled by these
+    // The id of the character this one is a FORM of, or null for an ordinary
+    // fighter. A form is unpickable — it's reached through a `form change`
+    // move and lasts until the bell. See src/game/forms.js.
+    formOf: null,
     ...partial,
   }
 }
@@ -740,6 +745,8 @@ export function migrateSave(save) {
     game.rules = migrateRules(game.rules)
     for (const c of game.characters) {
       c.tags ??= []
+      // Nobody was anybody's form before forms existed.
+      c.formOf ??= null
       // Descriptor overhaul: everyone was a "normal" body before it existed,
       // so old casts keep the balance they had.
       c.vitality ??= 'normal'
@@ -755,6 +762,7 @@ export function migrateSave(save) {
         }
       }
     }
+    pruneForms(game)
     computeMatchups(game)
   }
   // Dialogue infrastructure: people who have already played each other are

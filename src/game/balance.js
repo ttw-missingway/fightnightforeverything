@@ -10,6 +10,7 @@
 import { clamp, hash01, uid, choice, randInt } from './util.js'
 import { comboDamage, healthMultOf, sizeModOf } from './design.js'
 import { defaultRules } from './rules.js'
+import { reachableForms, selectableChars } from './forms.js'
 
 const by = (char, type) => (char.moves || []).filter((m) => m.type === type)
 
@@ -40,7 +41,14 @@ function soft(x) {
  *  mobility — movement tools and general pace
  *  meter    — super damage per bar and install access
  */
-export function ratings(char, rules = null) {
+export const RATING_KEYS = ['speed', 'offense', 'pressure', 'zoning', 'defense', 'mobility', 'meter']
+
+/**
+ * The sub-ratings a character has ON THEIR OWN, before any form they can turn
+ * into. Everything downstream should call `ratings`, which folds the forms in;
+ * this exists so that folding can measure a form without recursing forever.
+ */
+export function ownRatings(char, rules = null) {
   // The universal mechanics change what a character IS without touching the
   // character: give everyone a burst and pressure gets worse; let chip finish
   // and every zoner gets better.
@@ -154,6 +162,45 @@ export function ratings(char, rules = null) {
   return { speed, offense, pressure, zoning, defense, mobility, meter }
 }
 
+/**
+ * What a character is worth once you count what they can BECOME.
+ *
+ * A form origin doesn't own its form's kit — it owns a button that fetches
+ * it. So each axis moves from the origin's own value toward the best value
+ * any reachable form has on that axis, scaled by how cheaply the origin can
+ * get there (`accessOf`: meter, startup, safety on block). A free, instant,
+ * safe transformation means the origin very nearly IS the form; a full-bar
+ * launch-punishable one means they mostly aren't, and have to earn it.
+ *
+ * Only the axes the form is BETTER at move. Turning into a slower character
+ * doesn't make you slower — you weren't obliged to press the button. That
+ * asymmetry is the whole reason forms are worth designing, and the whole
+ * reason they need to be priced: without this, an unremarkable origin with a
+ * monster form read as an unremarkable character and the chart lied about
+ * every matchup they were in.
+ *
+ * HEALTH IS NOT FOLDED IN. The bar belongs to whoever started the round, so a
+ * glass-bodied origin with a tank form keeps the glass bar — which is exactly
+ * how transformations work in the games this is modelling, and is handled by
+ * `healthMultOf` reading the origin.
+ */
+export function ratings(char, rules = null, game = null) {
+  const own = ownRatings(char, rules)
+  if (!game) return own
+  const forms = reachableForms(game, char)
+  if (!forms.length) return own
+  const out = { ...own }
+  for (const { form, access } of forms) {
+    // No `game` on this call: forms cannot own forms (see forms.js), so this
+    // is a hard stop rather than a depth limit.
+    const rf = ownRatings(form, rules)
+    for (const k of RATING_KEYS) {
+      out[k] = out[k] + Math.max(0, rf[k] - out[k]) * access
+    }
+  }
+  return out
+}
+
 // How far past sane design a kit goes, summed across every axis. This is
 // the "your numbers are illegal" score — 0 for anything reasonable.
 //
@@ -245,9 +292,12 @@ function factors(ra, rb) {
   ]
 }
 
-export function computeMatchup(a, b, rules = null) {
-  const ra = ratings(a, rules)
-  const rb = ratings(b, rules)
+// `game` is optional but wanted: without it neither side's FORMS count, and a
+// form origin reads as whatever it is before it transforms. Every caller that
+// has a game in hand should pass it.
+export function computeMatchup(a, b, rules = null, game = null) {
+  const ra = ratings(a, rules, game)
+  const rb = ratings(b, rules, game)
   let edge = factors(ra, rb).reduce((s, f) => s + f.edge, 0) + styleEdge(a, b)
   // Irreducible matchup jank: some pairs are just weird, consistently.
   edge += (hash01(`${a.id}|${b.id}:mu`) - 0.5) * 4
@@ -257,9 +307,9 @@ export function computeMatchup(a, b, rules = null) {
 }
 
 // Why the number is what it is — the dominant factor, in plain speech.
-export function matchupExplanation(a, b, rules = null) {
-  const ra = ratings(a, rules)
-  const rb = ratings(b, rules)
+export function matchupExplanation(a, b, rules = null, game = null) {
+  const ra = ratings(a, rules, game)
+  const rb = ratings(b, rules, game)
   const fs = [...factors(ra, rb), { key: 'style', edge: styleEdge(a, b) }]
   const top = fs.reduce((best, f) => (Math.abs(f.edge) > Math.abs(best.edge) ? f : best))
   if (Math.abs(top.edge) < 1) return 'a genuinely even fight'
@@ -301,7 +351,7 @@ export function balanceConfidence(save) {
  * is, so their projections use confidence 0.
  */
 export function observedMatchup(save, game, a, b, confOverride = null) {
-  const truth = computeMatchup(a, b, game?.rules)
+  const truth = computeMatchup(a, b, game?.rules, game)
   const conf = confOverride ?? balanceConfidence(save)
   const noise = (hash01(`${a.id}|${b.id}|${game.version}:obs`) - 0.5) * 2 // -1..1
   return clamp(Math.round(truth + noise * (1 - conf) * 9), 10, 90)
@@ -325,6 +375,20 @@ export function draftChangedCharIds(liveGame, draft) {
     const old = liveById.get(c.id)
     if (!old || JSON.stringify([c.moves, c.combos]) !== JSON.stringify([old.moves, old.combos])) {
       changed.add(c.id)
+      // Editing a form edits everyone who can turn into it: their ratings are
+      // folded from it. Without this the origin's matchups still read as
+      // settled data while the character behind them has moved.
+      if (c.formOf) changed.add(c.formOf)
+    }
+  }
+  // The reverse too: pointing a form change somewhere new changes the origin
+  // without touching a single move on the form.
+  for (const c of draft.characters) {
+    const old = liveById.get(c.id)
+    if (old && (c.formOf || null) !== (old.formOf || null)) {
+      changed.add(c.id)
+      if (c.formOf) changed.add(c.formOf)
+      if (old.formOf) changed.add(old.formOf)
     }
   }
   return changed
@@ -342,10 +406,10 @@ const TIER_BLURBS = [
   'As always: if your main is low, the list is wrong.',
 ]
 
-function avgPower(chars, char) {
+function avgPower(chars, char, game = null) {
   const others = chars.filter((c) => c.id !== char.id)
   if (!others.length) return 50
-  return others.reduce((s, o) => s + computeMatchup(char, o), 0) / others.length
+  return others.reduce((s, o) => s + computeMatchup(char, o, game?.rules, game), 0) / others.length
 }
 
 /**
@@ -354,7 +418,9 @@ function avgPower(chars, char) {
  * the character, who's been winning tournaments with them, and noise.
  */
 export function generateTierList(save) {
-  const chars = save.game.characters
+  // Forms are not on the tier list. Nobody can pick one, so ranking them
+  // would be ranking a move — the origin already carries their weight.
+  const chars = selectableChars(save.game)
   if (!chars.length) return null
   const regs = Object.values(save.players).filter((p) => p.isRegular)
   const mains = {}
@@ -366,7 +432,7 @@ export function generateTierList(save) {
 
   const scored = chars.map((c) => ({
     id: c.id,
-    perception: avgPower(chars, c)
+    perception: avgPower(chars, c, save.game)
       + (Math.random() - 0.5) * 3            // discourse noise
       + Math.min(mains[c.id] || 0, 4) * 0.8  // popularity reads as strength
       + Math.min(titles[c.id] || 0, 3) * 0.7, // "it wins tournaments, it's top tier"
@@ -402,14 +468,16 @@ export { TIER_ORDER }
  * migration, and on every patch release — this table IS character power.
  */
 export function computeMatchups(game) {
-  const chars = game.characters
+  // Only pickable characters get a matchup. A form has no matchups of its own
+  // — it is part of its origin's, folded in by `ratings`.
+  const chars = selectableChars(game)
   const table = {}
   for (let i = 0; i < chars.length; i++) {
     for (let j = i + 1; j < chars.length; j++) {
       const a = chars[i]
       const b = chars[j]
       const [lo, hi] = a.id < b.id ? [a, b] : [b, a]
-      table[`${lo.id}|${hi.id}`] = computeMatchup(lo, hi, game.rules)
+      table[`${lo.id}|${hi.id}`] = computeMatchup(lo, hi, game.rules, game)
     }
   }
   game.matchups = table

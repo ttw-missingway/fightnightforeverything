@@ -9,11 +9,14 @@ import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance
 import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf } from './constants.js'
 import { postPatchReaction, postPatchAnnouncement } from './socialmedia.js'
 import { computeMatchups, observedPower } from './balance.js'
+import { selectableChars, charLabel } from './forms.js'
 import { ALL_RULE_KEYS, ruleLabel, defaultRules } from './rules.js'
 
 // A character's power level: average matchup win% against the rest of the cast.
 export function charPower(game, charId) {
-  const others = game.characters.filter((c) => c.id !== charId)
+  // Against the PICKABLE cast. A form has no matchup row of its own — its
+  // power is already folded into whoever transforms into it.
+  const others = selectableChars(game).filter((c) => c.id !== charId)
   if (!others.length) return 50
   return others.reduce((s, o) => s + getMatchup(game, charId, o.id), 0) / others.length
 }
@@ -27,7 +30,9 @@ export function charPower(game, charId) {
 // crowd today and break the balance tomorrow.
 export function communityDemands(save) {
   const out = []
-  for (const c of save.game.characters) {
+  // The community argues about characters it can pick. A form's power shows
+  // up as its origin's — that's who gets the nerf demand.
+  for (const c of selectableChars(save.game)) {
     const power = observedPower(save, save.game, c)
     if (power >= 58) out.push({ charId: c.id, name: c.name, kind: 'nerf', legit: true, heat: 40 + (power - 58) * 4 })
     else if (power <= 43) out.push({ charId: c.id, name: c.name, kind: 'buff', legit: true, heat: 30 + (43 - power) * 3 })
@@ -35,7 +40,7 @@ export function communityDemands(save) {
   // A trap: a mid-tier character the mob has irrationally decided is busted —
   // usually because a dominant player carries them. Nerfing them would be a
   // mistake, but the pressure to "do something" is real.
-  const mids = save.game.characters.filter((c) => { const p = observedPower(save, save.game, c); return p >= 47 && p < 56 })
+  const mids = selectableChars(save.game).filter((c) => { const p = observedPower(save, save.game, c); return p >= 47 && p < 56 })
   if (mids.length) {
     const c = mids[Math.floor(hash01(`${save.game.version}:trapdemand`) * mids.length)]
     const topMain = Object.values(save.players)
@@ -110,8 +115,15 @@ function effectLabel(e) {
   return `${e.effect} ${e.trigger}`
 }
 
-function moveDiffClauses(oldM, newM) {
+function moveDiffClauses(oldM, newM, nameOf = (id) => id) {
   const clauses = []
+  // The transformation target is an id, not a tier — diff it by name, or the
+  // note reads "becomes char_a91f → char_2b03" and tells nobody anything.
+  if ((oldM.d?.becomes ?? null) !== (newM.d?.becomes ?? null)) {
+    clauses.push(newM.d?.becomes
+      ? `now transforms into ${nameOf(newM.d.becomes)}`
+      : `no longer transforms into ${nameOf(oldM.d?.becomes)}`)
+  }
   if (oldM.name !== newM.name) clauses.push(`renamed to ${newM.name}`)
   if (oldM.type !== newM.type) clauses.push(`type ${oldM.type} → ${newM.type}`)
   if ((oldM.slot || 'special') !== (newM.slot || 'special')) clauses.push(`${oldM.slot || 'special'} → ${newM.slot || 'special'}`)
@@ -165,7 +177,7 @@ export function diffGame(oldGame, draft, observer = null) {
   computeMatchups(oldGame)
   computeMatchups(draft)
   const powerOf = (game, char) => {
-    const others = game.characters.filter((c) => c.id !== char.id)
+    const others = selectableChars(game).filter((c) => c.id !== char.id)
     if (!others.length) return 50
     if (!observer) return charPower(game, char.id)
     return others.reduce((s, o) => s + observer(game, char, o), 0) / others.length
@@ -183,11 +195,16 @@ export function diffGame(oldGame, draft, observer = null) {
   }
   const oldChars = new Map(oldGame.characters.map((c) => [c.id, c]))
   const newChars = new Map(draft.characters.map((c) => [c.id, c]))
+  const nameOf = (id) => newChars.get(id)?.name || oldChars.get(id)?.name || 'a deleted character'
 
   const added = draft.characters.filter((c) => !oldChars.has(c.id))
   const removed = oldGame.characters.filter((c) => !newChars.has(c.id))
-  for (const c of added) notes.push(`NEW CHARACTER: ${c.name} (${c.archetype})`)
-  for (const c of removed) notes.push(`Removed ${c.name} from the roster`)
+  for (const c of added) {
+    notes.push(c.formOf
+      ? `NEW FORM: ${charLabel(draft, c)} — ${c.name} is not selectable, only transformed into`
+      : `NEW CHARACTER: ${c.name} (${c.archetype})`)
+  }
+  for (const c of removed) notes.push(`Removed ${charLabel(oldGame, c)} from the roster`)
 
   const buffed = []
   const nerfed = []
@@ -195,40 +212,51 @@ export function diffGame(oldGame, draft, observer = null) {
   for (const c of draft.characters) {
     const old = oldChars.get(c.id)
     if (!old) continue
+    // A form's name means nothing on its own — nobody has ever picked it —
+    // so every note about one carries the origin it belongs to.
+    const cn = charLabel(draft, c)
     const dPow = charPower(draft, c.id) - charPower(oldGame, c.id)
-    if (dPow >= 1.5) { buffed.push({ char: c, delta: dPow }); notes.push(`Buffed ${c.name} (+${dPow.toFixed(1)} avg matchup)`) }
-    else if (dPow <= -1.5) { nerfed.push({ char: c, delta: dPow }); notes.push(`Nerfed ${c.name} (${dPow.toFixed(1)} avg matchup)`) }
+    if (dPow >= 1.5) { buffed.push({ char: c, delta: dPow }); notes.push(`Buffed ${cn} (+${dPow.toFixed(1)} avg matchup)`) }
+    else if (dPow <= -1.5) { nerfed.push({ char: c, delta: dPow }); notes.push(`Nerfed ${cn} (${dPow.toFixed(1)} avg matchup)`) }
 
     // Character-sheet changes, however small.
     if (old.name !== c.name) notes.push(`${old.name} is now called ${c.name}`)
-    if (old.archetype !== c.archetype) notes.push(`${c.name} reworked: archetype ${old.archetype} → ${c.archetype}`)
-    if (c.difficulty !== old.difficulty) notes.push(`${c.name}: difficulty ${old.difficulty} → ${c.difficulty}`)
-    if (c.popularity !== old.popularity) notes.push(`${c.name}: star power ${old.popularity} → ${c.popularity}`)
+    // Promotion and demotion between "a character" and "a form" is the single
+    // biggest thing that can happen to someone: it adds or removes them from
+    // character select entirely.
+    if ((old.formOf || null) !== (c.formOf || null)) {
+      notes.push(c.formOf
+        ? `${c.name} is no longer selectable — they are now a form of ${nameOf(c.formOf)}`
+        : `${c.name} is now a selectable character in their own right`)
+    }
+    if (old.archetype !== c.archetype) notes.push(`${cn} reworked: archetype ${old.archetype} → ${c.archetype}`)
+    if (c.difficulty !== old.difficulty) notes.push(`${cn}: difficulty ${old.difficulty} → ${c.difficulty}`)
+    if (c.popularity !== old.popularity) notes.push(`${cn}: star power ${old.popularity} → ${c.popularity}`)
     // Body changes are the loudest kind of rework — a health-bar adjustment
     // rewrites every matchup at once.
     if ((old.vitality || 'normal') !== (c.vitality || 'normal')) {
-      notes.push(`${c.name}: health ${old.vitality || 'normal'} → ${c.vitality || 'normal'}`)
+      notes.push(`${cn}: health ${old.vitality || 'normal'} → ${c.vitality || 'normal'}`)
     }
     if ((old.size || 'normal') !== (c.size || 'normal')) {
-      notes.push(`${c.name}: hurtbox ${old.size || 'normal'} → ${c.size || 'normal'}`)
+      notes.push(`${cn}: hurtbox ${old.size || 'normal'} → ${c.size || 'normal'}`)
     }
-    if ((old.spriteKey || null) !== (c.spriteKey || null)) notes.push(`${c.name}: updated character art`)
-    if ((old.description || '') !== (c.description || '')) notes.push(`${c.name}: bio updated`)
+    if ((old.spriteKey || null) !== (c.spriteKey || null)) notes.push(`${cn}: updated character art`)
+    if ((old.description || '') !== (c.description || '')) notes.push(`${cn}: bio updated`)
     const tagDiff = listDiff(old.tags, c.tags)
-    if (tagDiff.added.length) notes.push(`${c.name} tagged: ${tagDiff.added.join(', ')}`)
-    if (tagDiff.removed.length) notes.push(`${c.name} untagged: ${tagDiff.removed.join(', ')}`)
+    if (tagDiff.added.length) notes.push(`${cn} tagged: ${tagDiff.added.join(', ')}`)
+    if (tagDiff.removed.length) notes.push(`${cn} untagged: ${tagDiff.removed.join(', ')}`)
 
     // Moves: additions, removals, and every stat tweak in between.
     const oldMoves = new Map(old.moves.map((m) => [moveKey(m), m]))
     const newMoves = new Map(c.moves.map((m) => [moveKey(m), m]))
     for (const [key, m] of newMoves) {
       const om = oldMoves.get(key)
-      if (!om) { moveChanges++; notes.push(`${c.name} gains ${m.name} (${m.type})`); continue }
-      const clauses = moveDiffClauses(om, m)
-      if (clauses.length) { moveChanges++; notes.push(`${c.name} — ${om.name}: ${clauses.join(', ')}`) }
+      if (!om) { moveChanges++; notes.push(`${cn} gains ${m.name} (${m.type})`); continue }
+      const clauses = moveDiffClauses(om, m, nameOf)
+      if (clauses.length) { moveChanges++; notes.push(`${cn} — ${om.name}: ${clauses.join(', ')}`) }
     }
     for (const [key, m] of oldMoves) {
-      if (!newMoves.has(key)) { moveChanges++; notes.push(`${c.name} loses ${m.name}`) }
+      if (!newMoves.has(key)) { moveChanges++; notes.push(`${cn} loses ${m.name}`) }
     }
 
     // Combo routes count too — labs notice everything.
@@ -236,15 +264,15 @@ export function diffGame(oldGame, draft, observer = null) {
     const newCombos = new Map((c.combos || []).map((x) => [x.id, x]))
     for (const [id, combo] of newCombos) {
       const oc = oldCombos.get(id)
-      if (!oc) { notes.push(`${c.name}: new combo route — ${combo.name}`); continue }
+      if (!oc) { notes.push(`${cn}: new combo route — ${combo.name}`); continue }
       const renamed = oc.name !== combo.name
       const rerouted = (oc.moveIds || []).join() !== (combo.moveIds || []).join()
-      if (renamed && rerouted) notes.push(`${c.name} — ${oc.name}: renamed to ${combo.name}, route adjusted`)
-      else if (renamed) notes.push(`${c.name} — ${oc.name}: renamed to ${combo.name}`)
-      else if (rerouted) notes.push(`${c.name} — ${combo.name}: route adjusted`)
+      if (renamed && rerouted) notes.push(`${cn} — ${oc.name}: renamed to ${combo.name}, route adjusted`)
+      else if (renamed) notes.push(`${cn} — ${oc.name}: renamed to ${combo.name}`)
+      else if (rerouted) notes.push(`${cn} — ${combo.name}: route adjusted`)
     }
     for (const [id, combo] of oldCombos) {
-      if (!newCombos.has(id)) notes.push(`${c.name}: combo removed — ${combo.name}`)
+      if (!newCombos.has(id)) notes.push(`${cn}: combo removed — ${combo.name}`)
     }
   }
 
@@ -275,15 +303,19 @@ export function diffGame(oldGame, draft, observer = null) {
 
   // Balance-health read on the DRAFT — through the observer's eyes, which
   // may be squinting at thin data.
-  const overpowered = draft.characters.filter((c) => powerOf(draft, c) > 58)
+  // Forms are excluded from both reads: they have no matchup row, so every
+  // pair involving one would come back a dead 50-50 and drag the cast toward
+  // reading "boring" purely for having transformations in it.
+  const pickable = selectableChars(draft)
+  const overpowered = pickable.filter((c) => powerOf(draft, c) > 58)
   let flatPairs = 0
   let totalPairs = 0
-  for (let i = 0; i < draft.characters.length; i++) {
-    for (let j = i + 1; j < draft.characters.length; j++) {
+  for (let i = 0; i < pickable.length; i++) {
+    for (let j = i + 1; j < pickable.length; j++) {
       totalPairs++
       const mu = observer
-        ? observer(draft, draft.characters[i], draft.characters[j])
-        : getMatchup(draft, draft.characters[i].id, draft.characters[j].id)
+        ? observer(draft, pickable[i], pickable[j])
+        : getMatchup(draft, pickable[i].id, pickable[j].id)
       if (Math.abs(mu - 50) <= 2) flatPairs++
     }
   }
@@ -294,7 +326,7 @@ export function diffGame(oldGame, draft, observer = null) {
     stageAdds: stageAdds.length,
     overpowered, boring,
     // OP characters the patch actually fixed.
-    fixedOp: oldGame.characters.filter((c) => newChars.has(c.id) &&
+    fixedOp: selectableChars(oldGame).filter((c) => newChars.has(c.id) &&
       powerOf(oldGame, c) > 58 && powerOf(draft, newChars.get(c.id)) <= 56),
     // Characters who were ALREADY strong and got buffed anyway — the single
     // fastest way to set the boards on fire.

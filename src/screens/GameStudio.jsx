@@ -12,6 +12,7 @@ import { balanceConfidence, observedMatchup, observedPower, draftChangedCharIds 
 import { franchiseFatigue, gameAgeYears, relevanceLabel } from '../game/relevance.js'
 import { formatDay, dateOfAbs, difficultyOf } from '../game/constants.js'
 import { clamp } from '../game/util.js'
+import { selectableChars, formsOf } from '../game/forms.js'
 
 const TABS = [
   ['characters', 'Characters'],
@@ -223,9 +224,14 @@ export function ConfidenceMeter({ confidence, games, changedCount = 0 }) {
 // which for unreleased draft changes is pure projection.
 function BalanceReport({ save, game, confidence, changedIds = new Set() }) {
   const baseMargin = Math.round((1 - confidence) * 4.5)
-  const rows = game.characters
+  // Selectable characters only. A form has no matchup row of its own — its
+  // power shows up here as part of whoever transforms into it, which is where
+  // a designer needs to see it.
+  const rows = selectableChars(game)
     .map((c) => {
-      const changed = changedIds.has(c.id)
+      // A form changing is a change to its origin's power curve, so the
+      // origin has to read as edited too or the ✏ marker lies.
+      const changed = changedIds.has(c.id) || formsOf(game, c.id).some((f) => changedIds.has(f.id))
       return { c, changed, power: observedPower(save, game, c, changed ? 0 : null), margin: changed ? 9 : baseMargin }
     })
     .sort((x, y) => y.power - x.power)

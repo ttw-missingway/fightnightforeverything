@@ -15,6 +15,7 @@
 
 import { clamp, choice, chance, randInt, uid } from './util.js'
 import { absDayOf } from './constants.js'
+import { selectableChars } from './forms.js'
 
 // What a take can be about, and the stances available for each.
 export const TAKE_STANCES = {
@@ -103,7 +104,7 @@ export function pushTake(player, topic, subject, stance, absDay, delta = 12) {
 export function seedTakes(save, player) {
   const absDay = absDayOf(save)
   player.takes = []
-  const chars = save.game?.characters || []
+  const chars = selectableChars(save.game)
   if (chars.length) {
     // Nearly everyone has a character they've decided about.
     const c = choice(chars)

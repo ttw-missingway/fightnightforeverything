@@ -111,6 +111,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     watcherCount: context === 'evo' ? 10 : 4, // tournaments always draw a rail
     marquee, spice: marquee ? 3 : 2,
     rules: save.game.rules,
+    game: save.game,
     seed: randInt(1, 2147483646),
   })
   // Every tournament match goes out on the arcade's stream channel.

@@ -53,6 +53,7 @@
 import { clamp } from './util.js'
 import { ARCHETYPE_FLAVOR, MOVE_VERBS, FORM_VERBS, EFFECT_CLAUSES } from './names.js'
 import { comboDamage, COMBO_SCALING, healthMultOf } from './design.js'
+import { reachableForms } from './forms.js'
 import {
   defaultRules, gutsFactor, timeOverChance, chipCanKill, burstEnabled,
   guardCrushEnabled, cancelsEnabled, stunEnabled, stunRateOf,
@@ -138,7 +139,7 @@ function riderClausesFor(move) {
 const DEFAULT_STATS = { composure: 7, analysis: 6, xfactor: 6, mastery: 7, dominance: 6 }
 
 // Everything the beat generator wants to know about one side's kit.
-function kitOf(char, skill) {
+function kitOf(char, skill, game = null) {
   const mv = char?.moves || []
   const combos = (char?.combos || [])
     .map((c) => ({ name: c.name, dmg: comboDamage(char, c), len: (c.moveIds || []).length }))
@@ -164,6 +165,11 @@ function kitOf(char, skill) {
     char,
     skill: skill || 0,
     archetype: char?.archetype || 'All-Rounder',
+    // The kits this character can turn into mid-round, each with the button
+    // that gets them there. `game` is deliberately NOT passed down: forms
+    // cannot own forms, so this is one level and terminates by construction.
+    forms: (game ? reachableForms(game, char) : [])
+      .map(({ form, move, access }) => ({ form, move, access, kit: kitOf(form, skill) })),
     combos,
     specials,
     supers,
@@ -225,7 +231,7 @@ function simulateOnce({
   aName, bName, charA, charB, skillA = 0, skillB = 0, statsA = null, statsB = null,
   probA = 0.5, winnerIsA, long = false, winnerPhrase = '', seriesNote = null,
   grudge = false, watcherCount = 0, stageName = null, marquee = false,
-  rules = null,
+  rules = null, game = null,
 }, seed) {
   // The universal mechanics this game is played under. A save that predates
   // them plays by the defaults, which are the behaviour it already had.
@@ -255,8 +261,13 @@ function simulateOnce({
   // beats declare where they happen and this eases toward it, so the fighters
   // on screen end up where the fight actually is.
   let dist = 0.62
-  const A = { side: 'A', name: aName, kit: kitOf(charA, skillA), stats: statsA || DEFAULT_STATS, max: maxA, hp: maxA, meter: 0, games: 0, stun: 0 }
-  const B = { side: 'B', name: bName, kit: kitOf(charB, skillB), stats: statsB || DEFAULT_STATS, max: maxB, hp: maxB, meter: 0, games: 0, stun: 0 }
+  // `base` is who they picked; `kit` is who they are RIGHT NOW. The two differ
+  // only while a form is up, and the bell puts them back — see the reset at
+  // the top of each game.
+  const kitA = kitOf(charA, skillA, game)
+  const kitB = kitOf(charB, skillB, game)
+  const A = { side: 'A', name: aName, kit: kitA, base: kitA, form: null, stats: statsA || DEFAULT_STATS, max: maxA, hp: maxA, meter: 0, games: 0, stun: 0 }
+  const B = { side: 'B', name: bName, kit: kitB, base: kitB, form: null, stats: statsB || DEFAULT_STATS, max: maxB, hp: maxB, meter: 0, games: 0, stun: 0 }
   const winner = winnerIsA ? A : B
   const loser = winnerIsA ? B : A
   const winnerProb = winnerIsA ? probA : 1 - probA
@@ -276,6 +287,13 @@ function simulateOnce({
     // and the HUD hides the bar when it doesn't find them.
     sA: Math.round(clamp(A.stun, 0, 100)), sB: Math.round(clamp(B.stun, 0, 100)),
     d: Math.round(clamp(dist, 0, 1) * 100),
+    // WHO IS ACTUALLY ON SCREEN. Null for all but a transformed side, which
+    // is also what every match recorded before forms existed reads as. The
+    // HUD needs this per LINE rather than once per set: the fighter changes
+    // mid-match and changes back at the bell, so a replayed VOD has to show
+    // the right sprite and name at every point in the story — otherwise the
+    // text says "that's Dark Nyx standing there now" over a picture of Nyx.
+    fA: A.form?.id ?? null, fB: B.form?.id ?? null,
   })
   const push = (text, m = {}) => {
     lines.push(text)
@@ -660,6 +678,22 @@ function simulateOnce({
     ]),
   })
 
+  // THE TRANSFORMATION. A form change costs a button, a chunk of meter and
+  // the frames to do it, and buys a different character for the rest of the
+  // round — a real one, with their own movelist, which every beat after this
+  // reads from. It is deliberately loud: this is the moment the room stands
+  // up, and it should never scroll past as another poke.
+  const proposeFormChange = (att, def, entry) => ({
+    raw: 0, kind: 'struggle', actor: att.name, move: entry.move.name, momentum: 0.6,
+    fx: 'super', dist: 0.55,
+    text: () => pick([
+      `${att.name} cashes ${entry.move.name} — and gets up as ${entry.form.name}. Different movelist, same health bar, and ${def.name} has to solve a new character on the spot.`,
+      `${entry.move.name}. The screen flashes and ${att.name} isn't ${att.base.char?.name || 'who they were'} anymore — that's ${entry.form.name} standing there now.`,
+      `There it is — ${att.name} transforms. ${entry.form.name} for the rest of the round, and ${def.name}'s gameplan was written for somebody else.`,
+      `${att.name} hits ${entry.move.name} and the whole character changes. ${entry.form.name} now. The rail comes up out of their seats.`,
+    ]),
+  })
+
   // BURST: the universal escape. Nothing lands, but the turn ends — which is
   // exactly what makes pressure characters worse in a game that has one.
   const proposeBurst = (def, att) => ({
@@ -905,6 +939,17 @@ function simulateOnce({
     return 1 // possession holds
   }
 
+  // The cheapest form this side can pay for right now, and what the cheapest
+  // route costs at all. Both read `base`, not `kit`: once you've transformed
+  // your current kit is the form's, and a form owns no form changes.
+  const affordableForm = (side) => (side.base.forms || [])
+    .filter((f) => side.meter >= (f.move.meterCost ?? 0))
+    .sort((a, b) => (a.move.meterCost ?? 0) - (b.move.meterCost ?? 0))[0] || null
+  const formCost = (side) => {
+    const costs = (side.base.forms || []).map((f) => f.move.meterCost ?? 0)
+    return costs.length ? Math.min(...costs) : null
+  }
+
   // ---------- play the games ----------
   let w = 0
   let l = 0
@@ -921,6 +966,12 @@ function simulateOnce({
     // visibly reset on screen.
     A.hp = A.max; B.hp = B.max
     A.stun = 0; B.stun = 0
+    // THE BELL UNDOES THE TRANSFORMATION. A form is a round-long state, not a
+    // set-long one — you have to earn it again every game, which is the only
+    // thing keeping "spend half a bar once, be the monster for the rest of the
+    // set" off the table.
+    const reverted = [A, B].filter((s) => s.form)
+    for (const s of reverted) { s.kit = s.base; s.form = null }
     dist = 0.62 // back to their starting marks
     if (gi === 0) {
       push(pick([
@@ -931,13 +982,18 @@ function simulateOnce({
     } else if (matchPoint) {
       push(`Final game. Match point both ways. The whole arcade holds its breath.`, { kind: 'crowd' })
     } else {
+      // Say the revert out loud. A form silently vanishing between games reads
+      // as the engine forgetting, when it's actually the rule.
+      const formNote = reverted.length
+        ? ` ${reverted.map((s) => s.name).join(' and ')} ${reverted.length > 1 ? 'are' : 'is'} back to base — the transformation doesn't carry.`
+        : ''
       const meterNote = gWinner.meter >= 70 ? ` ${gWinner.name} walks in with a full bar banked.`
         : gLoser.meter >= 70 ? ` ${gLoser.name} has the meter — everyone knows what that means.` : ''
       const score = w === l ? `${w}–${l}` : `${Math.max(w, l)}–${Math.min(w, l)}`
       push(pick([
-        `Game ${gi + 1}. Fresh bars, same tension — ${score} in the set.${meterNote}`,
-        `They run it back. Game ${gi + 1}.${meterNote}`,
-        `Bars reset. ${score}. Game ${gi + 1} is live.${meterNote}`,
+        `Game ${gi + 1}. Fresh bars, same tension — ${score} in the set.${formNote}${meterNote}`,
+        `They run it back. Game ${gi + 1}.${formNote}${meterNote}`,
+        `Bars reset. ${score}. Game ${gi + 1} is live.${formNote}${meterNote}`,
       ]), { kind: 'bell' })
     }
 
@@ -1015,6 +1071,30 @@ function simulateOnce({
         drama.dizzies++
         if (def.hp <= 0) break
         continue
+      }
+
+      // TRANSFORM. Ahead of the escape options because it isn't a reaction to
+      // anything — it's the plan. Gated on actually having the meter, so a
+      // full-bar transformation genuinely means going without a super, and on
+      // having a turn to spend, because the button is not invincible.
+      if (!att.form && (att.base.forms || []).length && att.meter >= (formCost(att) ?? 999)
+        && attSched.budget > 0 && odds(0.55)) {
+        // The cheapest route they can currently afford — a player reaches for
+        // the form they can get to, not the one they'd like.
+        const entry = affordableForm(att)
+        if (entry) {
+          att.meter -= entry.move.meterCost ?? 0
+          // Flip BEFORE the line is committed. `commit` snapshots the HUD as
+          // it pushes, so transforming afterwards would publish the announcing
+          // line — "that's Dark Nyx standing there now" — against a snapshot
+          // that still says Nyx, and the picture would lag the text by exactly
+          // one line. The proposal reads `base` for the old name, so it still
+          // describes who they WERE.
+          att.kit = entry.kit
+          att.form = entry.form
+          commit(proposeFormChange(att, def, entry), att, def, sched)
+          continue
+        }
       }
 
       // The universal defensive escape: available once, and only when the

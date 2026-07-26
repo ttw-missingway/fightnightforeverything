@@ -6,6 +6,7 @@ import { uid } from '../game/util.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import { generatePlayer, randomPreferences } from '../game/generate.js'
 import { difficultyOf } from '../game/constants.js'
+import { selectableChars } from '../game/forms.js'
 
 export default function RosterEditor({ save, update }) {
   const [selId, setSelId] = useState(null)
@@ -74,7 +75,7 @@ export default function RosterEditor({ save, update }) {
                     if (s.players[p.id]) p.id = uid('player') // re-import: fresh identity
                     // A pinned main only survives if that character exists here
                     // (it does when the matching character roster was imported).
-                    if (p.mainCharId && !s.game.characters.some((c) => c.id === p.mainCharId)) {
+                    if (p.mainCharId && !selectableChars(s.game).some((c) => c.id === p.mainCharId)) {
                       p.mainCharId = null
                       p.lockedMain = false
                       p.settledMain = false

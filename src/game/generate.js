@@ -10,6 +10,7 @@ import {
 import { newStage } from './model.js'
 import { deriveVoice } from './dialogue.js'
 import { applyArchetypeKit, STAGE_VIBES } from './design.js'
+import { selectableChars } from './forms.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
@@ -284,7 +285,8 @@ export function generateEvoRoster(save, count = 20) {
     let alias = ELITE_ALIASES[i % ELITE_ALIASES.length]
     if (usedAliases.has(alias)) alias = `${alias} ${randInt(2, 9)}`
     usedAliases.add(alias)
-    const char = save.game.characters.length ? choice(save.game.characters) : null
+    const pool = selectableChars(save.game)
+    const char = pool.length ? choice(pool) : null
     // Elites are strong but tiered: a few gods, many killers.
     const tier = i < 3 ? 'god' : i < 10 ? 'legend' : 'killer'
     const skill = tier === 'god' ? randInt(76, 86) : tier === 'legend' ? randInt(66, 78) : randInt(56, 70)
@@ -311,8 +313,9 @@ export function driftEvoRoster(save) {
   for (const e of save.evoRoster) {
     e.skill = Math.max(48, Math.min(90, e.skill + randInt(-3, 3)))
     e.elo = Math.max(1700, e.elo + randInt(-40, 50))
-    if (chance(0.08) && save.game.characters.length) {
-      e.mainCharId = choice(save.game.characters).id
+    const pool = selectableChars(save.game)
+    if (chance(0.08) && pool.length) {
+      e.mainCharId = choice(pool).id
     }
   }
 }

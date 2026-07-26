@@ -2,6 +2,7 @@ import { clamp, hash01, chance, choice } from './util.js'
 import { newTeam, remember, chronicle, getMatchup } from './model.js'
 import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR } from './constants.js'
+import { selectableChars } from './forms.js'
 
 export function getRel(a, b) {
   return a.relationships[b.id] || 0
@@ -340,7 +341,7 @@ export function gameOpinionOf(save, p) {
   let score = 5
   // Winning is fun. Getting farmed is not.
   if (p.wins + p.losses >= 10) score += (p.wins / (p.wins + p.losses) - 0.5) * 4
-  const chars = save.game.characters
+  const chars = selectableChars(save.game)
   const main = chars.find((c) => c.id === p.mainCharId)
   if (main) {
     const others = chars.filter((c) => c.id !== main.id)

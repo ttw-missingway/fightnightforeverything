@@ -4,6 +4,7 @@ import { displayName } from '../game/util.js'
 import { formatDay } from '../game/constants.js'
 import { Portrait } from '../components/ui.jsx'
 import { charArt } from '../components/art.js'
+import { selectableChars, formsOf, originOf } from '../game/forms.js'
 
 // The Codex: an index of every discovered technique (who found it, which
 // character it belongs to) and every character (milestones, mains, tech).
@@ -99,9 +100,16 @@ function TechniqueIndex({ save }) {
 
 function CharacterIndex({ save }) {
   const players = Object.values(save.players).filter((p) => !p.npc)
+  // The index shows the whole cast, forms included — they're part of the game
+  // and people talk about them — but ordered under the character who turns
+  // into them, and marked, because a form has no mains of its own by
+  // definition and an unexplained empty "Mains (0)" reads as a bug.
+  const ordered = selectableChars(save.game)
+    .flatMap((c) => [c, ...formsOf(save.game, c.id)])
   return (
     <div className="grid2">
-      {save.game.characters.map((c) => {
+      {ordered.map((c) => {
+        const origin = originOf(save.game, c)
         const mains = players.filter((p) => p.mainCharId === c.id && p.isRegular)
           .sort((a, b) => (b.charSkill[c.id] || 0) - (a.charSkill[c.id] || 0))
         const innovs = save.innovations.filter((i) => i.charId === c.id)
@@ -115,15 +123,20 @@ function CharacterIndex({ save }) {
               </span>
               <span className="pill">{c.archetype}</span>
             </div>
+            {origin && (
+              <p className="gold small" style={{ margin: '2px 0 4px' }}>
+                ⟳ A form of {origin.name} — not on character select. Reached mid-round, gone at the bell.
+              </p>
+            )}
             <p className="dim small">
               difficulty {c.difficulty} · popularity {c.popularity}
               {(c.tags || []).map((t) => <span key={t} className="pill on" style={{ marginLeft: 6 }}>{t}</span>)}
             </p>
             {c.description && <p className="small dim">{c.description}</p>}
 
-            <h4>Mains ({mains.length})</h4>
-            {mains.length === 0 && <p className="dim small">Nobody mains {c.name} yet.</p>}
-            {mains.slice(0, 6).map((p) => (
+            {!origin && <h4>Mains ({mains.length})</h4>}
+            {!origin && mains.length === 0 && <p className="dim small">Nobody mains {c.name} yet.</p>}
+            {!origin && mains.slice(0, 6).map((p) => (
               <div className="row spread" key={p.id} style={{ padding: '2px 0' }}>
                 <span className="small">{displayName(p, save)}</span>
                 <span className="small dim">skill {Math.round(p.charSkill[c.id] || 0)}</span>

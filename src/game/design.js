@@ -22,6 +22,7 @@
 
 import { uid, choice, randInt, chance } from './util.js'
 import { comboScalingOf } from './rules.js'
+import { FORM_MOVE_TYPE } from './constants.js'
 
 // ---------- The authored vocabulary ----------
 // Ordered weakest → strongest, because generation and patching both walk
@@ -72,6 +73,12 @@ const KIND_BASE = {
   'install': { damage: 0, chip: 0, active: 1, startup: 'fast', recovery: 'average', guard: 'mid', reach: 'point-blank' },
   'movement': { damage: 0, chip: 0, active: 2, startup: 'instant', recovery: 'fast', guard: 'mid', reach: 'normal' },
   'super': { damage: 320, chip: 45, active: 7, startup: 'fast', recovery: 'very slow', guard: 'mid', reach: 'normal' },
+  // Becoming somebody else. Deals nothing on its own — the whole payoff is the
+  // kit on the other side, which is why the price is startup, safety and
+  // meter rather than damage. Unlike 'install' it carries no duration: a form
+  // holds until the bell (see forms.js), so a timer here would be a second,
+  // contradicting answer to "how long am I this character".
+  [FORM_MOVE_TYPE]: { damage: 0, chip: 0, active: 1, startup: 'average', recovery: 'average', guard: 'mid', reach: 'point-blank' },
 }
 
 /**
@@ -92,6 +99,7 @@ export const MOVE_FORMS = {
   'install': ['power aura', 'weapon draw', 'transformation', 'stance change'],
   'movement': ['dash', 'teleport', 'air dash', 'roll', 'wall jump'],
   'super': ['cinematic grab', 'screen-filling beam', 'rushdown barrage', 'unblockable slam'],
+  [FORM_MOVE_TYPE]: ['transformation', 'awakening', 'stance change', 'possession', 'gear shift', 'unsealing'],
 }
 
 export const EFFECT_TRIGGERS = ['on activate', 'on contact', 'on block', 'on whiff', 'after a duration']
@@ -115,9 +123,13 @@ export function defaultDescriptors(type) {
     guard: KIND_BASE[type]?.guard ?? 'mid',
     reach: KIND_BASE[type]?.reach ?? 'normal',
     onBlock: 'minus',
-    cost: type === 'super' ? 'full bar' : 'none',
+    cost: type === 'super' ? 'full bar' : type === FORM_MOVE_TYPE ? 'half bar' : 'none',
     duration: ['set up', 'trap', 'install'].includes(type) ? 'normal' : 'none',
     effects: [],
+    // Which character this turns you into. Only meaningful on a form change,
+    // and NEVER rolled by generation — a form is a deliberate authoring act,
+    // so a generated kit can hold the move and simply point nowhere.
+    ...(type === FORM_MOVE_TYPE ? { becomes: null } : {}),
   }
 }
 
@@ -328,6 +340,7 @@ export const MOVE_NAMES_BY_TYPE = {
   'install': ['Limit Break', 'Second Sunrise', 'Bloodline Awakening', 'Overclock', 'Eclipse Mode'],
   'movement': ['Ghost Step', 'Vapor Trail', 'Blink Cancel', 'Moonwalk', 'Rift Skip'],
   'super': ['Grand Finale', 'Thousand Cranes', 'Apocalypse Bloom', 'Curtain Call', 'Big Bang Encore'],
+  [FORM_MOVE_TYPE]: ['Shed the Skin', 'Second Face', 'Open the Cage', 'Devil Hour', 'Unseal', 'Break the Vow'],
 }
 
 export function generateMoveNameForType(type) {

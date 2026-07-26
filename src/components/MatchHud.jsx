@@ -40,12 +40,24 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
   const st = state || (hud && shown > 0 ? hud[shown - 1] : FRESH)
   const hasBars = !!hud
 
-  const charAName = m.charAName ?? m.aChar
-  const charBName = m.charBName ?? m.bChar
-  const chA = save.game.characters.find((c) => c.id === m.charAId)
-    || save.game.characters.find((c) => c.name === charAName)
-  const chB = save.game.characters.find((c) => c.id === m.charBId)
-    || save.game.characters.find((c) => c.name === charBName)
+  const pickedAName = m.charAName ?? m.aChar
+  const pickedBName = m.charBName ?? m.bChar
+  const pickedA = save.game.characters.find((c) => c.id === m.charAId)
+    || save.game.characters.find((c) => c.name === pickedAName)
+  const pickedB = save.game.characters.find((c) => c.id === m.charBId)
+    || save.game.characters.find((c) => c.name === pickedBName)
+
+  // A transformed fighter is a DIFFERENT character for as long as the form is
+  // up, so the sprite and the name follow the story rather than the pick. The
+  // snapshot carries the live form per line (`fA`/`fB`), which is what lets a
+  // replayed VOD change back at the bell exactly where the text says it does.
+  // Anything recorded before forms existed has no `fA`, and reads as the pick.
+  const formA = st.fA ? save.game.characters.find((c) => c.id === st.fA) : null
+  const formB = st.fB ? save.game.characters.find((c) => c.id === st.fB) : null
+  const chA = formA || pickedA
+  const chB = formB || pickedB
+  const charAName = formA?.name ?? pickedAName
+  const charBName = formB?.name ?? pickedBName
 
   const stage = m.stageName ? save.game.stages.find((s) => s.name === m.stageName) : null
   const backdrop = stageArt(stage, m.stageName ?? `${m.aId ?? m.aName}|${m.bId ?? m.bName}`)

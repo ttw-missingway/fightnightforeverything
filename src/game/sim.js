@@ -3,6 +3,7 @@ import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayO
 import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
+import { selectableChars } from './forms.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
 import { narrateSet } from './fight.js'
@@ -63,7 +64,9 @@ function charAppeal(save, player, char) {
 }
 
 export function pickMainChar(save, player) {
-  const chars = save.game.characters
+  // Forms are not on the character select screen — you reach one by pressing
+  // a button mid-round, so nobody can main one.
+  const chars = selectableChars(save.game)
   if (!chars.length) return null
   let best = null
   let bestScore = -Infinity
@@ -90,7 +93,7 @@ function settleThreshold(player) {
 // Today's lab character: mostly something untried, sometimes a second look
 // at one that's been working.
 function pickExplorationChar(save, player) {
-  const chars = save.game.characters
+  const chars = selectableChars(save.game)
   if (!chars.length) return null
   const untried = chars.filter((c) => !player.exploredChars.includes(c.id))
   const pool = untried.length && chance(0.7) ? untried : chars
@@ -154,7 +157,7 @@ function maybePocketPickup(save, player) {
   if (!player.settledMain || !player.mainCharId) return
   if ((player.pocketPicks || []).length >= 3) return
   if (!chance(0.0004 * (player.personal.learning + player.personal.innovation) + (player.personal.adaptation ?? 5) * 0.0011)) return
-  const options = save.game.characters.filter(
+  const options = selectableChars(save.game).filter(
     (ch) => ch.id !== player.mainCharId && !(player.pocketPicks || []).includes(ch.id))
   if (!options.length) return
   player.pocketPicks = [...(player.pocketPicks || []), choice(options).id]
@@ -633,6 +636,7 @@ function runMoneyMatch(save, mm, present, events) {
     watcherCount: watchers.length,
     marquee: true, spice: 3,
     rules: save.game.rules,
+    game: save.game, // the engine needs the cast to resolve form changes
     seed: randInt(1, 2147483646),
   })
   // The stare-down before the sticks are even plugged in.
@@ -1067,6 +1071,7 @@ export function simHour(save) {
         stageName: stage?.name,
         spice: grudge ? 2 : 1,
         rules: save.game.rules,
+        game: save.game,
         seed: randInt(1, 2147483646),
       })
       const narration = nar.lines

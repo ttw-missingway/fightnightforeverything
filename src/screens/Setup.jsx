@@ -9,6 +9,7 @@ import RosterEditor from '../components/RosterEditor.jsx'
 import { BudgetBar } from '../components/editors.jsx'
 import { difficultyOf } from '../game/constants.js'
 import { arcadeBuildCost, startingBudget } from '../game/economy.js'
+import { selectableChars } from '../game/forms.js'
 
 const STEPS = [
   ['basics', 'Basics'],
@@ -35,7 +36,9 @@ export default function Setup() {
   })
 
   const stepIdx = STEPS.findIndex(([k]) => k === step)
-  const charCount = draft.game.characters.length
+  // Selectable characters only. A cast of one fighter and one of their forms
+  // is a game with a single pick in it, which is not a fighting game.
+  const charCount = selectableChars(draft.game).length
   const consequential = draft.settings.mode !== 'sandbox'
   const overBudget = consequential && arcadeBuildCost(draft) > startingBudget(draft)
   // The cast you create IS the cast you follow — everyone else is filler who
@@ -86,7 +89,7 @@ export default function Setup() {
               </li>
             )}
           </ul>
-          {charCount < 2 && <p className="red">You need at least 2 characters in the game's roster to start.</p>}
+          {charCount < 2 && <p className="red">You need at least 2 selectable characters in the game's roster to start (forms don't count — nobody can pick one).</p>}
           {createdCount < 1 && (
             <p className="red">
               Create at least one player. They're who this run is about — the rest of the room fills

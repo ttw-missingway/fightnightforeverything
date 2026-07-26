@@ -96,9 +96,15 @@ export const ARCHETYPES = [
   'Weapon Master', 'Aerial', 'Stance Switch', 'Counter-Puncher',
 ]
 
+// The move type that turns one character into another. It lives here rather
+// than in design.js because forms.js needs it and must not depend on the
+// design content module — see src/game/forms.js.
+export const FORM_MOVE_TYPE = 'form change'
+
 export const MOVE_TYPES = [
   'projectile', 'melee', 'light', 'heavy', 'set up', 'trap',
   'anti-air', 'command grab', 'counter', 'install', 'movement', 'super',
+  FORM_MOVE_TYPE,
 ]
 
 export const GENDERS = ['woman', 'man', 'non-binary']

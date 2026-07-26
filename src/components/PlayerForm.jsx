@@ -9,6 +9,7 @@ import { randomIdentity, randomPreferences } from '../game/generate.js'
 import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHES, VOICE_QUIRKS } from '../game/dialogue.js'
 import { SpritePicker } from './SpritePicker.jsx'
 import { PLAYER_SPRITE_CATALOG, playerArtFor } from './art.js'
+import { selectableChars } from '../game/forms.js'
 
 const STAT_DESC = Object.fromEntries([...PERSONAL_STATS, ...SOCIAL_STATS])
 const uiVal = (v) => Math.round((v || 0) / STAT_UNIT)
@@ -146,7 +147,7 @@ export default function PlayerForm({ save, player, patch }) {
               }
             })}>
               <option value="">Let them explore and find their own main</option>
-              {save.game.characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {selectableChars(save.game).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
           {player.mainCharId && (
@@ -240,11 +241,11 @@ export default function PlayerForm({ save, player, patch }) {
           <NumField label="Current mood" value={Math.round(player.mood * 10) / 10} min={0} max={10}
             onChange={(v) => patch((p) => { p.mood = v })} />
         </div>
-        {save.game.characters.length > 0 && (
+        {selectableChars(save.game).length > 0 && (
           <>
             <h4 className="dim">Character skill (0-100)</h4>
             <div className="grid3">
-              {save.game.characters.map((c) => (
+              {selectableChars(save.game).map((c) => (
                 <div className="row" key={c.id}>
                   <span className="small" style={{ minWidth: 110 }}>{c.name}</span>
                   <input type="number" min={0} max={100} value={Math.round(player.charSkill[c.id] || 0)}
