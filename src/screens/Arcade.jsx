@@ -5,6 +5,7 @@ import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
+import VenueStrip, { DayLedger } from '../components/VenueStrip.jsx'
 import MatchHud from '../components/MatchHud.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
 import { displayName } from '../game/util.js'
@@ -59,11 +60,6 @@ export default function Arcade() {
               <span className="pink">📡 {save.stream.channelName}</span>
               <span className="dim"> · {save.stream.followers} followers · {hypeLabel(save.stream.hype)}</span>
               {save.stream.peakViewers > 0 && <span className="dim"> · peak {save.stream.peakViewers} viewers</span>}
-              {save.economy && (
-                <span className={save.economy.money < 0 ? 'red' : 'green'}>
-                  {' '}· 💰 ${Math.round(save.economy.money)}
-                </span>
-              )}
             </div>
             <MoneyMatchBanner save={save} />
             {dip && (
@@ -95,6 +91,8 @@ export default function Arcade() {
           </div>
         </div>
       </div>
+
+      <VenueStrip />
 
       {revealing
         ? <LiveTournament save={save} nav={nav} />
@@ -695,6 +693,7 @@ function RecapView({ save, report, nav }) {
       <div className="grid-main">
       <div className="card">
         <h3>📋 Daily Recap — {report.dateLabel}</h3>
+        <DayLedger save={save} />
         {report.events.length === 0 && <p className="dim">A quiet day. Nobody came in.</p>}
         {report.events.map((ev, i) => <RecapEvent key={i} ev={ev} />)}
       </div>

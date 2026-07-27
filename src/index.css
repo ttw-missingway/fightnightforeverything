@@ -957,3 +957,66 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   50% { box-shadow: 0 0 14px 0 rgba(255, 77, 106, 0.45); }
 }
 @media (prefers-reduced-motion: reduce) { .danger.critical { animation: none; } }
+
+/* ---------- Venue strip ----------
+   The standing economy readout on the Arcade page. Before this the only money
+   on screen was a 12px fragment tacked onto the end of the stream stats line,
+   so runs were being lost to levers the owner never knew were there. Every
+   cell is a button that lands on the tab holding its lever — a number you
+   can't act on from where you read it is a number you learn to ignore. */
+.vstrip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 14px;
+}
+.vcell {
+  display: block; text-align: left; width: 100%;
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; cursor: pointer; color: var(--text);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.vcell:hover { border-color: var(--cyan); background: var(--card2); color: var(--text); }
+.vcell .vlabel {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 1px;
+}
+.vcell .vbig { font-size: 21px; font-weight: 700; line-height: 1.15; }
+.vcell .vunit { font-size: 12px; font-weight: 400; opacity: 0.6; margin-left: 1px; }
+.vcell .vsub { font-size: 11.5px; margin-top: 1px; }
+/* Below a comfortable width four columns crush the numbers into two lines
+   each, which reads worse than two rows of two. */
+@media (max-width: 900px) { .vstrip { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .vstrip { grid-template-columns: 1fr; } }
+
+/* A tip is not a danger. Cool blue, no pulse, no border glow — it says "here
+   is a lever you haven't set", not "you are about to lose". Sharing the
+   .danger box model keeps them aligned in the same stack without inheriting
+   the alarm styling. */
+.danger.tip {
+  background: rgba(93, 168, 255, 0.10);
+  border-color: rgba(93, 168, 255, 0.45);
+  color: var(--blue);
+}
+.danger.tip .d-detail { color: var(--text); opacity: 0.82; }
+.danger.tip .d-go { border-color: rgba(93, 168, 255, 0.6); color: var(--blue); }
+.danger.tip .d-go:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ---------- Day ledger ----------
+   The sim has always written a labelled line for every movement of money and
+   none of it was ever shown. Collapsed by default: the headline is the lesson,
+   the breakdown is there when somebody wants to know why. */
+.ledger { margin: 0 0 10px; }
+.ledger > summary {
+  cursor: pointer; list-style: none; padding: 5px 0; font-size: 14px;
+}
+.ledger > summary::-webkit-details-marker { display: none; }
+.ledger > summary::before { content: '▸ '; color: var(--dim); }
+.ledger[open] > summary::before { content: '▾ '; }
+.ledger > summary:hover { color: var(--cyan); }
+.ledger-rows {
+  margin: 4px 0 2px; padding: 6px 10px;
+  background: var(--bg2); border-radius: 6px; border: 1px solid var(--border);
+}
+.ledger-row {
+  display: flex; justify-content: space-between; gap: 12px;
+  font-size: 12.5px; padding: 2px 0;
+}
+.ledger-row + .ledger-row { border-top: 1px solid rgba(255, 255, 255, 0.05); }

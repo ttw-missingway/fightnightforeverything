@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatLocation } from '../game/constants.js'
 import { SettingsEditor, ArcadeManagement, ScheduleEditor, StaffManagement } from '../components/editors.jsx'
@@ -14,8 +14,24 @@ const TABS = [
 // handful of settings that aren't part of the game itself (that's the
 // Game Studio's job now).
 export default function Manage() {
-  const { save, mutate } = useStore()
-  const [tab, setTab] = useState('arcade')
+  const { save, mutate, screen } = useStore()
+  // The venue strip and the teaching tips deep-link to the lever they are
+  // talking about, so land on that tab rather than always on 'arcade'. A tip
+  // that says "hire someone" and then drops you one tab away from hiring is
+  // most of the way back to the problem this UI pass exists to fix.
+  const [tab, setTab] = useState(
+    TABS.some(([k]) => k === screen.tab) ? screen.tab : 'arcade')
+  // The banner sits above the tab content on every screen, so a tip can be
+  // clicked while Manage is ALREADY open — in which case this component never
+  // remounts and the initialiser above never runs again.
+  //
+  // Depend on the screen OBJECT, not on screen.tab. nav() builds a fresh object
+  // every time, but the tab string is often identical: open a tip for staff,
+  // wander over to Settings, click the same tip again, and a [screen.tab] dep
+  // sees no change and leaves you on Settings staring at nothing to do.
+  useEffect(() => {
+    if (screen.tab && TABS.some(([k]) => k === screen.tab)) setTab(screen.tab)
+  }, [screen])
 
   return (
     <div>

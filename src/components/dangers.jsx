@@ -1,5 +1,6 @@
 import { useStore } from '../state/store.jsx'
 import { runDangers } from '../game/danger.js'
+import { venueTips } from '../game/venue.js'
 
 /**
  * The "you are about to lose" banner.
@@ -19,7 +20,12 @@ import { runDangers } from '../game/danger.js'
 export default function DangerBanner() {
   const { save, nav } = useStore()
   const dangers = runDangers(save)
-  if (!dangers.length) return null
+  // Levers that were never set. These fire EARLIER than the rows above — while
+  // there is still time — and they name a thing to do rather than a countdown.
+  // Styled apart on purpose: a tip that looks like an alarm gets dismissed like
+  // one, and the point is that these are the friendly warning.
+  const tips = venueTips(save)
+  if (!dangers.length && !tips.length) return null
   return (
     <div className="dangers">
       {dangers.map((d) => (
@@ -33,6 +39,18 @@ export default function DangerBanner() {
           {d.to && (
             <button className="d-go" onClick={() => nav(d.to)}>Go →</button>
           )}
+        </div>
+      ))}
+      {tips.map((t) => (
+        <div key={t.key} className="danger tip">
+          <span className="d-icon">{t.icon}</span>
+          <div>
+            <div className="d-title">{t.title}</div>
+            <div className="d-detail">{t.detail}</div>
+          </div>
+          <button className="d-go" onClick={() => nav(t.to, t.tab ? { tab: t.tab } : {})}>
+            {t.cta} →
+          </button>
         </div>
       ))}
     </div>
