@@ -734,13 +734,15 @@ export function migrateSave(save) {
     // Hygiene grew up into reliability (same slot, new meaning); the old joke
     // lives on as the `slob` quirk on the rare gross passer-through.
     if (p.social && p.social.reliability == null) {
-      p.social.reliability = p.social.hygiene ?? 5
+      p.social.reliability = p.social.hygiene ?? 0
       delete p.social.hygiene
     }
-    // Stats added after this player was made land at neutral.
+    // Stats added after this player was made land at neutral — and since the
+    // temperament rework, neutral is 0. Handing them 5 was two and a half
+    // creation points of free investment nobody chose.
     if (p.personal) {
-      p.personal.adaptation ??= 5
-      p.personal.presence ??= 5
+      p.personal.adaptation ??= 0
+      p.personal.presence ??= 0
     }
     // One FAVORITE each now — tastes are identity, not a shopping list.
     if (Array.isArray(p.foods) && p.foods.length > 1) p.foods = p.foods.slice(0, 1)

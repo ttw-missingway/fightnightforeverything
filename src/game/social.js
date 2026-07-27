@@ -1,7 +1,7 @@
 import { clamp, hash01, chance, choice } from './util.js'
 import { newTeam, remember, chronicle, getMatchup } from './model.js'
 import { TEAM_WORDS } from './names.js'
-import { DAYS_PER_YEAR } from './constants.js'
+import { DAYS_PER_YEAR, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
 
 export function getRel(a, b) {
@@ -238,8 +238,8 @@ function maybeBetrayal(save, events) {
         return m && getRel(p, m) > 30 && getRel(m, p) > 20
       }) || avgElo(t) > avgElo(team) + 80))
     if (!suitors.length) continue
-    let c = 0.0012 * Math.max(0.2, (10 - p.personal.loyalty) / 6)
-    if (p.social.persona >= 7) c *= 1.5 // big egos chase bigger stages
+    let c = 0.0012 * Math.max(0.2, (10 - statLevel(p.personal.loyalty)) / 6)
+    if (p.social.persona >= 4) c *= 1.5 // big egos chase bigger stages
     if (!chance(c)) continue
 
     const dest = suitors.reduce((a, b) => (avgElo(a) >= avgElo(b) ? a : b))
@@ -318,7 +318,7 @@ export function dailyTeamDynamics(save, events) {
     if (!team) continue
     let c = 0.003
     if (team.memberIds.length < 4) c += 0.008
-    if (p.social.persona >= 8) c += 0.004
+    if (p.social.persona >= 6) c += 0.004
     c *= Math.max(0.3, 1.3 - p.personal.loyalty * 0.09)
     if (chance(c)) {
       team.memberIds = team.memberIds.filter((id) => id !== p.id)
@@ -392,7 +392,7 @@ export function arcadeOpinionOf(save, p) {
   score -= (save.arcade.letdowns || 0) * 5
   score += ((save.staffing?.morale ?? 70) - 60) * 0.012
   const tokenPrice = save.arcade.prices?.token ?? 1
-  score -= Math.max(0, tokenPrice - (0.9 + (p.social?.income ?? 5) * 0.18)) * 0.8
+  score -= Math.max(0, tokenPrice - (0.9 + statLevel(p.social?.income) * 0.18)) * 0.8
   // A room full of bad blood is miserable to be in — a toxic scene poisons how
   // everyone feels about the ARCADE itself, not just each other. This is what
   // makes the internet stop loving your place when the vibe curdles.

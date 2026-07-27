@@ -7,6 +7,7 @@
 // years start walking away, and you have to keep them engaged or replace them.
 
 import { clamp, chance, displayName } from './util.js'
+import { statLevel } from './constants.js'
 import { chronicle, remember } from './model.js'
 
 export const PASSION_MAX = 100
@@ -46,7 +47,7 @@ export function passionDaily(save, player, ctx) {
   if (rel < 35) decay += (35 - rel) * 0.004
   // A toxic, hateful scene is exhausting — it burns people out faster.
   decay += (save.scene?.toxicity || 0) * 0.09
-  decay *= clamp(1.3 - (player.personal.loyalty ?? 5) * 0.06, 0.5, 1.3)
+  decay *= clamp(1.3 - statLevel(player.personal.loyalty) * 0.06, 0.5, 1.3)
   bumpPassion(player, -decay)
 
   if (ctx.attendedToday) {

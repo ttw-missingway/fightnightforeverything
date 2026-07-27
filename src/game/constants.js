@@ -90,6 +90,27 @@ export const temperamentOf = (key, list = TEMPERAMENTS) => list.find((t) => t.ke
 export const STAT_UNIT = 2 // internal per creation point
 export const STAT_MAX_POINTS = 5 // per-stat cap, every difficulty
 
+/**
+ * Re-express a sparse point-buy stat on the 1–10 scale the old formulas expect.
+ *
+ * The comment above is half true: the NUMERIC range survived the temperament
+ * rework, but the distribution did not. Stats used to be rolled and sat near 5;
+ * now every stat starts EMPTY and you spend a small budget, so a roster is
+ * mostly zeroes with a few spikes and the mean of any one stat is about 1.2.
+ *
+ * That silently inverted every formula shaped like `(10 - stat)` or `stat - 5`.
+ * Those read an unspent stat as the WORST possible value, when the point-buy
+ * design means it should read as unremarkable — so the average arcade regular
+ * came out maximally disloyal, maximally tilted, maximally rude and maximally
+ * prone to choking, all at once, without anyone having chosen any of it.
+ *
+ * statLevel puts an unspent stat back on the old average of 5 and lets every
+ * point spent read as above average. Use it wherever ABSENCE of a stat would
+ * otherwise be a penalty. Do NOT use it for plain bonus terms (`+ mojo * 0.8`)
+ * — there, zero correctly means "no bonus", which is what the point buy is for.
+ */
+export const statLevel = (v) => 5 + (v || 0) / 2
+
 export const ARCHETYPES = [
   'Shoto', 'Grappler', 'Zoner', 'Rushdown', 'Charge', 'Puppet',
   'Setplay', 'Footsies', 'Mix-up', 'Glass Cannon', 'All-Rounder', 'Big Body',

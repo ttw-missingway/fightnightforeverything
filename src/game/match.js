@@ -1,7 +1,7 @@
 import { clamp, rand, displayName } from './util.js'
 import { getMatchup, awardMilestone } from './model.js'
 import { areRivals, rivalOf } from './social.js'
-import { competitiveIntensity } from './constants.js'
+import { competitiveIntensity, statLevel } from './constants.js'
 
 // ---------- Character skill & learning curve ----------
 
@@ -136,7 +136,7 @@ export function performance(save, player, charId) {
   }
   // Mojo: bonus in a good mood, mild penalty in a foul one.
   if (player.mood >= 7) perf += player.personal.mojo * 0.8
-  else if (player.mood <= 2) perf -= (10 - player.personal.temperance) * 0.4
+  else if (player.mood <= 2) perf -= (10 - statLevel(player.personal.temperance)) * 0.4
   // X-factor: random spike potential.
   perf += rand() * player.personal.xfactor * 1.2
   perf += techniqueBonus(save, player, charId)
@@ -265,9 +265,9 @@ export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mai
   save.patchGames = (save.patchGames || 0) + 1 // every set is balance data
 
   // Temperance dampens mood swings from game results.
-  const swing = (10 - loser.personal.temperance) * 0.25
+  const swing = (10 - statLevel(loser.personal.temperance)) * 0.25
   loser.mood = clamp(loser.mood - swing, 0, 10)
-  winner.mood = clamp(winner.mood + (10 - winner.personal.temperance) * 0.2, 0, 10)
+  winner.mood = clamp(winner.mood + (10 - statLevel(winner.personal.temperance)) * 0.2, 0, 10)
 
   // Skill growth: dominance for the winner, determination for the loser — on the
   // character they actually played this set.

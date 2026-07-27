@@ -6,7 +6,7 @@
 
 import { clamp, chance, choice, randInt, uid, hash01 } from './util.js'
 import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
-import { difficultyOf, absDayOf, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS } from './constants.js'
+import { difficultyOf, absDayOf, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
 import { chronicle } from './model.js'
 import { worldRentMult } from './worldevents.js'
 
@@ -362,7 +362,7 @@ export function tokenDeterrence(save, p) {
   // thinks HARD about a $2 token. Pricing against your actual room's wallets
   // is the early game: squeeze past what your crowd carries and the machines
   // sit quiet no matter how much they love the place.
-  const comfort = 0.9 + (p.social?.income ?? 5) * 0.18 // $/game they don't think about
+  const comfort = 0.9 + statLevel(p.social?.income) * 0.18 // $/game they don't think about
   return clamp((price - comfort) * 0.38, 0, 0.6)
 }
 

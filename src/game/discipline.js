@@ -8,7 +8,7 @@
 // spiral. Pure engine, node-runnable.
 
 import { clamp, displayName } from './util.js'
-import { absDayOf } from './constants.js'
+import { absDayOf, statLevel } from './constants.js'
 import { chronicle } from './model.js'
 import { getRel, shiftRel } from './social.js'
 import { bumpPassion } from './career.js'
@@ -61,11 +61,13 @@ export function warnableBehaviors(save, player) {
 // Prideful = big polarizing persona, thin skin, a dominant streak.
 function receptiveness(p) {
   const s = p.social
-  return clamp((s.sportsmanship + s.politeness + (p.personal.temperance ?? 5) + s.community) / 40, 0, 1)
+  return clamp((statLevel(s.sportsmanship) + statLevel(s.politeness) +
+    statLevel(p.personal.temperance) + statLevel(s.community)) / 40, 0, 1)
 }
 function pride(p) {
   const s = p.social
-  return clamp((s.persona + (10 - s.politeness) + (10 - s.sportsmanship) + p.personal.dominance) / 40, 0, 1)
+  return clamp((statLevel(s.persona) + (10 - statLevel(s.politeness)) +
+    (10 - statLevel(s.sportsmanship)) + statLevel(p.personal.dominance)) / 40, 0, 1)
 }
 
 /**

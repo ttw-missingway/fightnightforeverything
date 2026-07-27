@@ -7,7 +7,7 @@
 
 import { clamp, rand, randInt, choice, chance, displayName } from './util.js'
 import { CHAT_NAME_PARTS, CHAT_LINES } from './names.js'
-import { difficultyOf } from './constants.js'
+import { difficultyOf, statLevel } from './constants.js'
 import { upsetSeverityOf } from './match.js'
 import { bumpPassion } from './career.js'
 import { chronicle } from './model.js'
@@ -71,7 +71,7 @@ function noteBeliefSwing(save, ref, delta, viewers) {
 // A steady head doesn't spiral after a bad night. Composure was already the
 // innate half of stage nerve; this makes it the thing that protects the earned
 // half too, so the two read as one attribute.
-const lossDamp = (ref) => clamp(1.25 - (ref.personal?.composure ?? 5) * 0.075, 0.5, 1.25)
+const lossDamp = (ref) => clamp(1.25 - statLevel(ref.personal?.composure) * 0.075, 0.5, 1.25)
 
 // How well a player actually performed, 0..1, read off the real scoreline —
 // a 3–0 sweep is 1, a 3–2 war is ~0.67, getting swept is 0.

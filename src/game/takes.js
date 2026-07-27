@@ -14,7 +14,7 @@
 // Imports only util/constants — sim.js, dialogue and the feed all read it.
 
 import { clamp, choice, chance, randInt, uid } from './util.js'
-import { absDayOf } from './constants.js'
+import { absDayOf, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
 
 // What a take can be about, and the stances available for each.
@@ -117,7 +117,7 @@ export function seedTakes(save, player) {
   }
   if (chance(0.45)) {
     pushTake(player, 'arcade', 'here',
-      (player.social?.politeness ?? 5) >= 5 ? choice(['home', 'the best room in town'])
+      (player.social?.politeness || 0) >= 4 ? choice(['home', 'the best room in town'])
         : choice(['a ripoff', 'filthy']), absDay)
   }
   if (chance(0.35) && (player.foods || []).length) {
@@ -140,7 +140,7 @@ export function noteMatchOutcome(save, player, oppCharId, won) {
   const absDay = absDayOf(save.day, save.year)
   if (!won) {
     // Salt scales with how badly they take things.
-    const salt = 0.18 + (10 - (player.personal?.composure ?? 5)) * 0.022
+    const salt = 0.18 + (10 - statLevel(player.personal?.composure)) * 0.022
     if (chance(salt)) {
       // Confirmation bias: losing to something you ALREADY distrust confirms
       // it far harder than the first loss suggested it. This is what turns a

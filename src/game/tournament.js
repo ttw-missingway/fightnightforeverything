@@ -1,5 +1,5 @@
 import { uid, chance, rand, randInt, choice, displayName, clamp } from './util.js'
-import { formatDay } from './constants.js'
+import { formatDay, statLevel } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
 import { narrateSet } from './fight.js'
@@ -33,7 +33,7 @@ function entrantPerformance(save, e, context = 'tournament') {
     // (streamed sets, deep tournament runs). A monster who's never performed in
     // front of a crowd leaves a huge chunk of their skill in the lab; a
     // seasoned competitor barely flinches. EVO is the brightest light there is.
-    const composure = e.ref.personal.composure ?? 5
+    const composure = statLevel(e.ref.personal.composure)
     const belief = e.ref.belief ?? 0
     const nerve = composure * 0.6 + belief * 0.06 // ~0..12
     const stageWeight = context === 'evo' ? 1.4 : 0.55
@@ -83,7 +83,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
   }
   if (loser.kind === 'arcade') {
     loser.ref.losses += 1
-    loser.ref.mood = clamp(loser.ref.mood - (10 - loser.ref.personal.temperance) * 0.2, 0, 10)
+    loser.ref.mood = clamp(loser.ref.mood - (10 - statLevel(loser.ref.personal.temperance)) * 0.2, 0, 10)
     gainSkill(save, loser.ref, loser.ref.mainCharId, 0.15 + loser.ref.personal.determination * 0.06)
     recordCharResult(loser.ref, loser.charId, false)
   }
@@ -137,7 +137,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
       if (wl) postMatch.push({ speaker: winner.name, text: wl })
     }
     if (chance(0.55)) {
-      const goodSport = loser.ref.social.sportsmanship >= 6
+      const goodSport = loser.ref.social.sportsmanship >= 4
       const ll = speak(loser.ref, goodSport ? 'ggLossGood' : 'ggLossBad', { t: winner.name, to: winner.ref, self: loser.name })
       if (ll) postMatch.push({ speaker: loser.name, text: ll })
     }
@@ -457,7 +457,7 @@ export function runExhibition(save) {
 function dropoutChance(p) {
   // Life gets in the way of the UNRELIABLE. The put-together player has never
   // missed a bracket in their life; the flake no-shows their own grudge match.
-  let c = 0.035 + (5 - p.mood) * 0.008 + Math.max(0, 8 - (p.social?.reliability ?? 5)) * 0.011
+  let c = 0.035 + (5 - p.mood) * 0.008 + Math.max(0, 8 - statLevel(p.social?.reliability)) * 0.011
   return clamp(c, 0.01, 0.16)
 }
 

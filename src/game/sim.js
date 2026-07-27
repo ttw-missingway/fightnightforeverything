@@ -1,5 +1,5 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf, statLevel } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
@@ -88,7 +88,7 @@ function explorationGames(player) {
 
 // How many games it takes before they commit: loyal players settle fast.
 function settleThreshold(player) {
-  return Math.round(8 + (10 - player.personal.loyalty) * 2.2)
+  return Math.round(8 + (10 - statLevel(player.personal.loyalty)) * 2.2)
 }
 
 // Today's lab character: mostly something untried, sometimes a second look
@@ -170,7 +170,7 @@ function maybeSwitchMain(save, player, events) {
   const rec = player.charRecord?.[player.mainCharId]
   const winning = rec && rec.w + rec.l >= 8 && rec.w > rec.l
   const frustration = (player.mood < 4 ? 1.6 : 1) * (winning ? 0.4 : 1)
-  if (!chance((10 - player.personal.loyalty) * 0.004 * frustration)) return
+  if (!chance((10 - statLevel(player.personal.loyalty)) * 0.004 * frustration)) return
   const alt = pickMainChar(save, player)
   if (alt && alt !== player.mainCharId) {
     const oldChar = save.game.characters.find((c) => c.id === player.mainCharId)
@@ -194,7 +194,7 @@ function attendChance(save, player) {
   const wd = weekdayOf(save.day)
   // Weekends draw everyone; weekdays belong to the RELIABLE — the put-together
   // player is the one keeping your Tuesday room alive.
-  p += wd === 0 || wd === 6 ? 0.16 : (-0.05 + (player.social?.reliability ?? 5) * 0.006)
+  p += wd === 0 || wd === 6 ? 0.16 : (-0.05 + statLevel(player.social?.reliability) * 0.006)
   // A hated (or beloved) patch changes how much anyone wants to play.
   if (save.settings.mode !== 'sandbox') p += (save.patchMorale || 0) * 0.004
   for (const f of player.foods) if (save.arcade.foods.includes(f)) p += 0.03
@@ -582,7 +582,7 @@ function makeBeats(save, group, where, results) {
     }
   }
 
-  const kind = group.find((p) => p.social.politeness >= 7)
+  const kind = group.find((p) => p.social.politeness >= 4)
   if (kind && group.length >= 2 && chance(0.3)) {
     const target = choice(group.filter((p) => p !== kind))
     const dm = 0.15 + target.social.sensitivity * 0.05
@@ -592,7 +592,7 @@ function makeBeats(save, group, where, results) {
     say(kind, 'compliment', { t: pName(save, target), to: target, c: char?.name }, `(+${dm.toFixed(1)} mood for ${pName(save, target)})`)
   }
 
-  const loudmouth = group.find((p) => p.social.politeness <= 3 && p.personal.dominance >= 6)
+  const loudmouth = group.find((p) => p.social.politeness === 0 && p.personal.dominance >= 4)
   if (loudmouth && group.length >= 2 && chance(0.3)) {
     const target = choice(group.filter((p) => p !== loudmouth))
     shiftRel(target, loudmouth, -1.5)
@@ -628,7 +628,7 @@ function makeBeats(save, group, where, results) {
     say(p, 'memoryToFace', { mem: memText, t: subjName, to: subject })
     // And they answer for it — owning it or flatly disputing the retelling.
     if (subject && chance(0.6)) {
-      const owns = (subject.social?.sportsmanship ?? 5) >= 5
+      const owns = (subject.social?.sportsmanship || 0) >= 2
       say(subject, owns ? 'memoryConfirm' : 'memoryDeny', { t: pName(save, p), to: p })
     }
   } else {
@@ -752,7 +752,7 @@ function runMoneyMatch(save, mm, present, events) {
   const postMatch = []
   const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save.day, save.year) })
   if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
-  const goodSport = loser.social.sportsmanship >= 6
+  const goodSport = loser.social.sportsmanship >= 4
   const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save.day, save.year) })
   if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
 
@@ -1240,7 +1240,7 @@ export function simHour(save) {
         if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
       }
       if (chance(0.55)) {
-        const goodSport = loser.social.sportsmanship >= 6 || (loser.social.sportsmanship >= 4 && loser.mood >= 6)
+        const goodSport = loser.social.sportsmanship >= 4 || (loser.social.sportsmanship >= 2 && loser.mood >= 6)
         const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save.day, save.year) })
         if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
       }

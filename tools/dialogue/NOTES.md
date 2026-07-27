@@ -354,3 +354,59 @@ history), `staff:new` (no hire date). `dormantReqs()` reports these.
 Others are gated on things only the player does — stocking concession, running
 into the red, shipping a system change or a new character, letting the place get
 shut down. Those are correct to be rare; they are not dead.
+
+### The full stale-scale audit (2026-07-27)
+
+The three bugs above were found because they blocked casting. They were not the
+only ones — the same class was throughout the engine, so the whole codebase got
+swept for it. `statLevel` in `constants.js` is the fix and the explanation.
+
+The temperament rework kept the internal 0–10 stat range but replaced a ROLL
+(mean ~5) with a sparse point buy (mean ~1.2, mostly zeroes). Every formula
+shaped like `(10 - stat)` or `stat - 5` therefore read an unspent stat as the
+worst possible value. Compounded across the engine, the average regular came
+out maximally disloyal, maximally tilted, maximally rude, maximally prone to
+choking, maximally likely to be poached, and too broke to afford a $1 token —
+none of it chosen by anyone.
+
+Fixed (inversions and old-midpoint centering, now via `statLevel`):
+
+| where | was | effect on an unspent stat |
+|---|---|---|
+| `sim.settleThreshold` | `(10 - loyalty) * 2.2` | 30 games to commit to a main, vs ~19 intended |
+| `sim` main-switching | `(10 - loyalty) * 0.004` | maximum churn |
+| `social` team poaching | `(10 - loyalty) / 6` | maximum susceptibility |
+| `career` passion decay | `1.3 - loyalty * 0.06` | fastest possible burnout |
+| `match` mood swings ×2 | `(10 - temperance)` | maximum tilt both ways |
+| `tournament` mood swing | `(10 - temperance)` | same |
+| `tournament` the choke | `composure ?? 5`, `11 - nerve` | everyone chokes on the big stage |
+| `stream` loss damage | `1.25 - composure * 0.075` | maximum on-stream damage |
+| `tournament` dropouts | `8 - reliability` | maximum bracket no-shows |
+| `sim` weekday turnout | `-0.05 + reliability * 0.006` | worst weekday attendance |
+| `takes` post-loss salt | `(10 - composure)` | 38% saltier than intended |
+| `discipline` receptiveness/pride | raw sums / 40 | every player scored as a prideful problem case |
+| `economy` + `social` token comfort | `0.9 + income * 0.18` | **comfort $0.90 against a $1 default price — the median regular was priced out at the DEFAULT setting** |
+
+Also lowered thresholds that needed 3–4 of a 5-point budget on one exact stat
+(`>= 7`, `>= 8`) to investment levels, and stopped the `adaptation`/`presence`
+save migration handing out 5 (two and a half free creation points).
+
+Deliberately NOT changed: plain bonus terms (`+ mojo * 0.8`, the
+aptitude/mastery/stamina learning rate, `adaptation` counterpicking). There zero
+correctly means "no bonus" — that is what the point buy is FOR — and the
+difficulty ladder was calibrated against them. See
+`difficulty-calibration-2026-07-25`.
+
+Measured over 4 runs × 300 days, before → after:
+
+| | before | after |
+|---|---|---|
+| players settled on a main | 22.3 | 27.3 |
+| median passion | 44.6 | **61.8** |
+| arcade cash | $84 | **$162** |
+| warm pairs (rel ≥ 20) | 11.8 | 15.3 |
+| elo spread | 320 | 408 |
+| distinct voices on a 29-player roster | 1 | **10** |
+
+The passion and cash numbers are the ones to watch: burnout and the money
+squeeze were both partly this bug, not the difficulty curve.
