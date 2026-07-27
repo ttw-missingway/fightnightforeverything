@@ -91,6 +91,14 @@ export function roleModelPicks(save, exclude = null) {
   if (regs.length < 3) return {} // no pecking order worth copying yet
   const top = regs.slice(0, Math.max(2, Math.ceil(regs.length * 0.2)))
   const out = {}
+  // Piggybacked on the scan we are already doing: how many people main each
+  // character, and the roster average. metaAppeal runs per character, so a
+  // second full-roster pass in there would be a scan per character per player.
+  const crowd = {}
+  for (const p of regs) crowd[p.mainCharId] = (crowd[p.mainCharId] || 0) + 1
+  const chars = (save.game?.characters || []).filter((c) => !c.formOf)
+  out.__crowd = crowd
+  out.__avgCrowd = chars.length ? regs.length / chars.length : 0
   for (let i = 0; i < top.length; i++) {
     // The very best player is the one being copied; the pull tails off down
     // the list. Respect and glory sharpen it — a champion people TALK about
@@ -135,9 +143,26 @@ export function metaAppeal(save, player, char, models = null) {
     score -= pull * per.innovation * 0.85
   }
 
+  // ---- unexplored ground ----
+  // The discovery rate strongly favours characters nobody has taken apart
+  // (see techFrontier in sim.js — a lone specialist rolls at ~11x the rate of
+  // somebody in the crowd on a picked-over meta pick). That reward is useless
+  // if the people who benefit from it never end up standing on it: measured
+  // over ten runs, high-innovation players sat on characters exactly as
+  // crowded as everyone else's, so the multiplier never got collected.
+  //
+  // So the pull toward empty space is part of the temperament, not just the
+  // payoff for it. This is the same instinct as the tier contrarianism above
+  // seen from the other side — one is "I don't care what the list says", this
+  // is "there's something in here nobody has found yet".
+  if (per.innovation > 0 && models) {
+    const crowd = models.__crowd?.[char.id] ?? null
+    if (crowd != null) score += (models.__avgCrowd - crowd) * per.innovation * 0.14
+  }
+
   // ---- who's winning with what ----
   if (models && per.learning > 0) {
-    const clout = models[char.id] || 0
+    const clout = char.id.startsWith('__') ? 0 : (models[char.id] || 0)
     if (clout > 0) score += clout * per.learning * 0.9
   }
 
