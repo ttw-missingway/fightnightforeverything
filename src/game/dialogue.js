@@ -351,6 +351,19 @@ const LINES = {
       ],
     },
   },
+  // Answering an introduction in a room days old. `greet`'s tiers all assume
+  // shared history ("you were here last week too, yeah?"), which is a flat
+  // contradiction on day two of a brand-new arcade — and the tiers can be
+  // reached without ever having spoken, because playing a set counts as
+  // contact. So the opening gets its own, historyless.
+  openingGreet: {
+    dimension: 'energy',
+    pools: {
+      fiery: ["{t}! Right, who's got winners?", "Good to meet you, {t}. Let's get a set in.", "{t}. Yeah, come on then."],
+      neutral: ["Good to meet you, {t}.", "{t}. Yeah — first time in here for me too.", "Hey {t}. Guess we're both figuring this place out."],
+      chill: ["Hey, {t}.", "{t}. Cool.", "Alright, {t}."],
+    },
+  },
   // Saying hello to somebody you already know — entirely about how well.
   greet: {
     dimension: null,
@@ -631,6 +644,172 @@ const LINES = {
   },
   // Small talk at the counter — the game falls away for a second and people
   // are just people. This is what keeps the cast from reading as stat blocks.
+  // ---------- Opening weeks ----------
+  // A brand-new arcade is its own subject. For the first few weeks nobody has
+  // history here, so the conversation is about the ROOM — how many setups,
+  // whether the food's any good, what everyone played before they walked in.
+  // These pools exist so the opening reads like a group of strangers casing a
+  // new spot together, rather than regulars who happen to have amnesia.
+
+  // Introducing yourself in a room nobody has history in yet.
+  openingIntro: {
+    dimension: 'energy',
+    pools: {
+      fiery: [
+        "{self}. First time here too? Good — nobody's got a home-field advantage yet.",
+        "I'm {self}. Place just opened, so whatever happens in here is on us.",
+        "{self}. Been waiting for somewhere like this to open up. Let's break it in.",
+      ],
+      neutral: [
+        "{self}. Just found this place. You too?",
+        "Hey — {self}. Everyone's new here, so I don't feel so bad asking where anything is.",
+        "I'm {self}. Nobody's a regular yet. Feels weird. Good weird.",
+      ],
+      chill: [
+        "{self}. Saw the lights on, came in.",
+        "Hey. {self}. New spot. Seems alright so far.",
+        "{self}. Still working out where I like to stand.",
+      ],
+    },
+  },
+
+  // What they make of the room. {n} = setups, {x} = the arcade's name.
+  firstImpression: {
+    dimension: 'humor',
+    pools: {
+      dry: [
+        "{n} setups. It's a start.",
+        "Smells like a new cabinet in here. Enjoy it, it doesn't last.",
+        "No sticky floor yet. Give it a month.",
+        "{x}. Nobody's carved their name into anything yet. Tragic.",
+        "So this is {x}. Ceiling's higher than the last place, I'll give it that.",
+      ],
+      earnest: [
+        "I like it in here. Genuinely. Feels like it could be something.",
+        "{n} setups is enough to get a scene going. That's all you need to start.",
+        "First proper arcade round here in years. I'm just glad somebody tried.",
+        "{x} could be really good. I want it to be really good.",
+        "Whoever opened {x} — thank you. I've been driving an hour to play.",
+      ],
+      clowning: [
+        "Calling it now: I'm going to be here so much they'll charge me rent.",
+        "{n} setups and I've already claimed one. Emotionally.",
+        "This is where I peak. I can feel it. {x}, remember the name.",
+        "New arcade smell. Someone bottle it. I'd wear it.",
+      ],
+    },
+  },
+
+  // What they played before they got here. {x} = one of their other games.
+  tasteGame: {
+    dimension: 'humor',
+    pools: {
+      dry: [
+        "I came off {x}. Don't ask me my rank, I'll lie.",
+        "Spent about four years on {x}. Muscle memory's still arguing with me.",
+        "{x} player, mostly. This is a holiday.",
+      ],
+      earnest: [
+        "I mostly play {x}, honestly — but I wanted somewhere with actual people in it.",
+        "{x} is my game. Was my game. Ask me again in a month.",
+        "If anyone here plays {x}, I would genuinely love a set sometime.",
+      ],
+      clowning: [
+        "I'm nationally ranked at {x}. Nationally. In a nation of about eleven players.",
+        "Quit {x} for this. My old team thinks I'm dead. Let them.",
+        "{x} ruined my thumbs and I'd do it again.",
+      ],
+    },
+  },
+
+  // What they eat. {x} = one of their foods.
+  tasteFood: {
+    dimension: 'humor',
+    pools: {
+      dry: [
+        "I'll play anyone here for {x} money.",
+        "A place lives or dies on whether it does decent {x}. I don't make the rules.",
+        "Show me the {x} situation and I'll tell you if I'm staying.",
+      ],
+      earnest: [
+        "If they ever do {x} in here I'm never leaving.",
+        "Little thing, but — good {x} makes a room. It just does.",
+        "I'd come for the {x} alone, is what I'm saying.",
+      ],
+      clowning: [
+        "My entire personality is {x} and losing. In that order.",
+        "I will absolutely be reviewing the {x} and telling everyone.",
+        "Whole scenes have collapsed over bad {x}. I've seen it.",
+      ],
+    },
+  },
+
+  // Their taste is actually catered for — {x} is stocked or on a cabinet.
+  spotHere: {
+    dimension: 'energy',
+    pools: {
+      fiery: [
+        "They've got {x}?! Okay. OKAY. I live here now.",
+        "{x} in the corner. Whoever made that call, I owe you.",
+        "Nah, they've got {x}. That settles it, I'm not going anywhere.",
+      ],
+      neutral: [
+        "Oh, they've actually got {x}. That's a good sign.",
+        "{x}. Didn't expect that. Nice touch.",
+        "Someone thought about this — there's {x}.",
+      ],
+      chill: [
+        "...they've got {x}. Alright. I approve.",
+        "{x}'s here. Cool.",
+        "Huh. {x}. Good.",
+      ],
+    },
+  },
+
+  // …and the opposite. Mild, not a complaint — it's week one.
+  spotMissing: {
+    dimension: 'humor',
+    pools: {
+      dry: [
+        "No {x} yet. I'll survive. Barely.",
+        "Would kill for {x} in here. Just putting that out loud.",
+        "Noted absence: {x}. That's all I'll say. For now.",
+      ],
+      earnest: [
+        "Only thing missing is {x}, really. Otherwise it's great.",
+        "If they ever add {x}, tell me and I'll be here that day.",
+        "No {x} — but it's week one, I'm not going to hold it against the place.",
+      ],
+      clowning: [
+        "No {x}. I'm going to bring it up every single day until it changes.",
+        "Petition starts now: {x}. Who's signing.",
+        "The {x} shaped hole in this arcade is going to haunt me.",
+      ],
+    },
+  },
+
+  // Everyone arriving at the same time is its own kind of bond.
+  newRoomBond: {
+    dimension: 'energy',
+    pools: {
+      fiery: [
+        "Nobody in here is good YET. That's the fun part. We all start from zero.",
+        "Whoever gets good first sets the tone for this whole place. Might be me.",
+        "In a year we'll all be sick of each other. Let's enjoy the honeymoon.",
+      ],
+      neutral: [
+        "Weird, isn't it — none of us know each other's characters yet.",
+        "Nobody's got a read on anybody. Enjoy it while it lasts.",
+        "Give it six months and we'll all have nicknames we didn't choose.",
+      ],
+      chill: [
+        "No hierarchy yet. It's nice.",
+        "Everyone's just… figuring it out. I like that.",
+        "First week. Nobody's got a rival yet.",
+      ],
+    },
+  },
+
   lifeChat: {
     dimension: 'humor',
     pools: {
@@ -639,7 +818,7 @@ const LINES = {
         "My coworkers think 'labbing' is a personality disorder. They're not wrong.",
         "Rent went up again. Anyway. Who's got next.",
         "I'm told there's a world outside this building. Sounds fake.",
-        "Ordered the same thing here for three years. Don't fix what works.",
+        "Ordered the same thing at my old spot for three years. Don't fix what works.",
       ],
       earnest: [
         "Honestly? Best part of my whole week is walking through that door.",

@@ -115,6 +115,13 @@ export const MONTHS_PER_YEAR = 12
 export const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR // 336
 export const EVO_DAY = 322 // day-of-year EVO fires automatically
 
+// How long a brand-new arcade still feels brand new. For this long the floor
+// talk is mostly ABOUT the room — first impressions, what everyone played
+// before, whether the food's any good — because nobody has any history here
+// yet to talk about instead. Measured in absolute days, so it covers the
+// opening of every fresh run rather than every January.
+export const OPENING_DAYS = 24
+
 export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',

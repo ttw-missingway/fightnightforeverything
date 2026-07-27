@@ -102,7 +102,7 @@ export function pushTake(player, topic, subject, stance, absDay, delta = 12) {
  * rather than spending a month forming its first thought.
  */
 export function seedTakes(save, player) {
-  const absDay = absDayOf(save)
+  const absDay = absDayOf(save.day, save.year)
   player.takes = []
   const chars = selectableChars(save.game)
   if (chars.length) {
@@ -133,7 +133,7 @@ export function seedTakes(save, player) {
  */
 export function noteMatchOutcome(save, player, oppCharId, won) {
   if (!oppCharId) return
-  const absDay = absDayOf(save)
+  const absDay = absDayOf(save.day, save.year)
   if (!won) {
     // Salt scales with how badly they take things.
     const salt = 0.18 + (10 - (player.personal?.composure ?? 5)) * 0.022

@@ -618,7 +618,7 @@ export function remember(save, player, kind, text, opts = {}) {
   player.memories.push({
     day: save.day,
     year: save.year,
-    absDay: absDayOf(save),
+    absDay: absDayOf(save.day, save.year),
     kind,
     text,
     subjectIds: opts.subjectIds || [],

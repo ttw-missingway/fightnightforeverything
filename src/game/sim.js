@@ -1,5 +1,5 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
@@ -338,11 +338,65 @@ function maybeLearnInnovation(save, learner, teacher, events, viaWatching = fals
  * don't, compliments, trash talk, post-match afterglow and salt. Returns
  * display strings; mood/relationship changes are applied as they happen.
  */
+/**
+ * Is the arcade still new enough that the room itself is the subject?
+ *
+ * Absolute days, so this covers the opening of every fresh run rather than
+ * every January — a reset starts the clock again, which is right: the next
+ * run is a different arcade.
+ */
+function isOpeningWeeks(save) {
+  return absDayOf(save.day, save.year) <= OPENING_DAYS
+}
+
+/**
+ * One beat about the new place, chosen from what is ACTUALLY true of it and
+ * of the speaker. This is the difference between immersion and filler: the
+ * lines name the food that really is on the counter, the cabinet that really
+ * is in the corner, and the number of setups the owner really did buy.
+ *
+ * Returns {kind, ctx} for `speak`, or null when there's nothing concrete to
+ * say — better to fall through to ordinary chatter than to invent a detail.
+ */
+function openingTalk(save, p) {
+  const a = save.arcade
+  const options = []
+  const favGame = choice(p.otherGames || [])
+  const favFood = choice(p.foods || [])
+
+  // Their taste, met or unmet by the room. The strongest beats, because they
+  // are the ones that could only be said in THIS arcade by THIS person.
+  if (favGame) {
+    options.push((a.otherGames || []).includes(favGame)
+      ? { kind: 'spotHere', ctx: { x: favGame }, weight: 4 }
+      : { kind: chance(0.75) ? 'tasteGame' : 'spotMissing', ctx: { x: favGame }, weight: 3 })
+  }
+  if (favFood) {
+    // Stocked → delight. Not stocked → either they simply say what they like,
+    // or they note the gap; both are true things to say and alternating them
+    // stops week one sounding like a single running complaint.
+    options.push((a.foods || []).includes(favFood)
+      ? { kind: 'spotHere', ctx: { x: favFood }, weight: 4 }
+      : { kind: chance(0.5) ? 'tasteFood' : 'spotMissing', ctx: { x: favFood }, weight: 3 })
+  }
+  // A read on the room itself, and the fact everyone arrived at once.
+  options.push({ kind: 'firstImpression', ctx: { n: save.settings?.setups ?? 1, x: a.name }, weight: 3 })
+  options.push({ kind: 'newRoomBond', ctx: {}, weight: 2 })
+
+  const total = options.reduce((n, o) => n + o.weight, 0)
+  let roll = rand() * total
+  for (const o of options) {
+    roll -= o.weight
+    if (roll <= 0) return o
+  }
+  return options[options.length - 1]
+}
+
 function makeBeats(save, group, where, results) {
   const beats = []
   // Speech beats carry a speaker and render as actual dialogue.
   const say = (p, kind, ctx = {}, note = null) => {
-    const text = speak(p, kind, { self: pName(save, p), absDay: absDayOf(save), ...ctx })
+    const text = speak(p, kind, { self: pName(save, p), absDay: absDayOf(save.day, save.year), ...ctx })
     if (text) beats.push({ speaker: pName(save, p), text, note })
   }
 
@@ -354,15 +408,17 @@ function makeBeats(save, group, where, results) {
     outer: for (const a of group) {
       for (const b of group) {
         if (a === b || !isFirstMeeting(a, b)) continue
-        const line = speak(a, 'intro', {
-          self: pName(save, a), t: pName(save, b), to: b, absDay: absDayOf(save),
+        // In a brand-new room, introducing yourself IS talking about the
+        // place — nobody's a regular yet and everyone knows it.
+        const line = speak(a, isOpeningWeeks(save) ? 'openingIntro' : 'intro', {
+          self: pName(save, a), t: pName(save, b), to: b, absDay: absDayOf(save.day, save.year),
         })
         if (line) {
           beats.push({ speaker: pName(save, a), text: line })
           // Both sides now know each other, whoever did the talking.
-          noteMeeting(b, a, absDayOf(save))
-          const reply = speak(b, 'greet', {
-            self: pName(save, b), t: pName(save, a), to: a, absDay: absDayOf(save),
+          noteMeeting(b, a, absDayOf(save.day, save.year))
+          const reply = speak(b, isOpeningWeeks(save) ? 'openingGreet' : 'greet', {
+            self: pName(save, b), t: pName(save, a), to: a, absDay: absDayOf(save.day, save.year),
           })
           if (reply) beats.push({ speaker: pName(save, b), text: reply })
           break outer
@@ -371,9 +427,31 @@ function makeBeats(save, group, where, results) {
     }
   }
 
+  // OPENING WEEKS: the room is the subject. Fires high, right after the
+  // introductions, so the first thing anyone says about anything is what they
+  // make of the place they've just walked into — and often somebody answers,
+  // because "what do you play?" is how strangers actually start.
+  if (isOpeningWeeks(save) && chance(0.85)) {
+    const speaker = choice(group)
+    const talk = openingTalk(save, speaker)
+    if (talk) {
+      const other = group.find((x) => x !== speaker)
+      say(speaker, talk.kind, { ...talk.ctx, t: other ? pName(save, other) : 'you', to: other })
+      // A second voice chimes in with their OWN taste — two strangers
+      // comparing notes reads as a conversation; one person narrating the
+      // decor reads as a plaque on the wall.
+      if (other && chance(0.55)) {
+        const reply = openingTalk(save, other)
+        if (reply) say(other, reply.kind, { ...reply.ctx, t: pName(save, speaker), to: speaker })
+      }
+    }
+  }
+
   // Somebody airs a conviction. The more firmly it's held the more likely it
   // is to come out unprompted — that's what having an opinion looks like.
-  if (group.length >= 2 && chance(0.3)) {
+  // Quieter in the opening weeks: nobody has watched enough sets here to have
+  // hardened into a position about the meta yet.
+  if (group.length >= 2 && chance(isOpeningWeeks(save) ? 0.12 : 0.3)) {
     const holders = group.filter((p) => loudestTake(p))
     if (holders.length) {
       const p = choice(holders)
@@ -386,7 +464,7 @@ function makeBeats(save, group, where, results) {
         const other = group.find((x) => x !== p)
         const line = speak(p, kind, {
           self: pName(save, p), x: label, t: other ? pName(save, other) : 'you',
-          to: other, absDay: absDayOf(save),
+          to: other, absDay: absDayOf(save.day, save.year),
         })
         if (line) {
           beats.push({ speaker: pName(save, p), text: line })
@@ -405,24 +483,24 @@ function makeBeats(save, group, where, results) {
 
           if (backer && chance(0.7)) {
             const reply = speak(backer, 'agreeTake', {
-              self: pName(save, backer), t: pName(save, p), to: p, x: label, absDay: absDayOf(save),
+              self: pName(save, backer), t: pName(save, p), to: p, x: label, absDay: absDayOf(save.day, save.year),
             })
             if (reply) {
               beats.push({ speaker: pName(save, backer), text: reply })
               // Being agreed with is how an opinion hardens into a position.
-              pushTake(p, take.topic, take.subject, take.stance, absDayOf(save), 5)
-              pushTake(backer, take.topic, take.subject, take.stance, absDayOf(save), 5)
+              pushTake(p, take.topic, take.subject, take.stance, absDayOf(save.day, save.year), 5)
+              pushTake(backer, take.topic, take.subject, take.stance, absDayOf(save.day, save.year), 5)
               shiftRel(backer, p, 2)
               shiftRel(p, backer, 2)
             }
           } else if (objector && chance(0.65)) {
             const reply = speak(objector, disputeKind(take), {
-              self: pName(save, objector), t: pName(save, p), to: p, x: label, absDay: absDayOf(save),
+              self: pName(save, objector), t: pName(save, p), to: p, x: label, absDay: absDayOf(save.day, save.year),
             })
             if (reply) {
               beats.push({ speaker: pName(save, objector), text: reply })
               // Being argued with makes people dig in, not reconsider.
-              pushTake(p, take.topic, take.subject, take.stance, absDayOf(save), 4)
+              pushTake(p, take.topic, take.subject, take.stance, absDayOf(save.day, save.year), 4)
               shiftRel(p, objector, -1.5)
             }
           }
@@ -445,7 +523,7 @@ function makeBeats(save, group, where, results) {
     if (pairs.length) {
       const { a, b, h, n } = choice(pairs)
       const line = speak(a, 'callback', {
-        self: pName(save, a), t: pName(save, b), to: b, absDay: absDayOf(save),
+        self: pName(save, a), t: pName(save, b), to: b, absDay: absDayOf(save.day, save.year),
         w: h.w, l: h.l, n,
       })
       if (line) beats.push({ speaker: pName(save, a), text: line })
@@ -542,7 +620,7 @@ function makeBeats(save, group, where, results) {
   if (where === 'at the concession stand' && chance(0.5)) {
     const talker = choice(group)
     const other = group.find((p) => p !== talker)
-    const line = speak(talker, 'lifeChat', { self: pName(save, talker), to: other, absDay: absDayOf(save), t: other ? pName(save, other) : 'someone' })
+    const line = speak(talker, 'lifeChat', { self: pName(save, talker), to: other, absDay: absDayOf(save.day, save.year), t: other ? pName(save, other) : 'someone' })
     if (line) beats.push({ speaker: pName(save, talker), text: line })
   }
 
@@ -643,15 +721,15 @@ function runMoneyMatch(save, mm, present, events) {
   const preMatch = []
   for (const p of [a, b]) {
     const opp = p === a ? b : a
-    const line = speak(p, 'mmPre', { t: pName(save, opp), to: opp, self: pName(save, p), absDay: absDayOf(save) })
+    const line = speak(p, 'mmPre', { t: pName(save, opp), to: opp, self: pName(save, p), absDay: absDayOf(save.day, save.year) })
     if (line) preMatch.push({ speaker: pName(save, p), text: line })
   }
   // And the words after — a money match always ends with words.
   const postMatch = []
-  const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save) })
+  const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save.day, save.year) })
   if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
   const goodSport = loser.social.sportsmanship >= 6
-  const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save) })
+  const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save.day, save.year) })
   if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
 
   const ev = {
@@ -1125,12 +1203,12 @@ export function simHour(save) {
       // The set ends; sometimes words are exchanged.
       const postMatch = []
       if (chance(0.55)) {
-        const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save) })
+        const wl = speak(winner, 'ggWin', { t: pName(save, loser), to: loser, self: pName(save, winner), absDay: absDayOf(save.day, save.year) })
         if (wl) postMatch.push({ speaker: pName(save, winner), text: wl })
       }
       if (chance(0.55)) {
         const goodSport = loser.social.sportsmanship >= 6 || (loser.social.sportsmanship >= 4 && loser.mood >= 6)
-        const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save) })
+        const ll = speak(loser, goodSport ? 'ggLossGood' : 'ggLossBad', { t: pName(save, winner), to: winner, self: pName(save, loser), absDay: absDayOf(save.day, save.year) })
         if (ll) postMatch.push({ speaker: pName(save, loser), text: ll })
       }
 
