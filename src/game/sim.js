@@ -306,7 +306,12 @@ function attendChance(save, player) {
   // Nobody goes to the arcade every single day — weekends are the draw,
   // weekdays are for the truly committed, and the habit builds slowly.
   // That's what makes "regular" mean something.
-  let p = 0.21 + player.personal.spark * 0.030 + (player.mood - 5) * 0.02
+  // Mood swings turnout — unless they're temperate. The Stoic is the person
+  // who turns up on the bad night, and that is what makes a scene durable:
+  // measured, removing the whole row cost the scene nothing, because none of
+  // temperance/loyalty/stamina reached anything anyone could see.
+  const moodSwing = 0.02 * Math.max(0.25, 1 - (player.personal.temperance || 0) * 0.11)
+  let p = 0.21 + player.personal.spark * 0.030 + (player.mood - 5) * moodSwing
   p += Math.min(0.12, player.daysAttended * 0.0015) // dedication compounds
   const wd = weekdayOf(save.day)
   // Weekends draw everyone; weekdays belong to the RELIABLE — the put-together

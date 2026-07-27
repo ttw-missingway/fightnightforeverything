@@ -262,7 +262,11 @@ export function topUpNpcs(save, absDay) {
     const feuding = Object.values(p.relationships || {}).some((v) => v <= -45)
     const attached = feuding || p.teamId ||
       save.mentorships.some((m) => m.mentorId === p.id || m.studentId === p.id)
-    if (!attached && absDay - last > 45 + Math.floor(rand() * 30)) delete save.players[p.id]
+    // Loyalty is what keeps somebody coming back to the same room. A loyal
+    // regular takes far longer to drift away, which is the other half of what
+    // makes a Stoic-heavy scene durable.
+    const patience = 45 + (p.personal?.loyalty || 0) * 6 + Math.floor(rand() * 30)
+    if (!attached && absDay - last > patience) delete save.players[p.id]
   }
 
   const alive = Object.values(save.players).filter((p) => p.npc && !p.retired && !p.banished).length

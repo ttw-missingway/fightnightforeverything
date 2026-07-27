@@ -31,9 +31,22 @@ export function skillCeiling(save, player, charId) {
   // Where a player stalls with NO cultivation — the comfort plateau.
   // Nerve is part of potential: the innate half (composure) sits alongside the
   // earned half (belief) — the Stoic's slow-but-inevitable engine.
-  let ceiling = 28 + apt * 1.9 + intensity * 2.0 + mastery * 0.8 + (s.composure ?? 5) * 1.1
+  // Volume is potential, not just pace. `stamina` used to appear ONLY in the
+  // learning rate, which is multiplied by (ceiling - skill)/ceiling — so it
+  // bought arrival time and never destination, and over a long run the
+  // thousand-hour grinder ended up indistinguishable from the dabbler. It was
+  // also the reason the Stoic row measured as free to delete: of its four
+  // stats only `composure` reached this line, while all four Killer stats
+  // reach it through competitiveIntensity.
+  let ceiling = 28 + apt * 1.9 + intensity * 2.0 + mastery * 0.8
+    + (s.composure ?? 5) * 1.1 + (s.stamina ?? 0) * 1.0
   // Iron sharpens iron: an active rival is the main way past the plateau.
-  if (hasActiveRival(save, player)) ceiling += 10
+  //
+  // This was +10 and it was not paying. Removing the archetype that GENERATES
+  // rivalries (Dramatic) made measured skill go UP 19% — the feud cost the
+  // scene more in mood and attendance than the rivalry returned in growth. A
+  // rival has to be worth having.
+  if (hasActiveRival(save, player)) ceiling += 18
   // Earned stage belief: battle-tested players realize more of their potential.
   // This is the single biggest thing separating a cultivated player from a
   // talented one who was left alone. The rate is calibrated to what belief can

@@ -19,8 +19,16 @@ import { econLog } from './economy.js'
 export function personalityOf(player) {
   // Presence is innate screen-magnetism — the walk-on nobody can look away
   // from. Fame (respect/glory/popularity) is EARNED draw stacked on top of it.
+  //
+  // Persona is the OTHER kind of draw: the polarising one. It was pure cost —
+  // socialDelta splits the room over a big personality and nothing anywhere
+  // paid it back, which is why a scene measured HEALTHIER with the whole
+  // Dramatic row deleted (death rate 80% -> 60%). People tune in for someone
+  // half the room can't stand; that is what a heel is for. Worth less per
+  // point than presence, because presence is likeable and this isn't.
   return clamp((player.respect + player.glory * 1.2 + (player.popularity || 0) * 0.4
-    + (player.personal?.presence ?? 5) * 3) / 100, 0, 1)
+    + (player.personal?.presence ?? 5) * 3
+    + (player.social?.persona ?? 0) * 1.8) / 100, 0, 1)
 }
 
 // Being featured under the lights is how a player becomes battle-tested. Every

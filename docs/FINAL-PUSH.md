@@ -18,16 +18,19 @@ comments claimed.
 
 Neither is a build task; both change what everything else is worth.
 
-- [ ] **Does the economy stay this dominant?** Measured: **83% of runs die and
-      the economy is the funnel.** Right now "the best way to play" is
-      economy-first and everything else is decoration. A shop gated behind
-      in-game currency makes money *more* dominant, not less. Achievement-gated
-      unlocks (Phase 4) are the agreed mitigation — the open question is whether
-      the 83% itself should come down as well.
-- [ ] **Is "chasing the meta makes your scene boring" intended?** Phase 2's
-      character fatigue will actively punish the meta-chasing built in
-      `interest.js`. That tension is good design, but it is a real balancing
-      force between two systems and should be deliberate.
+- [x] **Does the economy stay this dominant?** **DECIDED: no — let pressure off,
+      gently.** Measured today: 83% of runs die and the economy is the funnel.
+      Achievement-gated unlocks (Phase 4) handle the *progression* half.
+      **Sequencing note:** the calibration record says economy deaths are a
+      SYMPTOM — nine economy sweeps came back flat because they sat downstream
+      of the skill threshold. Phase 1 raises ceilings, which may soften the 83%
+      by itself. So: land Phase 1, re-measure, and only nudge an economy lever
+      if it is still needed. Two easings stacked blindly is how a ladder gets
+      broken. Working target: ~83% → ~70%, not lower.
+- [x] **Is "chasing the meta makes your scene boring" intended?** **DECIDED:
+      yes, wanted.** Character fatigue will punish the meta-chasing built in
+      `interest.js`, and that tension is the point — it mirrors how real scenes
+      feel. Build it deliberately rather than tuning it away later.
 
 ---
 
@@ -36,26 +39,40 @@ Neither is a build task; both change what everything else is worth.
 The archetype ablation says two rows are broken. Fix those before anything is
 measured against them again.
 
-- [ ] **`stamina` feeds `skillCeiling`.** It currently only appears in the
+- [x] **`stamina` feeds `skillCeiling`.** It currently only appears in the
       learning *rate*, which is multiplied by `prox = (ceiling - skill)/ceiling`
       — so it buys arrival time, never destination. Over a long run everyone is
       parked at their ceiling and the grinder is indistinguishable from the
       dabbler. The comment above the line already promises "the thousand-hour
       grinder keeps improving on reps alone"; the math never did it.
-- [ ] **Give `loyalty` and `temperance` an output.** Of Stoic's four stats only
+- [x] **Give `loyalty` and `temperance` an output.** Of Stoic's four stats only
       `composure` reaches the ceiling (×1.1), while all four Killer stats reach
       it via `competitiveIntensity` (×2.0). Stoic should be the row that makes a
       scene *durable* — turnout on bad nights, not retiring when passion dips.
-- [ ] **Rival bonuses pay more.** `hasActiveRival` gives a flat +10 ceiling, and
+- [x] **Rival bonuses pay more.** `hasActiveRival` gives a flat +10 ceiling, and
       it is not enough: removing the archetype that *generates* rivalries
       (Dramatic) made measured skill go **up** 19%.
-- [ ] **`persona` converts to draw.** It is currently pure cost — the polarising
+- [x] **`persona` converts to draw.** (partial — see gate) It is currently pure cost — the polarising
       term in `socialDelta` with no upside. A polarising player should pull
       viewers the way `presence` does.
 
-**Gate:** re-run the ablation (`scratchpad/ablate.mjs`, live economy, n≥30).
-Target: no row improves the scene by its own absence. Today **Dramatic
-removal drops the death rate 80% → 60%** and **Stoic removal is free**.
+**Gate — RUN (live economy, n=30). Two of three met:**
+
+| arm | died before | died after | reading |
+|---|---|---|---|
+| control | 83% | **73%** | economy pressure came off by itself |
+| no Stoic | 77% (free) | **80%** | now costs 7pp — **FIXED** |
+| no Killer | 80% | 83% | now costs 10pp — rival bonus landed |
+| no Dramatic | 60% | **67%** | gap narrowed 20pp → 6pp, **still a tax** |
+
+- **The economy nudge is probably unnecessary.** Control&nbsp;83% → 73% with no
+  economy lever touched, against a ~70% target. The calibration note was right:
+  the economy funnel was downstream of the skill ceiling. Re-check after Phase 2
+  before changing rent or prices.
+- **Drama is not fixed yet.** `persona` → draw closed most of the gap but not
+  all of it; `sensitivity` still only amplifies mood damage. Phase 2 item 5
+  (popular-but-not-good players generate hype on wins) is the rest of this fix
+  by design — re-run this gate after Phase 2 rather than over-tuning now.
 
 ---
 
