@@ -199,7 +199,11 @@ export default function PlayerForm({ save, player, patch }) {
       </div>
 
       <div className="card sub">
-        <div className="row spread">
+        {/* Sticks to the top for as long as this section is on screen. The
+            build is taller than the viewport, so without this the one number
+            that decides whether you can afford the next dot is the one thing
+            you have to scroll back up to check. */}
+        <div className="row spread stickyhead">
           <h4>
             Temperament & Stats
             {/* The allowance in the same currency the rows are spent in: one

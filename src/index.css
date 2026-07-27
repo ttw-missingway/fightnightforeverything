@@ -154,6 +154,20 @@ tr.clickable:hover td { background: var(--card2); }
 .pdot.on { background: #fff; border-color: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.35); }
 .pdot.clickable { cursor: pointer; }
 .pdot.clickable:hover { border-color: #fff; }
+/* A card heading that stays put while its own section scrolls past. Bleeds to
+   the card's edges (cancelling .card's padding) so nothing slides through the
+   gutter beside it. */
+.stickyhead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg2);
+  margin: -14px -16px 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+}
+
 /* Header variant: sits inline in a heading, and wraps once a lineage has
    banked enough legacy that the allowance runs long. */
 .pdots.compact { display: inline-flex; padding: 0; vertical-align: middle; gap: 6px; }
@@ -218,6 +232,8 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   h2 { font-size: 20px; }
   .statbar .label { width: 88px; font-size: 12px; }
   .pdots .label { width: 88px; font-size: 12px; }
+  /* Match the tighter card padding this breakpoint sets, or the bleed misses. */
+  .stickyhead { margin: -10px -12px 6px; padding: 8px 12px; }
   .bracket .round { min-width: 190px; }
   .card { padding: 10px 12px; }
   .zonecard { padding: 16px 12px; }
