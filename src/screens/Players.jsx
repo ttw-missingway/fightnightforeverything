@@ -11,7 +11,7 @@ import { INTEREST_LABEL } from '../game/interest.js'
 import { displayName } from '../game/util.js'
 import { skillCeiling } from '../game/match.js'
 import { voiceSummary } from '../game/dialogue.js'
-import { warnPlayer, banish, separate, warnableBehaviors, toxicityBlame } from '../game/discipline.js'
+import { warnPlayer, banish, separate, unseparate, separationOf, warnableBehaviors, toxicityBlame } from '../game/discipline.js'
 
 const bestSkill = (p) => Math.round(Math.max(0, ...Object.values(p.charSkill || {}), 0))
 
@@ -405,10 +405,23 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
             <div className="row spread" key={other.id} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
               <span style={{ cursor: 'pointer' }} onClick={() => goTo(other.id)}>{displayName(other, save)}</span>
               <span className="row" style={{ gap: 6 }}>
-                {v <= -40 && !p.retired && !p.banished && !other.retired && !other.banished && (
-                  <button className="small" title="keep these two apart for 3 weeks so the bad blood can cool"
-                    onClick={() => mutate((s) => separate(s, p.id, other.id))}>✋ keep apart</button>
-                )}
+                {(() => {
+                  const sep = separationOf(save, p.id, other.id)
+                  if (sep) {
+                    return (
+                      <button className="small" title="they are being kept apart — click to let them near each other again"
+                        style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}
+                        onClick={() => mutate((s) => unseparate(s, p.id, other.id))}>
+                        ✋ apart · {sep.daysLeft}d
+                      </button>
+                    )
+                  }
+                  if (v > -40 || p.retired || p.banished || other.retired || other.banished) return null
+                  return (
+                    <button className="small" title="keep these two apart for 3 weeks so the bad blood can cool"
+                      onClick={() => mutate((s) => separate(s, p.id, other.id))}>✋ keep apart</button>
+                  )
+                })()}
                 <span className={`small ${v >= 20 ? 'green' : v <= -20 ? 'red' : 'dim'}`}>
                   {relLabel(v)} ({Math.round(v)})
                 </span>
@@ -461,10 +474,25 @@ function ComparePanel({ save, player: p, mutate, goTo }) {
             <span className="small gold">{displayName(p, save)} {h.w}–{h.l} {displayName(o, save)}</span>
           </div>
           {drama && <p className="small" style={{ margin: '6px 0 0', color: drama.color }}>{drama.text}</p>}
-          {mutual <= -40 && !p.retired && !p.banished && !o.retired && !o.banished && (
-            <button className="small" style={{ marginTop: 6 }}
-              onClick={() => mutate((s) => separate(s, p.id, o.id))}>✋ Keep these two apart (3 weeks)</button>
-          )}
+          {(() => {
+            const sep = separationOf(save, p.id, o.id)
+            if (sep) {
+              return (
+                <div className="row spread" style={{ marginTop: 8, alignItems: 'center' }}>
+                  <span className="small gold">
+                    ✋ Kept apart — {sep.daysLeft} day{sep.daysLeft === 1 ? '' : 's'} left.
+                    <span className="dim"> They won't be matched or drawn into the same circle.</span>
+                  </span>
+                  <button className="small" onClick={() => mutate((s) => unseparate(s, p.id, o.id))}>Lift it</button>
+                </div>
+              )
+            }
+            if (mutual > -40 || p.retired || p.banished || o.retired || o.banished) return null
+            return (
+              <button className="small" style={{ marginTop: 6 }}
+                onClick={() => mutate((s) => separate(s, p.id, o.id))}>✋ Keep these two apart (3 weeks)</button>
+            )
+          })()}
         </div>
       )}
     </div>

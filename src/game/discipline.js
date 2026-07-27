@@ -143,6 +143,27 @@ export function areSeparated(save, aId, bId) {
   return !!s && absDayOf(save.day, save.year) < s.untilAbs
 }
 
+/**
+ * The live separation between two players and how long is left on it, or null.
+ *
+ * The sim has always honoured separations — matchmaking scores them out and the
+ * social pass skips the pair — but nothing ever DISPLAYED one, so pressing
+ * "keep apart" changed the room silently and left the same button sitting
+ * there. It read as a dead button, and got reported as one.
+ */
+export function separationOf(save, aId, bId) {
+  const s = (save.separations || []).find((x) => x.key === sepKey(aId, bId))
+  if (!s) return null
+  const daysLeft = s.untilAbs - absDayOf(save.day, save.year)
+  return daysLeft > 0 ? { ...s, daysLeft } : null
+}
+
+/** Let them near each other again — a hold with no release is a trap. */
+export function unseparate(save, aId, bId) {
+  const key = sepKey(aId, bId)
+  save.separations = (save.separations || []).filter((x) => x.key !== key)
+}
+
 export function pruneSeparations(save) {
   if (!save.separations?.length) return
   const abs = absDayOf(save.day, save.year)
