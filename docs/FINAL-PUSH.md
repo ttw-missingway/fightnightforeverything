@@ -1,0 +1,194 @@
+# The final push — design plan
+
+Everything agreed in the design pass, in the order it has to be built.
+
+**The ordering rule:** anything that changes what a temperament is *worth* comes
+before anything priced against it. The shop is last on purpose — every unlock
+price is a judgement about how valuable a thing is, and half those judgements
+are wrong today because stamina does nothing, drama is a net tax, and hype
+rewards a boring room.
+
+Check items off as they land. Each phase ends with a measurement gate, because
+this whole plan came out of measurements that contradicted what the code's own
+comments claimed.
+
+---
+
+## Phase 0 — the two decisions that block pricing
+
+Neither is a build task; both change what everything else is worth.
+
+- [ ] **Does the economy stay this dominant?** Measured: **83% of runs die and
+      the economy is the funnel.** Right now "the best way to play" is
+      economy-first and everything else is decoration. A shop gated behind
+      in-game currency makes money *more* dominant, not less. Achievement-gated
+      unlocks (Phase 4) are the agreed mitigation — the open question is whether
+      the 83% itself should come down as well.
+- [ ] **Is "chasing the meta makes your scene boring" intended?** Phase 2's
+      character fatigue will actively punish the meta-chasing built in
+      `interest.js`. That tension is good design, but it is a real balancing
+      force between two systems and should be deliberate.
+
+---
+
+## Phase 1 — engine truth
+
+The archetype ablation says two rows are broken. Fix those before anything is
+measured against them again.
+
+- [ ] **`stamina` feeds `skillCeiling`.** It currently only appears in the
+      learning *rate*, which is multiplied by `prox = (ceiling - skill)/ceiling`
+      — so it buys arrival time, never destination. Over a long run everyone is
+      parked at their ceiling and the grinder is indistinguishable from the
+      dabbler. The comment above the line already promises "the thousand-hour
+      grinder keeps improving on reps alone"; the math never did it.
+- [ ] **Give `loyalty` and `temperance` an output.** Of Stoic's four stats only
+      `composure` reaches the ceiling (×1.1), while all four Killer stats reach
+      it via `competitiveIntensity` (×2.0). Stoic should be the row that makes a
+      scene *durable* — turnout on bad nights, not retiring when passion dips.
+- [ ] **Rival bonuses pay more.** `hasActiveRival` gives a flat +10 ceiling, and
+      it is not enough: removing the archetype that *generates* rivalries
+      (Dramatic) made measured skill go **up** 19%.
+- [ ] **`persona` converts to draw.** It is currently pure cost — the polarising
+      term in `socialDelta` with no upside. A polarising player should pull
+      viewers the way `presence` does.
+
+**Gate:** re-run the ablation (`scratchpad/ablate.mjs`, live economy, n≥30).
+Target: no row improves the scene by its own absence. Today **Dramatic
+removal drops the death rate 80% → 60%** and **Stoic removal is free**.
+
+---
+
+## Phase 2 — hype stops rewarding a boring room
+
+Measured bug: six of eight ablations *raised* hype. A more homogeneous roster
+produces closer matches, and stream quality rewards close matches — so hype
+currently goes up as the scene gets duller.
+
+- [ ] Mirror matches are worth less hype.
+- [ ] **Character fatigue** — seeing the same handful of characters repeatedly
+      depresses hype. This is the direct inversion of the bug above.
+- [ ] Underdog wins pay a large hype bonus after the fact.
+- [ ] Low-tier-character wins pay a large hype bonus. (Also the first
+      *scene-level* payoff for the contrarian archetype — championing a low tier
+      currently costs the player and returns nothing to anyone.)
+- [ ] Popular-but-not-good players winning generates hype. (This is the
+      `persona` → draw conversion from Phase 1, arriving from the other side.)
+
+**Gate:** hype must correlate with roster *diversity*, not with parity. Re-run
+the ablation and confirm removing a temperament no longer raises hype.
+
+---
+
+## Phase 3 — character guides
+
+Gives `loyalty`/`mastery` a visible output, fills the Codex with earned content,
+and creates a route to notoriety that is not personality.
+
+- [ ] A player who **leads their peers** in skill on a character can write a
+      guide. Gate on *n ≥ 3 players with real reps on that character* — after
+      the taste-layer work, contrarians are often the only person on their pick
+      and would trivially qualify on day one.
+- [ ] Guide **quality** keys off absolute skill; quality drives the chance it
+      catches on.
+- [ ] A popular guide raises **arcade relevance** and the **author's
+      popularity**.
+- [ ] Guides live in the **Codex**.
+
+---
+
+## Phase 4 — persistence foundation
+
+No balance dependency; can be built in parallel with 1–3.
+
+- [ ] **Attribution points as white dots**, replacing the `5/5` text.
+- [ ] **Helpers toggle** (on by default): UI warnings, the financial snapshot
+      strip, and the rumor tab. These are *not* shop items — the players who most
+      need them are exactly the ones with no currency. Experienced players switch
+      them off.
+- [ ] **Achievement scaffolding.** Every unlock is earned by an achievement
+      related to it — typically *doing the thing without the tool*, after which
+      the tool is the reward. Unlocks also pay attribution points.
+- [ ] Persistence lives on `save.prestige`, which already survives
+      `resetSaveById` per save lineage.
+
+---
+
+## Phase 5 — the shop
+
+Priced only after Phases 1–2 land, because the prices encode what things are
+worth.
+
+- [ ] Idle mode — every speed beyond real time
+- [ ] VODs tab
+- [ ] Community tier list tab
+- [ ] Feed tab
+- [ ] Studio tab
+- [ ] **Food packs** — cut the catalogue to 5 at start, 4 purchasable packs of 5.
+      Players can prefer food you cannot yet stock; that gap is the motivation.
+- [ ] **Arcade attraction packs** — pinball, bowling, VR, pickleball, laser tag,
+      classic games, touch-screen. Passive revenue scaled by arcade popularity,
+      each targeting a different demographic. No NPCs needed.
+      *Buying the pack persistently unlocks the **option**; you still install it
+      per-run — but the purchase grants the first installation free in the run
+      where it is bought.*
+- [ ] Separate / ban players
+- [ ] Hotfixes from the Studio — small changes only, to correct an overlooked
+      problem without the community irritation of a full patch
+- [ ] Family business — start with a small staff who never quit and need no pay
+- [ ] Extra allocation points (expensive)
+- [ ] Advertising options — start with flyers and word of mouth only
+- [ ] **Streaming setup** — per-run purchase, not persistent. You cannot stream
+      until you buy it.
+
+---
+
+## Phase 6 — tournaments
+
+Self-contained subsystem; slot anywhere after Phase 4.
+
+- [ ] Formats: double elimination, 16 / 32 player, team, 8-team, round robin
+- [ ] **Bandwidth meter at world creation.** Tournament count × frequency ×
+      duration (a product of player count and format) consumes bandwidth.
+      Starting bandwidth ≈ one weekly 8-player plus one monthly 16-player.
+- [ ] Bandwidth is purchasable and persistent
+- [ ] Tournaments cost cleanliness, scaled by size
+
+---
+
+## Phase 7 — verification
+
+The two constraints this entire plan exists to protect:
+
+- [ ] **No archetype superfluous.** Re-run the live-economy ablation. Every row
+      must cost the scene something real when removed.
+- [ ] **No dominant strategy.** Run several distinct play policies (economy-first,
+      community-first, competition-first) to the same horizon. Viability is the
+      bar — one being best is fine; a gap that makes the others feel like
+      self-kneecapping is not.
+
+---
+
+## Reference — what the measurements actually said
+
+Live economy, 500 days, n≈30, death rate (control ≈ 80–83%):
+
+| removed | death rate | reading |
+|---|---|---|
+| Dramatic | **60%** | scene is far healthier without them |
+| Stoic | 77% | ~free |
+| Killer | 80% | ~neutral |
+| Natural | 83% | ~neutral |
+| Gracious | 83% | ~neutral |
+| Scholar | 87% | costly (and the **only** source of tech: −100%) |
+| Put-together | 90% | costly |
+| Warm | **97%** | load-bearing (mentorships −86%, teams −72%) |
+
+Two traps found while measuring, worth not repeating:
+
+- **Insulating the economy invalidates the arms that operate on it.** A $20k
+  float made Put-together and Killer look superfluous; with a live economy both
+  are load-bearing and the sign on followers flipped in both cases.
+- **Survival confounds every cumulative metric.** Runs that live longer
+  accumulate more followers, tech and skill by definition. Trust the death rate
+  and the per-run social ratios; treat the rest as directional.
