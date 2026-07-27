@@ -205,6 +205,15 @@ const SCHEMA = {
 }
 
 const BANNED = [
+  // Dylan's most-disliked pattern: ironic "the thing" with no antecedent.
+  /\b(do|doing|did|does) the thing\b/i,
+  /\bthe thing where\b/i,
+  // Sets are FT2/FT3 — a specific game number is usually wrong and always risky.
+  /\bgame (three|four|five|3|4|5)\b/i,
+  // "throw at" is not what a throw is.
+  /\bthrow(ing|s)? (it |that )?at (me|you|him|her|them)\b/i,
+  // False-precision joke construction.
+  /\b(about|roughly|approximately) (two|three|four|five|six|seven|eight|nine|ten|\d+) (seconds|minutes)\b/i,
   /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
   /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
   /\b(he|she|his|her|him)\b/i,

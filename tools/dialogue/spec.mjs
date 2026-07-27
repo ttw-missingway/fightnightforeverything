@@ -89,7 +89,16 @@ export const FG_GLOSSARY = `
 - LAB / LABBING: practising something alone in training mode.
 - TECH: (1) escaping a throw, (2) newly discovered technology. Both are used.
 - METER: the resource supers and other cash-ins are spent from.
-- COUNTERPICK / POCKET PICK: switching characters for a specific matchup.
+- THROW: a grab. You "throw someone", "go for a throw", or "get thrown". You
+  NEVER "throw at" someone — that reads as throwing an object and is wrong.
+  Escaping one is a "tech".
+- DASH / METER / KNOCKDOWN and every other mechanic are SEPARATE systems. Do not
+  invent causal links between them. "Dashes forward whenever their meter fills"
+  is nonsense — meter is a resource, dashing is movement, and one does not cause
+  the other. If a scene describes somebody's habit, keep it to ONE mechanic.
+- Sets are first-to-2 or first-to-3, so a set is at most five games and usually
+  fewer. Do not reference a specific game number ("game four") — say "that last
+  one" or "the one where you switched" instead.
 
 Use these only where a real player would, and only correctly. A scene with no
 jargon at all is always better than a scene with jargon used loosely.
@@ -176,6 +185,21 @@ export const ANTI_PATTERNS = `
 - Do NOT assume elapsed time the sim has not accrued ("I've been coming here a
   long time", "we've been doing this for years"). If a scene needs that, it
   must declare "arcade:established" in its cast requirements.
+- Do NOT use the ironic "the thing" construction. "Just do the thing", "I can't
+  believe you did the thing", "make me stop doing the thing" — this is the
+  single most disliked pattern in the whole corpus. It is internet-register
+  irony and it is cringe. Name what you mean or cut the line.
+- Do NOT write like Twitter or Reddit. No ironic distancing, no self-aware
+  narration of one's own behaviour, no phrasing that exists to be quotable.
+  Some real players talk this way; a whole cast talking this way is unbearable.
+  These are adults in a room, not posters.
+- Do NOT reach for oddly precise quantities as a joke ("spent about four seconds
+  building it"). The false precision is a tell.
+- EVERY pronoun and every "that" / "it" / "one" must have a clear antecedent
+  INSIDE the exchange. A scene plays with no surrounding context, so a referent
+  that points at something the reader cannot see is not subtle, it is broken.
+  This is the most common failure after the closing-flourish problem: lines that
+  would be clear if you had watched the set, and are meaningless if you did not.
 `.trim()
 
 // ---------- The kinds ----------

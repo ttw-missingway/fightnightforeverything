@@ -219,3 +219,54 @@ themselves. Every exchange needs one thing that isn't information transfer.
 
 The four perfect ones plus 1, 12, 16, 19 are the few-shot seed. 7 and 17 go in
 the prompt as explicit negative examples.
+
+## Round 2 tier pass (2026-07-27) — floor achieved, three defects left
+
+    perfect      14, 18
+    good         2, 4, 7, 8, 10, 11, 12, 21
+    funny        1, 6, 19
+    wrong jargon 5
+    boring       3, 15
+    confusing    9, 13, 16, 17, 20
+    horrible     — EMPTY —
+
+Dylan: "these ARE better… nothing that was just flat out unacceptably bad, I
+would be happy with a database of lines full of this quality." The calibration
+worked: naming the closing-flourish tell and showing his own graded examples
+removed the bottom of the distribution, which is what matters at corpus scale —
+nobody reads 2,400 scenes, but everybody notices the bad ones.
+
+Three defects remain, and **two of them are the same defect**:
+
+1. **Unanchored referents — the biggest one.** Confusion held at 5/21 and did
+   not improve. The failures aren't too-many-inferences (what I guessed after
+   round 1); they're pronouns with no antecedent. "What the hell are they
+   talking about? work on what one, the console?" A scene plays with no
+   surrounding context, so a referent pointing at something offstage is not
+   subtle, it's broken. Rule added: every "it"/"that"/"one" must resolve INSIDE
+   the exchange.
+
+2. **The ironic "the thing" construction — his most disliked pattern, by a
+   distance.** "just do the thing", "I can't believe you did the thing", "make
+   me stop doing the thing". His words: "I do not care for that convention of
+   talking AT ALL. It is very cringe-y to me." Note this is defect 1 wearing a
+   hat — "the thing" IS an unanchored referent, used as a verbal tic. Banned in
+   the prompt and regex-enforced.
+
+   Generalised: "I don't want everyone in the cast talking like they're on
+   twitter or reddit." Some real players talk in internet register; a whole cast
+   doing it is unbearable. Rule added.
+
+3. **Jargon still loose, in two distinct ways.** Vocabulary — "throw at me" is
+   not what a throw is (it's a grab; you throw *someone*). And mechanics —
+   scene 21 had somebody dashing forward whenever their meter fills, which
+   invents a causal link between two unrelated systems. The glossary now covers
+   both, plus: sets are FT2/FT3 so "game four" is usually wrong (scene 4 was
+   rated marvellous but Dylan noted few sets ever reach a game 4).
+
+Also newly banned: false-precision jokes ("spent about four seconds building
+it"), which he clocked as AI-ish.
+
+Regex-enforced now: "the thing" construction, specific game numbers, "throw
+at", false-precision quantities. The referent rule and the register rule can
+only live in the prompt.
