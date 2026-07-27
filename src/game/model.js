@@ -701,6 +701,7 @@ export function migrateSave(save) {
   save.charMilestones ??= []
   save.stream ??= { channelName: 'ArcadeTV', followers: 0, hype: 0, totalStreams: 0, peakViewers: 0 }
   save.stream.fatigue ??= 0
+  save.stream.recentChars ??= [] // rolling record of what has been broadcast (character fatigue)
   save.economy ??= { money: 500, log: [] }
   save.economy.history ??= []
   save.economy.lastDayMoney ??= save.economy.money

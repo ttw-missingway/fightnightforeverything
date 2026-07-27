@@ -12,6 +12,7 @@ import { upsetSeverityOf } from './match.js'
 import { bumpPassion } from './career.js'
 import { chronicle } from './model.js'
 import { econLog } from './economy.js'
+import { perceivedTier } from './interest.js'
 
 // How famous an arcade player is, 0..1. Respect and glory are the resume; a
 // growing public profile (popularity, earned from being featured) adds to it —
@@ -142,11 +143,96 @@ export function elitePersonality(elite) {
  * 0..100. level: avg skill 0..1; personality: avg fame 0..1;
  * probA: pre-match win chance; upset: did the underdog win?
  */
-export function matchQuality({ level, personality, probA, upset }) {
+export function matchQuality({ level, personality, probA, upset, mirror = false, staleness = 0 }) {
   const closeness = 1 - Math.abs(probA - 0.5) * 2
   let q = 100 * (0.32 * level + 0.3 * closeness + 0.32 * personality)
   if (upset) q += 12
+  // A mirror is the least interesting version of any matchup — same tools,
+  // same answers, and no matchup story to tell.
+  if (mirror) q -= 8
+  // CHARACTER FATIGUE. `closeness` is 30% of quality, which meant a roster
+  // converging on a couple of characters produced ever closer matches and
+  // therefore ever better streams: measured, SIX of eight archetype ablations
+  // RAISED hype, because deleting a temperament made the room more uniform.
+  //
+  // This is a SWING, not a tax. The first cut of it was a flat penalty of up
+  // to -34, and because stream quality feeds ad revenue it simply made the
+  // whole game harder — control 73% -> 90%, and removing the Scholar
+  // started HELPING. Signed around the expected rotation, a fresh matchup gains
+  // roughly what a stale one loses, so the scene is rewarded for variety
+  // without the channel being poorer on average.
+  q -= staleness * 16
   return Math.round(clamp(q, 0, 100))
+}
+
+// How many recent streamed sets are remembered for fatigue purposes.
+const FATIGUE_WINDOW = 24
+
+/**
+ * SIGNED, around the expected rotation: -1 means these two are a fresh sight on
+ * the channel, +1 means it has been nothing but them. Reads the rolling record
+ * of what has actually been broadcast.
+ *
+ * Signed on purpose — an unsigned penalty is a tax on the whole channel, and
+ * since stream quality feeds ad revenue that lands as a difficulty increase
+ * rather than as a preference for variety.
+ */
+export function stalenessOf(save, charIds) {
+  const recent = save.stream?.recentChars || []
+  if (recent.length < 6) return 0 // too early to be bored
+  const ids = charIds.filter(Boolean)
+  if (!ids.length) return 0
+  const seen = recent.filter((id) => ids.includes(id)).length
+  const expected = recent.length * 0.22 // two characters out of a healthy rotation
+  return clamp((seen - expected) / Math.max(1, recent.length - expected), -1, 1)
+}
+
+function rememberChars(save, charIds) {
+  const st = save.stream
+  st.recentChars = [...charIds.filter(Boolean), ...(st.recentChars || [])].slice(0, FATIGUE_WINDOW)
+}
+
+/**
+ * Hype swing from what the RESULT meant, applied after the set is broadcast.
+ *
+ * Quality decides how good the broadcast was; this decides whether the scene
+ * is still talking about it tomorrow. All three of these are stories a real
+ * room retells, and none of them were worth anything before.
+ */
+export function resultNotability(save, { winner, loser, winnerCharId, probA, aIsWinner }) {
+  const out = { hype: 0, why: [] }
+  if (!winner || !loser) return out
+  const winProb = aIsWinner ? probA : 1 - probA
+
+  // The underdog. Graded — a coin-flip upset is not a story.
+  if (winProb < 0.4) {
+    const shock = (0.4 - winProb) / 0.4 // 0..1
+    out.hype += 2 + shock * 6
+    if (shock > 0.5) out.why.push('a genuine upset')
+  }
+
+  // Somebody winning on a character the community has written off.
+  const tier = perceivedTier(save, winnerCharId)
+  if (tier === 'C' || tier === 'D') {
+    out.hype += tier === 'D' ? 5 : 3
+    out.why.push('a low tier just won')
+  }
+
+  // The draw who shouldn't have won it. This is the other half of making a
+  // polarising personality worth having: people tune in for the heel, and they
+  // REALLY tune in when the heel takes one off somebody better.
+  const wSkill = winner.charSkill?.[winnerCharId] || 0
+  const lSkill = loser.charSkill?.[loser.mainCharId] || 0
+  // Key this off PERSONA itself, not off accumulated fame. personalityOf folds
+  // in respect and glory, so gating on it meant the bonus only reached players
+  // who were already famous — which a polarising newcomer is precisely not.
+  // The heel has to be able to earn the room's attention BEFORE they have any.
+  const persona = winner.social?.persona || 0
+  if (persona >= 4 && wSkill < lSkill - 6) {
+    out.hype += 2 + persona * 0.7 + personalityOf(winner) * 4
+    out.why.push('the loud one beat the better one')
+  }
+  return out
 }
 
 /**
@@ -241,12 +327,14 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
  */
 export function buildStream(save, {
   level, personality, probA, aWins, narration, meta = [], aName, bName, winnerName, context,
+  mirror = false, staleness = 0,
 }) {
   const upsetSeverity = upsetSeverityOf(probA, aWins)
   // Hidden variance: some sets just deliver, some just don't. The pre-match
   // read is never a guarantee — that's the risk in picking.
   const quality = clamp(
-    matchQuality({ level, personality, probA, upset: upsetSeverity !== 'none' }) + randInt(-8, 8),
+    matchQuality({ level, personality, probA, upset: upsetSeverity !== 'none', mirror, staleness })
+      + randInt(-8, 8),
     0, 100)
   const viewers = viewersFor(save, quality, context)
   const comments = generateComments({ viewers, narration, meta, aName, bName, winnerName, probA, upsetSeverity, context })
@@ -309,20 +397,42 @@ export function buildStream(save, {
 
 // Convenience for arcade-vs-arcade daily matches.
 export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily') {
-  const level = ((a.charSkill[a.mainCharId] || 0) + (b.charSkill[b.mainCharId] || 0)) / 200
+  // What they actually BROUGHT, not what they main — a counterpick or a lab
+  // character is what the audience saw.
+  const aChar = matchEvent.charAId || a.mainCharId
+  const bChar = matchEvent.charBId || b.mainCharId
+  const level = ((a.charSkill[aChar] || 0) + (b.charSkill[bChar] || 0)) / 200
   const personality = (personalityOf(a) + personalityOf(b)) / 2
+  const aWins = matchEvent.winnerId === a.id
   const stream = buildStream(save, {
     level,
     personality,
     probA: matchEvent.probA,
-    aWins: matchEvent.winnerId === a.id,
+    aWins,
     narration: matchEvent.narration,
     meta: matchEvent.narrationMeta || [],
     aName: matchEvent.aName,
     bName: matchEvent.bName,
     winnerName: matchEvent.winnerName,
     context,
+    mirror: !!aChar && aChar === bChar,
+    staleness: stalenessOf(save, [aChar, bChar]),
   })
+  rememberChars(save, [aChar, bChar])
+  // What the result MEANT, as distinct from how good the broadcast was. An
+  // upset, a low tier winning, or the loud one taking down the better player
+  // is what the scene is still talking about tomorrow.
+  const note = resultNotability(save, {
+    winner: aWins ? a : b,
+    loser: aWins ? b : a,
+    winnerCharId: aWins ? aChar : bChar,
+    probA: matchEvent.probA,
+    aIsWinner: aWins,
+  })
+  if (note.hype > 0) {
+    save.stream.hype = clamp(save.stream.hype + note.hype, 0, 100)
+    stream.notability = note
+  }
   // Getting your set picked for the channel is a genuine thrill — the two
   // featured players get a mood lift, bigger when the broadcast actually
   // pulls a crowd.

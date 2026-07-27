@@ -82,18 +82,43 @@ Measured bug: six of eight ablations *raised* hype. A more homogeneous roster
 produces closer matches, and stream quality rewards close matches — so hype
 currently goes up as the scene gets duller.
 
-- [ ] Mirror matches are worth less hype.
-- [ ] **Character fatigue** — seeing the same handful of characters repeatedly
+- [x] Mirror matches are worth less hype.
+- [x] **Character fatigue** — seeing the same handful of characters repeatedly
       depresses hype. This is the direct inversion of the bug above.
-- [ ] Underdog wins pay a large hype bonus after the fact.
-- [ ] Low-tier-character wins pay a large hype bonus. (Also the first
+- [x] Underdog wins pay a large hype bonus after the fact.
+- [x] Low-tier-character wins pay a large hype bonus. (Also the first
       *scene-level* payoff for the contrarian archetype — championing a low tier
       currently costs the player and returns nothing to anyone.)
-- [ ] Popular-but-not-good players winning generates hype. (This is the
+- [x] Popular-but-not-good players winning generates hype. (This is the
       `persona` → draw conversion from Phase 1, arriving from the other side.)
 
-**Gate:** hype must correlate with roster *diversity*, not with parity. Re-run
-the ablation and confirm removing a temperament no longer raises hype.
+**Gate — RUN. Partially met.**
+
+All five shipped. One real bug fixed on the way: `sensitivity` had the down
+coefficient at DOUBLE the up one (0.12 vs 0.06, on a bigger base), so identical
+social churn cost a dramatic player more than it ever paid them.
+
+Also a self-inflicted regression, caught and fixed: fatigue started as a flat
+penalty of up to −34 quality. Stream quality feeds ad revenue, so that landed
+as a difficulty increase, not a preference for variety — control deaths went
+73% → 90% and removing the Scholar started *helping*. It is a signed swing
+around the expected rotation now: fresh matchups gain roughly what stale ones
+lose, so the channel is not poorer on average.
+
+**STILL OPEN — drama is a net tax.** Four attempts have not moved it:
+
+| attempt | control | no Dramatic |
+|---|---|---|
+| before Phase 1 | 80% | 60% |
+| + persona→draw, rival +18 | 73% | 67% |
+| + fatigue/notability | 77% | 67% |
+| + heel keyed off persona | 80% | 60% |
+| + sensitivity symmetry | 80% | 63% |
+
+Coefficient tuning is not working, so **stop guessing and instrument it**: find
+where the cost actually lands (attendance? retirements? feuds driving
+separations? mood suppressing performance?) before changing another number.
+That diagnosis is the next task, not another tweak.
 
 ---
 

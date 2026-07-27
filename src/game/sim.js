@@ -751,13 +751,20 @@ function makeBeats(save, group, where, results) {
       (target.mood - 5) * 0.03 - (results[target.id] === 'lost' ? 0.15 : 0),
       0.1, 0.92)
     say(joker, 'joke', { t: pName(save, target), to: target })
+    // Sensitivity feels everything AT VOLUME — and it has to cut both ways.
+    // The down coefficient was double the up one (0.12 vs 0.06) on top of a
+    // bigger base, which made `sensitivity` a strictly losing stat: identical
+    // social churn cost a dramatic player more than it ever paid them. Pair
+    // that with `persona` polarising the room (which makes jokes bomb more
+    // often) and the whole Dramatic row was a compounding mood tax — measured,
+    // deleting the row cut the death rate from 80% to 60%.
     if (chance(landChance)) {
-      const dm = 0.2 + target.social.sensitivity * 0.06
+      const dm = 0.22 + target.social.sensitivity * 0.10
       target.mood = clamp(target.mood + dm, 0, 10)
       shiftRel(target, joker, 1.5)
       say(target, 'jokeLanded', { t: pName(save, joker), to: joker }, `(+${dm.toFixed(1)} mood)`)
     } else {
-      const dm = 0.3 + target.social.sensitivity * 0.12
+      const dm = 0.28 + target.social.sensitivity * 0.10
       target.mood = clamp(target.mood - dm, 0, 10)
       shiftRel(target, joker, -2.5)
       say(target, 'jokeBombed', { t: pName(save, joker), to: joker }, `(−${dm.toFixed(1)} mood)`)
