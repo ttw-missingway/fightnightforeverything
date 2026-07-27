@@ -28,3 +28,8 @@ dist-ssr
 # history means the repo doesn't carry megabytes of GIFs it never serves.
 fighter-packs/
 headshots/
+
+# Dialogue generation scratch. The SPEC and the generator are the source of
+# truth and are tracked; raw per-bucket output is a review artifact until a
+# corpus is promoted into src/.
+tools/dialogue/out/
