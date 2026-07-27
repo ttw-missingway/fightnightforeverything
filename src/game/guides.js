@@ -59,6 +59,20 @@ export function leadsCharacter(save, player, charId) {
   return mine >= MIN_SKILL && mine >= next + LEAD_MARGIN
 }
 
+/**
+ * How far clear of the field this player is on the character, -1..+1.
+ * Leading is not a gate on WRITING — anybody can write a guide — it is most of
+ * what decides whether the guide is any good.
+ */
+function standingOn(save, player, charId) {
+  const peers = peersOn(save, charId).filter((p) => p.id !== player.id)
+  if (!peers.length) return 0
+  const mine = player.charSkill[charId] || 0
+  const best = peers[0].charSkill[charId] || 0
+  const spread = Math.max(6, best)
+  return clamp((mine - best) / spread, -1, 1)
+}
+
 /** Has this character already been written up by this author? */
 const alreadyWrote = (save, playerId, charId) =>
   (save.guides || []).some((g) => g.authorId === playerId && g.charId === charId)
@@ -68,10 +82,18 @@ const alreadyWrote = (save, playerId, charId) =>
  * actually good) plus a little of the author's standing — a known name gets
  * read, but a nobody with genuinely great tech still gets passed around.
  */
-function reachOf(player, charId) {
+function reachOf(save, player, charId) {
   const skill = player.charSkill[charId] || 0
   const known = Math.min(1, ((player.respect || 0) + (player.popularity || 0)) / 90)
-  return clamp((skill - MIN_SKILL) / REACH_SPAN * 0.8 + known * 0.35, 0, 1)
+  const standing = standingOn(save, player, charId)
+  // Absolute skill is most of it — is the advice actually correct — with being
+  // demonstrably the best on the character as the other half of the argument,
+  // and a little credit for already having a name. A mediocre player writing up
+  // a character three people beat them on lands near zero, which is the point:
+  // plenty of guides get written, most sink.
+  return clamp(
+    (skill - MIN_SKILL) / REACH_SPAN * 0.55 + standing * 0.4 + known * 0.25,
+    0, 1)
 }
 
 /**
@@ -84,15 +106,22 @@ export function maybeWriteGuide(save, player, events, chance) {
   const charId = player.mainCharId
   if (!charId || !player.settledMain) return
   if (alreadyWrote(save, player.id, charId)) return
-  if (!leadsCharacter(save, player, charId)) return
+  // Anybody who has actually put the reps in can write one. Leading the field
+  // is NOT required — a scene produces plenty of guides from players nobody
+  // rates, and those simply go nowhere. Gating writing on being the best made
+  // guides a rare trophy (~2 a run) instead of a thing the community does.
+  const rec = player.charRecord?.[charId]
+  if (!rec || rec.w + rec.l < MIN_REPS) return
   const per = player.personal
-  const p = 0.004 + (per.mastery || 0) * 0.0016 + (per.loyalty || 0) * 0.0011
-    + (per.analysis || 0) * 0.0009
+  const p = (0.0024 + (per.mastery || 0) * 0.0010 + (per.loyalty || 0) * 0.0007
+    + (per.analysis || 0) * 0.0009)
+    // The person who IS the authority is likelier to sit down and write it.
+    * (leadsCharacter(save, player, charId) ? 2.6 : 1)
   if (!chance(p)) return
 
   const char = save.game.characters.find((c) => c.id === charId)
   if (!char) return
-  const reach = reachOf(player, charId)
+  const reach = reachOf(save, player, charId)
   save.guides ??= []
   const guide = {
     id: uid('guide'),

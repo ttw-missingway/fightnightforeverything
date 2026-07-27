@@ -143,7 +143,10 @@ and creates a route to notoriety that is not personality.
       popularity**.
 - [x] Guides live in the **Codex**.
 
-**Built.** ~2 guides per 500-day run, ~1 catching on. Thresholds are calibrated
+**Built.** ~14 guides per 500-day run, ~1-2 catching on. Anyone with real reps
+can write one; leading the field is not a gate on WRITING, it is most of what
+decides whether the thing is any good. Landed guides average ~16 skill against
+~7 for the ones that sink, so quality is visibly what travels. Thresholds are calibrated
 against measured per-character skill (best-on-a-character runs 5–20, NOT the
 30–37 you see for skill-on-your-main) — the first cut used 45 and produced zero
 guides in six runs.

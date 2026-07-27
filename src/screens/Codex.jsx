@@ -177,6 +177,9 @@ function CharacterIndex({ save }) {
                         <span className="dim"> by {author ? displayName(author, save) : 'a departed regular'}</span>
                         {g.landed === true && <span className="green"> · widely read</span>}
                         {g.landed === null && <span className="dim"> · just published</span>}
+                        {/* Most guides sink, and saying so is the point — it is
+                            what makes the ones that travel mean anything. */}
+                        {g.landed === false && <span className="dim"> · never caught on</span>}
                       </span>
                       <span className="dim small">{formatDay(g.day, g.year)}</span>
                     </div>
