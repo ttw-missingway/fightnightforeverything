@@ -26,21 +26,41 @@ export const VOICE_QUIRKS = [
 export const DEFAULT_VOICE = { energy: 'neutral', humor: 'dry', speech: 'plain', quirk: 'none' }
 
 // Voice falls out of who the player already is. Stats first, dice second.
+//
+// Calibrated to the SPARSE stat scale: since the temperament rework, stats are
+// a 0-5 point buy scaled by STAT_UNIT, so a roster looks like mostly zeroes
+// with a few spikes where somebody actually invested. A stat at 0 means "not
+// part of this person", not "the low end of a bell curve" — so the thresholds
+// have to read investment, not magnitude.
+//
+// The previous thresholds (>= 7, <= 3, >= 13) were written for the old 1-10
+// roll, where 7 was a high roll. Under the point buy, >= 7 needs 4 of 5 points
+// on one exact stat and almost never happened, while <= 3 caught every stat
+// nobody had spent on — which is most of them. The result was that every
+// single person in the arcade derived the identical voice, and every line in
+// the game came out of the same three pools.
+const INVESTED = 4 // 2 points — this is a trait they actually have
+const STRONG = 6 // 3 points — they lead with it
+
 export function deriveVoice(p) {
   const per = p.personal
   const soc = p.social
-  const energy = per.dominance + (per.mojo ?? 5) >= 13 ? 'fiery'
-    : per.spark + (per.mojo ?? 5) <= 8 ? 'chill' : 'neutral'
-  const humor = soc.persona >= 7 && soc.politeness <= 4 ? 'clowning'
-    : soc.politeness >= 7 ? 'earnest' : 'dry'
-  const speech = soc.charisma >= 7 ? 'chatty' : soc.charisma <= 3 ? 'terse' : 'plain'
+  // Aggression read across two stats, so either a spike or a spread counts.
+  const energy = per.dominance + (per.mojo ?? 0) >= STRONG ? 'fiery'
+    : (per.temperance ?? 0) >= INVESTED || per.dominance + (per.mojo ?? 0) + per.spark <= 2 ? 'chill'
+      : 'neutral'
+  const humor = soc.persona >= INVESTED && soc.politeness < INVESTED ? 'clowning'
+    : soc.politeness >= INVESTED ? 'earnest' : 'dry'
+  // Terse is the honest default for somebody who spent nothing on expression.
+  const speech = soc.charisma >= STRONG ? 'chatty'
+    : soc.charisma >= INVESTED || soc.persona >= INVESTED ? 'plain' : 'terse'
   const options = ['none', 'none', 'none']
-  if (soc.persona >= 8) options.push('third-person')
-  if (per.analysis >= 7) options.push('technical')
-  if (soc.politeness >= 7 && soc.sportsmanship >= 7) options.push('humble')
-  if (soc.politeness <= 3) options.push('menace')
-  if ((per.temperance ?? 5) >= 8) options.push('philosopher')
-  if (soc.charisma >= 8) options.push('hypeman')
+  if (soc.persona >= STRONG) options.push('third-person')
+  if (per.analysis >= INVESTED) options.push('technical')
+  if (soc.politeness >= INVESTED && soc.sportsmanship >= INVESTED) options.push('humble')
+  if (soc.politeness === 0 && per.dominance >= INVESTED) options.push('menace')
+  if ((per.temperance ?? 0) >= STRONG) options.push('philosopher')
+  if (soc.charisma >= STRONG) options.push('hypeman')
   options.push(chance(0.5) ? 'anime' : 'old-head')
   return { energy, humor, speech, quirk: choice(options) }
 }

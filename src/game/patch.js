@@ -459,6 +459,11 @@ export function releasePatch(save) {
     reception: label,
     why,
     divisive,
+    // Which characters actually moved. The notes carry this as prose, and
+    // prose is not queryable — scenes need to ask "was MY main nerfed", and so
+    // will anything else that reacts to a patch personally.
+    buffedIds: diff.buffed.map((b) => b.char.id),
+    nerfedIds: diff.nerfed.map((n) => n.char.id),
   }
   save.patches.unshift(patch)
 

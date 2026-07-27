@@ -39,12 +39,23 @@ export function moodLabel(m) {
  * amplifies affection or grates on a — the same pair always polarizes the
  * same direction, so grudges and bromances are consistent.
  */
+// The point on the stat scale that reads as "unremarkable, no opinion either
+// way". It is NOT the midpoint of the range: since the temperament rework
+// stats are a sparse 0-5 point buy scaled by STAT_UNIT, so a roster is mostly
+// zeroes with a few spikes, and the mean of any single social stat sits near
+// 1.5. The old constants here (4.5, 4, 5) were the midpoints of the retired
+// 1-10 roll, which meant every unspent stat scored as a strong negative and
+// the whole arcade drifted into mutual dislike — measured across a simulated
+// year, the median relationship was -15 and the friendliest pair on the roster
+// reached +3, so nobody could ever become close, mentor anyone, or form a team.
+const SOCIAL_NEUTRAL = 1.5
+
 export function socialDelta(a, b, context = {}) {
   let delta = 0
-  delta += (b.social.politeness - 4.5) * 0.35
+  delta += (b.social.politeness - SOCIAL_NEUTRAL) * 0.35
   const rel = getRel(a, b)
-  if (Math.abs(rel) < 10) delta += (b.social.charisma - 4) * 0.5 // first impressions
-  else delta += (b.social.charisma - 5) * 0.15
+  if (Math.abs(rel) < 10) delta += (b.social.charisma - SOCIAL_NEUTRAL) * 0.5 // first impressions
+  else delta += (b.social.charisma - SOCIAL_NEUTRAL) * 0.15
 
   const polarity = hash01(`${a.id}:${b.id}:persona`) < 0.5 ? -1 : 1
   delta += polarity * b.social.persona * 0.35
@@ -65,7 +76,7 @@ export function socialDelta(a, b, context = {}) {
 
   if (context.justLostTo) {
     // b beat a recently; b's sportsmanship decides how it lands.
-    delta += (b.social.sportsmanship - 5) * 0.6
+    delta += (b.social.sportsmanship - SOCIAL_NEUTRAL) * 0.6
   }
   delta += (Math.random() - 0.45) * 2 // day-to-day noise
   return delta

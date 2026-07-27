@@ -292,3 +292,65 @@ weekday and pronoun catches are the ones that matter — those would have shippe
 as real bugs (the sim owns the calendar, and {t} has no stated gender).
 
 Next: casting layer in makeBeats.
+
+---
+
+## Casting (2026-07-27)
+
+The corpus ships as `src/game/data/scenes.js` (generated, do not hand-edit) and
+is matched to real players by `src/game/scenes.js`. `makeBeats` tries to cast a
+scene FIRST — before introductions, so the corpus's own first-meeting material
+can play instead of the generic intro/greet pair — and returns immediately when
+one casts. If nothing casts, the old line pools run unchanged.
+
+Measured over a simulated year with a 14-character roster and 7 patches:
+**1,865 interactions, 803 scenes cast, 78–88 of the 120 situations used**
+(varies by seed), zero placeholder leaks, zero `undefined`.
+
+### Three sim bugs found while calibrating
+
+All three are the same root cause: constants written for the retired 1-10 stat
+roll, still in place after the temperament rework made stats a sparse 0-5 point
+buy where most values are 0.
+
+1. **`deriveVoice` gave every player in the game the identical voice.**
+   `persona >= 7` needed 4 of 5 points on one stat and essentially never fired;
+   `charisma <= 3` caught every unspent stat, which is most of them. Measured
+   across 32 players: one distinct voice, `chill/dry/terse`. Since the existing
+   line pools are selected by voice dimension, the whole cast had been drawing
+   from the same three pools. Recalibrated to read investment, not magnitude.
+
+2. **Mentorships and teams could never form.** `chance(social.community * 0.02)`
+   is `chance(0)` for anyone who did not spend on community. Given a floor.
+
+3. **The arcade drifted into universal mutual dislike.** `socialDelta` centred
+   on 4.5 / 4 / 5 — the midpoints of the old roll — so an unspent stat scored
+   as a strong negative on every interaction. Measured over a year: median
+   relationship −15, friendliest pair on the entire roster +3. Nobody could
+   reach `close`, mentor anyone, or found a team. Recentred on `SOCIAL_NEUTRAL`
+   (1.5); median is now 0 with real friendships and the occasional feud.
+
+### Predicates recalibrated to measured ranges
+
+- `veteran` 60 → 35 attended nights (nobody reached 60 in a year).
+- `main:toptier` / `main:lowtier`: absolute 55/45 → top/bottom 20% of the
+  roster. `charPower` is an average matchup score and clusters hard: a measured
+  14-character roster spanned 48.2 to 50.8, so the absolute cutoffs were
+  unreachable.
+- `stream:growing` 250 → 120 followers.
+
+### Small state added to support casting
+
+- `patch.buffedIds` / `patch.nerfedIds` — the notes carried this as prose only.
+- `player.form` — last 8 results, so "on a losing streak" is answerable.
+- `dip.charToday` — what someone actually brought, vs what they main.
+
+### Situations that cannot cast yet
+
+Five need world state the sim does not model: `setup:broken` (no faulty-cabinet
+state), `game:new` (no install date on side cabinets), `price:raised` (no price
+history), `staff:new` (no hire date). `dormantReqs()` reports these.
+
+Others are gated on things only the player does — stocking concession, running
+into the red, shipping a system change or a new character, letting the place get
+shut down. Those are correct to be rare; they are not dead.

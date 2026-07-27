@@ -3,6 +3,7 @@ import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, forma
 import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
 import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
+import { castScene, sceneBeats, SCENE_CHANCE } from './scenes.js'
 import { selectableChars } from './forms.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
@@ -398,6 +399,29 @@ function makeBeats(save, group, where, results) {
   const say = (p, kind, ctx = {}, note = null) => {
     const text = speak(p, kind, { self: pName(save, p), absDay: absDayOf(save.day, save.year), ...ctx })
     if (text) beats.push({ speaker: pName(save, p), text, note })
+  }
+
+  // A WRITTEN SCENE, if the room can cast one. This is the good stuff: an
+  // exchange authored as a unit, so each turn actually answers the one before
+  // it rather than being a line that happens to come next. It replaces the
+  // whole rest of the chatter — a scene followed by three unrelated one-liners
+  // reads worse than either alone.
+  //
+  // It goes BEFORE introductions on purpose. The corpus has real first-meeting
+  // material (`rel:stranger` on both roles), and it is better than the generic
+  // intro/greet pair; if introductions ran first they would consume every
+  // stranger in the room and that material could never play.
+  if (chance(SCENE_CHANCE)) {
+    const scene = castScene(save, group, results, { tournamentToday: !!whatHappensToday(save) })
+    if (scene) {
+      for (const beat of sceneBeats(scene, (p) => pName(save, p))) beats.push(beat)
+      if (beats.length) {
+        // Talking to someone counts as meeting them, same as every other path.
+        const cast = Object.values(scene.cast)
+        for (const a of cast) for (const b of cast) if (a !== b) noteMeeting(a, b, absDayOf(save.day, save.year))
+        return beats.slice(0, 4)
+      }
+    }
   }
 
   // Before anything else: has anyone in this circle never met before? People
@@ -854,7 +878,11 @@ function runInteraction(save, group, where, events, results = {}) {
   const student = sorted[sorted.length - 1]
   if (mentor !== student && mentor.elo - student.elo > 120 && getRel(mentor, student) > 15 &&
       !save.mentorships.some((m) => m.studentId === student.id) &&
-      chance(mentor.social.community * 0.02)) {
+      // Floor + slope, not bare multiplication: under the sparse point buy an
+      // unspent stat is 0, so `chance(community * 0.02)` was chance(0) for
+      // most of the roster and mentorships could never form at all. The gating
+      // conditions above are already the rare part.
+      chance(0.02 + mentor.social.community * 0.02)) {
     save.mentorships.push({ mentorId: mentor.id, studentId: student.id, startedDay: save.day, startedYear: save.year })
     mentor.respect += 4
     outcomes.push(`${pName(save, mentor)} started mentoring ${pName(save, student)}!`)
@@ -876,7 +904,7 @@ function runInteraction(save, group, where, events, results = {}) {
           if (tryJoinTeam(save, team, b, a, events)) break
         }
       }
-    } else if (freeAgents >= 5 && chance(a.social.community * 0.012 * foundingPressure)) {
+    } else if (freeAgents >= 5 && chance((0.01 + a.social.community * 0.015) * foundingPressure)) {
       const buddy = group.find((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 40 && getRel(b, a) > 30)
       if (buddy) tryFoundTeam(save, a, buddy, save.day, save.year, events)
     }
@@ -932,7 +960,7 @@ export function startDay(save) {
     save.hour = 0
     save.dayInProgress = {
       day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
-      attendeeIds: [], newcomers: [], staysUntil: {}, results: {}, gamesToday: {},
+      attendeeIds: [], newcomers: [], staysUntil: {}, results: {}, gamesToday: {}, charToday: {},
       openingEvents: events, hours: [], closed: true,
     }
     return
@@ -1037,6 +1065,7 @@ export function startDay(save) {
     staysUntil,
     results: {}, // playerId -> 'won' | 'lost' (latest result today, feeds social beats)
     gamesToday: {}, // playerId -> games played today (fatigue)
+    charToday: {}, // playerId -> charId they last brought today (feeds pocket-pick scenes)
     openingEvents: events,
     hours: [], // one entry per simulated hour: {label, events, streamedSetup}
   }
@@ -1160,6 +1189,10 @@ export function simHour(save) {
       dip.results[loser.id] = 'lost'
       dip.gamesToday[a.id] = (dip.gamesToday[a.id] || 0) + 1
       dip.gamesToday[b.id] = (dip.gamesToday[b.id] || 0) + 1
+      // What they actually brought, not what they main — the difference is the
+      // whole subject of a pocket-pick conversation.
+      dip.charToday[a.id] = aCharId
+      dip.charToday[b.id] = bCharId
       // Shock results become part of both players' personal legends.
       if (upsetSeverityOf(probA, result.aWins) === 'severe' && chance(0.5)) {
         remember(save, winner, 'upset', `the upset win over ${pName(save, loser)}`, { subjectIds: [loser.id] })

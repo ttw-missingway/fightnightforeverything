@@ -109,6 +109,7 @@ export function newPlayer(partial = {}) {
     attractedPlayerTags: [], // drawn to people with these tags
     repelledPlayerTags: [], // put off by people with these tags
     charRecord: {}, // charId -> {w, l} lifetime record on that character
+    form: [], // last 8 results, newest first: 'w' | 'l' — recent form, not lifetime
     otherGames: [],
     foods: [],
     wins: 0,
@@ -795,6 +796,7 @@ export function migrateSave(save) {
     p.retiredYear ??= null
     // Mid-game overhaul fields.
     p.pocketPicks ??= []
+    p.form ??= []
     p.evoTitles ??= 0
     p.belief ??= 0
     p.popularity ??= 0

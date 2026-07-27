@@ -132,6 +132,10 @@ export function seedTakes(save, player) {
  * that, but slowly — winning doesn't feel like evidence the way losing does.
  */
 export function noteMatchOutcome(save, player, oppCharId, won) {
+  // Recent form, newest first, capped at 8. Lifetime W/L says who somebody IS;
+  // this says how the last few nights have gone, which is what people actually
+  // talk about and what a losing streak means.
+  player.form = [won ? 'w' : 'l', ...(player.form || [])].slice(0, 8)
   if (!oppCharId) return
   const absDay = absDayOf(save.day, save.year)
   if (!won) {
