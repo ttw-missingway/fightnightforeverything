@@ -206,13 +206,14 @@ export default function PlayerForm({ save, player, patch }) {
         <div className="row spread stickyhead">
           <h4>
             Temperament & Stats
-            {/* The allowance in the same currency the rows are spent in: one
-                dot is one point, filled once it is sitting on a stat. What is
-                left to spend is the hollow ones — you read it the same way
-                here as you do down the page, without converting anything. */}
+            {/* This is the pot, so it drains: the dots start filled and go out
+                as you place them in the rows below. The white on screen is
+                conserved — a point leaves the top and appears on a stat — which
+                is what the point-buy actually is, rather than two separate
+                meters that happen to add up. */}
             {budget != null && (
               <span style={{ marginLeft: 10 }}>
-                <PointDots compact value={Math.min(spent, budget)} max={budget} />
+                <PointDots compact value={Math.max(0, budget - spent)} max={budget} />
                 <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
                   {spent > budget ? `${spent - budget} over budget` : `${budget - spent} left`}
                   {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
