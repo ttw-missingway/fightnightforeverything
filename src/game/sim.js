@@ -392,6 +392,13 @@ function generateInnovationName(save, charId) {
   return base
 }
 
+// Per point of `innovation`, per attended day, before the frontier multiplier.
+// This is a difficulty lever as well as a flavour one: every discovery is +1
+// permanent performance through techniqueBonus (cap 12), which sits OUTSIDE
+// skillCeiling, so it raises how strong a cultivated roster can get rather
+// than just how fast it gets there.
+const INNOVATION_RATE = 0.0028
+
 /**
  * How fertile a character's tech is, relative to the rest of the roster.
  *
@@ -446,7 +453,10 @@ function maybeInnovate(save, player, events) {
   // player who mains what nobody else will: the contrarian picks the character
   // the room has written off, and the room has written it off precisely
   // because nobody has found what it can do yet.
-  const p = player.personal.innovation * 0.0008 * (skill > 55 ? 1.5 : 1)
+  // 0.0008 put an innovation-8 specialist at roughly one discovery every two
+  // in-game years — a signature stat the owner would essentially never see
+  // pay off. See INNOVATION_RATE for what raising it does to the ladder.
+  const p = player.personal.innovation * INNOVATION_RATE * (skill > 55 ? 1.5 : 1)
     * techFrontier(save, player.mainCharId || null)
   if (!chance(p)) return
   const isCharSpecific = chance(0.8) && player.mainCharId
