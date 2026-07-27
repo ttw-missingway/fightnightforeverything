@@ -202,14 +202,17 @@ export default function PlayerForm({ save, player, patch }) {
         <div className="row spread">
           <h4>
             Temperament & Stats
-            {/* The per-stat cap doesn't need saying any more — five dots say
-                it. What the header still owes you is how much is left. */}
+            {/* The allowance in the same currency the rows are spent in: one
+                dot is one point, filled once it is sitting on a stat. What is
+                left to spend is the hollow ones — you read it the same way
+                here as you do down the page, without converting anything. */}
             {budget != null && (
-              <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
-                {spent > budget
-                  ? `${spent - budget} over budget`
-                  : `${budget - spent} of ${budget} points left`}
-                {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
+              <span style={{ marginLeft: 10 }}>
+                <PointDots compact value={Math.min(spent, budget)} max={budget} />
+                <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
+                  {spent > budget ? `${spent - budget} over budget` : `${budget - spent} left`}
+                  {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
+                </span>
               </span>
             )}
           </h4>

@@ -43,11 +43,14 @@ export function StatBar({ label, value, max = 10, title, color }) {
  * `granted` is the free point a temperament hands out. It is drawn in the
  * row's colour instead of white, because it is the one point in the row that
  * was never the owner's to spend and cannot be traded away.
+ *
+ * `compact` is the header variant: smaller, inline, and it wraps — the total
+ * allowance can run to thirty dots once a lineage has banked some legacy.
  */
-export function PointDots({ label, value, max = 5, granted = 0, color, title, onChange }) {
+export function PointDots({ label, value, max = 5, granted = 0, color, title, onChange, compact = false }) {
   const v = Math.round(value)
   return (
-    <div className="pdots" title={title}>
+    <div className={`pdots${compact ? ' compact' : ''}`} title={title}>
       {label != null && <span className="label">{label}</span>}
       <span className="dots">
         {Array.from({ length: max }, (_, i) => i + 1).map((i) => {

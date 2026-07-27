@@ -154,6 +154,11 @@ tr.clickable:hover td { background: var(--card2); }
 .pdot.on { background: #fff; border-color: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.35); }
 .pdot.clickable { cursor: pointer; }
 .pdot.clickable:hover { border-color: #fff; }
+/* Header variant: sits inline in a heading, and wraps once a lineage has
+   banked enough legacy that the allowance runs long. */
+.pdots.compact { display: inline-flex; padding: 0; vertical-align: middle; gap: 6px; }
+.pdots.compact .dots { flex-wrap: wrap; gap: 4px; }
+.pdots.compact .pdot { width: 11px; height: 11px; }
 
 .event { border-left: 3px solid var(--border); padding: 6px 12px; margin: 6px 0; font-size: 14px; }
 .event.match { border-left-color: var(--pink); }
