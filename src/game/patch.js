@@ -3,7 +3,7 @@
 // community reacts — to balance, to content, to boredom, and to cadence.
 
 import { uid, clamp, hash01, displayName } from './util.js'
-import { getMatchup, chronicle } from './model.js'
+import { getMatchup, chronicle, bumpPeak } from './model.js'
 import { bumpPassion } from './career.js'
 import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance.js'
 import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf } from './constants.js'
@@ -440,6 +440,7 @@ export function releasePatch(save) {
   const why = [...base.why, ...dem.why]
   const divisive = base.divisive
   const label = receptionLabel(score)
+  bumpPeak(save, 'bestReception', score)
   const version = bumpVersion(save.game.version)
   save.gameDraft.version = version
   // Stamp the debut on anything this patch introduces, so "the new character"

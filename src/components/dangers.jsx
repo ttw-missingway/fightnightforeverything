@@ -1,6 +1,7 @@
 import { useStore } from '../state/store.jsx'
 import { runDangers } from '../game/danger.js'
 import { venueTips } from '../game/venue.js'
+import { helperOn } from '../game/constants.js'
 
 /**
  * The "you are about to lose" banner.
@@ -24,7 +25,10 @@ export default function DangerBanner() {
   // there is still time — and they name a thing to do rather than a countdown.
   // Styled apart on purpose: a tip that looks like an alarm gets dismissed like
   // one, and the point is that these are the friendly warning.
-  const tips = venueTips(save)
+  // Coaching is a helper and can be switched off. The red rows above it
+  // cannot: a run three days from foreclosure isn't advice, it's the state of
+  // the world, and hiding the state of the world isn't a difficulty setting.
+  const tips = helperOn(save, 'tips') ? venueTips(save) : []
   if (!dangers.length && !tips.length) return null
   return (
     <div className="dangers">

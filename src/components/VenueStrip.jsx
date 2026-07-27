@@ -1,5 +1,6 @@
 import { useStore } from '../state/store.jsx'
 import { venueVitals } from '../game/venue.js'
+import { helperOn } from '../game/constants.js'
 
 /**
  * The standing readout of the four numbers that decide a run, on the screen
@@ -19,6 +20,7 @@ import { venueVitals } from '../game/venue.js'
 export default function VenueStrip() {
   const { save, nav } = useStore()
   if (!save?.economy || save.settings?.mode === 'sandbox') return null
+  if (!helperOn(save, 'vitals')) return null
   const v = venueVitals(save)
   const y = v.yesterday
 

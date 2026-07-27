@@ -1,7 +1,8 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf, statLevel } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
-import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
+import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup, bumpPeak } from './model.js'
+import { checkAchievements } from './achievements.js'
 import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
 import { castScene, sceneBeats, SCENE_CHANCE } from './scenes.js'
 import { metaAppeal, roleModelPicks, pickInterest, resultsWeight, INTEREST_DAYS, INTEREST_LABEL } from './interest.js'
@@ -12,7 +13,7 @@ import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf
 import { narrateSet } from './fight.js'
 import { buildStream, personalityOf, applyStageReps } from './stream.js'
 import {
-  staffDaily, playerSpending, settleRecurring,
+  staffDaily, playerSpending, settleRecurring, staffCounts,
   landlordDaily, tokenDeterrence, arcadeClosed, isStaffed,
   adAwarenessBoost, adHypePerDay, playerStaffAppeal,
 } from './economy.js'
@@ -1861,19 +1862,36 @@ export function advanceDay(save) {
   // here — the single tick EVERY day flows through (normal, tournament, EVO,
   // idle catch-up) — so no day is ever missed. absDayOf reads the day that's
   // closing, before the calendar ticks below.
+  let todayNet = 0
   if (save.economy) {
     const money = Math.round(save.economy.money * 100) / 100
     const prev = save.economy.lastDayMoney ?? money
+    todayNet = Math.round((money - prev) * 100) / 100
     save.economy.history ??= []
     save.economy.history.push({
       absDay: absDayOf(save.day, save.year),
       money,
-      net: Math.round((money - prev) * 100) / 100,
+      net: todayNet,
       attendance: save.economy.todayAttendance ?? null, // null on tournament/EVO days
     })
     if (save.economy.history.length > 180) save.economy.history.shift()
     save.economy.lastDayMoney = money
     save.economy.todayAttendance = null
+  }
+  // Achievement counters. Read off the day that just closed, because most of
+  // what the ladder asks is "did you do it the whole way through" — a claim no
+  // snapshot of the current state can answer. Observed here rather than at the
+  // call sites so idle catch-up days count exactly like played ones.
+  if (save.tally) {
+    if (save.idle?.enabled) save.tally.usedIdle = true
+    if ((save.arcade?.ads || []).length) save.tally.usedAds = true
+    bumpPeak(save, 'peakToxicity', save.scene?.toxicity || 0)
+    // "Alone and in the black" has to be a streak: a single good Tuesday with
+    // nobody on the payroll isn't running a family business, it's a Tuesday.
+    const staff = staffCounts(save)
+    save.tally.soloBlackDays = staff.employees + staff.managers === 0 && todayNet > 0
+      ? (save.tally.soloBlackDays || 0) + 1
+      : 0
   }
   // Legacy milestones: making it matters, growing matters — existing doesn't.
   if (save.settings.mode !== 'sandbox') {
@@ -1908,6 +1926,12 @@ export function advanceDay(save) {
       }
       if (absDay >= 168) awardMilestone(save, 'half-year', 3, "Half a year in. This place is somebody's routine.")
     }
+    // Permanent unlocks. Milestones above pay the RUN's pot and bank at reset;
+    // these are lineage facts and land the moment they are proved. Announced
+    // through the chronicle, like every other legacy award — advanceDay is the
+    // universal tick and has no day report to write into (tournament, EVO and
+    // idle catch-up days all come through here too).
+    checkAchievements(save)
   }
   save.day += 1
   if (save.day > DAYS_PER_YEAR) {

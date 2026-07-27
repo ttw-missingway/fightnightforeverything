@@ -3,6 +3,7 @@ import { useStore } from '../state/store.jsx'
 import { ordinal } from './Tournament.jsx'
 import { displayName } from '../game/util.js'
 import { formatDay } from '../game/constants.js'
+import { ACHIEVEMENTS } from '../game/achievements.js'
 
 export default function HallOfFame() {
   const { save, nav } = useStore()
@@ -12,11 +13,21 @@ export default function HallOfFame() {
   const mostGlorious = [...players].sort((a, b) => b.glory - a.glory).slice(0, 5).filter((p) => p.glory > 0)
   const evoLegends = [...save.evoRoster].sort((a, b) => (b.titles || 0) - (a.titles || 0)).filter((e) => e.titles > 0)
   const archives = save.archives || []
+  const earnedCount = ACHIEVEMENTS.filter((a) => save.prestige?.achievements?.[a.key]).length
+
+  if (tab === 'legacy') {
+    return (
+      <div>
+        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} earned={earnedCount} />
+        <LegacyLadder save={save} earned={earnedCount} />
+      </div>
+    )
+  }
 
   if (tab === 'chronicle') {
     return (
       <div>
-        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} />
+        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} earned={earnedCount} />
         <h1 style={{ fontSize: 30 }}>📜 The Arcade Chronicle</h1>
         <p className="dim">The moments everyone remembers — told and retold until they're legend.</p>
         {(save.chronicle || []).length === 0 && (
@@ -37,7 +48,7 @@ export default function HallOfFame() {
   if (tab === 'archive') {
     return (
       <div>
-        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} />
+        <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} earned={earnedCount} />
         <h1 style={{ fontSize: 30 }}>🗄 The Archives</h1>
         <p className="dim">Past runs of this world — everything that happened before the reset(s).</p>
         {[...archives].reverse().map((a) => (
@@ -78,7 +89,7 @@ export default function HallOfFame() {
 
   return (
     <div>
-      <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} />
+      <HofTabs tab={tab} setTab={setTab} count={(save.chronicle || []).length} archives={archives.length} earned={earnedCount} />
       <h1 style={{ fontSize: 30 }}>🏛 Hall of Fame</h1>
 
       <div className="grid2">
@@ -135,12 +146,74 @@ export default function HallOfFame() {
   )
 }
 
-function HofTabs({ tab, setTab, count, archives = 0 }) {
+/**
+ * The one page that isn't about this run.
+ *
+ * Everything else in the Hall of Fame is a record of what happened; this is a
+ * record of what you can now do — and it stays true through every foreclosure,
+ * because a lineage is the thing that accumulates when the runs don't.
+ */
+function LegacyLadder({ save, earned }) {
+  const record = save.prestige?.achievements || {}
+  const points = save.prestige?.points || 0
+  const runs = save.prestige?.runs || 0
+  const unearned = ACHIEVEMENTS.filter((a) => !record[a.key])
+  const done = ACHIEVEMENTS.filter((a) => record[a.key])
+
+  return (
+    <div>
+      <h1 style={{ fontSize: 30 }}>🎖 Legacy</h1>
+      <p className="dim">
+        What survives a reset. Every tool here is earned by proving you can run the place
+        without it — and the proof pays creation points on top.
+      </p>
+      <div className="card">
+        <div className="row spread">
+          <span><span className="gold" style={{ fontSize: 22, fontWeight: 700 }}>{points}</span> <span className="dim">creation points banked</span></span>
+          <span className="dim small">{earned} of {ACHIEVEMENTS.length} earned · {runs === 0 ? 'first run' : `${runs} run${runs === 1 ? '' : 's'} behind you`}</span>
+        </div>
+      </div>
+
+      {done.map((a) => {
+        const at = record[a.key]
+        return (
+          <div className="card" key={a.key} style={{ borderColor: 'var(--gold)' }}>
+            <div className="row spread">
+              <span><span style={{ fontSize: 18 }}>{a.icon}</span> <strong className="gold">{a.name}</strong></span>
+              <span className="dim small">
+                {at?.day ? `${formatDay(at.day, at.year)}` : 'earned'}{at?.run ? ` · run ${at.run}` : ''}
+              </span>
+            </div>
+            <p className="small" style={{ margin: '4px 0 0' }}>✅ {a.unlockLabel}</p>
+            <p className="dim small" style={{ margin: 0 }}>{a.how} · +{a.points} creation points</p>
+          </div>
+        )
+      })}
+
+      {unearned.length > 0 && <h3 style={{ marginTop: 16 }}>Still to prove</h3>}
+      {unearned.map((a) => (
+        <div className="card" key={a.key}>
+          <div className="row spread">
+            <span className="dim"><span style={{ fontSize: 18 }}>🔒</span> <strong>{a.name}</strong></span>
+            <span className="dim small">+{a.points} creation points</span>
+          </div>
+          <p className="small" style={{ margin: '4px 0 0' }}>{a.how}</p>
+          <p className="dim small" style={{ margin: 0 }}>Unlocks: {a.unlockLabel}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HofTabs({ tab, setTab, count, archives = 0, earned = 0 }) {
   return (
     <div className="tabs">
       <button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>🏛 Hall of Fame</button>
       <button className={tab === 'chronicle' ? 'active' : ''} onClick={() => setTab('chronicle')}>
         📜 Arcade Chronicle ({count})
+      </button>
+      <button className={tab === 'legacy' ? 'active' : ''} onClick={() => setTab('legacy')}>
+        🎖 Legacy ({earned}/{ACHIEVEMENTS.length})
       </button>
       {archives > 0 && (
         <button className={tab === 'archive' ? 'active' : ''} onClick={() => setTab('archive')}>

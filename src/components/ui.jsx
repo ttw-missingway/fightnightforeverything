@@ -32,6 +32,43 @@ export function StatBar({ label, value, max = 10, title, color }) {
   )
 }
 
+/**
+ * A stat drawn as points rather than a number.
+ *
+ * "3" is a reading on a dial; three filled dots out of five is an amount of
+ * something you spent. The whole build is a point-buy off a fixed allowance,
+ * and the dots are what make that legible at a glance — how much sits here,
+ * and how much room is left, in the same shape everywhere the stat appears.
+ *
+ * `granted` is the free point a temperament hands out. It is drawn in the
+ * row's colour instead of white, because it is the one point in the row that
+ * was never the owner's to spend and cannot be traded away.
+ */
+export function PointDots({ label, value, max = 5, granted = 0, color, title, onChange }) {
+  const v = Math.round(value)
+  return (
+    <div className="pdots" title={title}>
+      {label != null && <span className="label">{label}</span>}
+      <span className="dots">
+        {Array.from({ length: max }, (_, i) => i + 1).map((i) => {
+          const filled = i <= v
+          const isGranted = filled && i <= granted
+          return (
+            <span
+              key={i}
+              className={`pdot${filled ? ' on' : ''}${onChange ? ' clickable' : ''}`}
+              style={isGranted && color ? { background: color, borderColor: color } : undefined}
+              // Clicking the topmost filled dot clears it, so the same row that
+              // spends a point can take it back without a second control.
+              onClick={onChange ? () => onChange(i === v ? i - 1 : i) : undefined}
+            />
+          )
+        })}
+      </span>
+    </div>
+  )
+}
+
 // A list of toggleable string pills.
 export function PillPicker({ options, selected, onToggle, badSelected = [] }) {
   return (

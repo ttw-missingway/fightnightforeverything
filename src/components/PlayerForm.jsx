@@ -1,4 +1,4 @@
-import { Field, NumField, PillPicker } from './ui.jsx'
+import { Field, NumField, PillPicker, PointDots } from './ui.jsx'
 import {
   PERSONAL_STATS, SOCIAL_STATS, GENDERS, difficultyOf,
   TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS,
@@ -202,9 +202,13 @@ export default function PlayerForm({ save, player, patch }) {
         <div className="row spread">
           <h4>
             Temperament & Stats
+            {/* The per-stat cap doesn't need saying any more — five dots say
+                it. What the header still owes you is how much is left. */}
             {budget != null && (
               <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
-                {spent}/{budget} points · max {STAT_MAX_POINTS}/stat
+                {spent > budget
+                  ? `${spent - budget} over budget`
+                  : `${budget - spent} of ${budget} points left`}
                 {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
               </span>
             )}
@@ -305,17 +309,15 @@ function PointStats({ player, patch, group, rows, budget, spent, chosenRow }) {
     const val = uiVal(player[group][key])
     // A temperament isn't a suggestion: its granted point can't be traded away.
     const floor = chosen && chosen.stats.includes(key) ? 1 : 0
+    const row = rows.find((t) => t.stats.includes(key))
     return (
-      <div className="row" key={key} title={STAT_DESC[key]} style={{ marginBottom: 4 }}>
-        <span className="small" style={{ width: 110, color: val === 0 ? 'var(--dim)' : 'inherit' }}>{key}</span>
-        <input type="range" min={0} max={STAT_MAX_POINTS} value={val} style={{ flex: 1 }}
-          onChange={(e) => patch((p) => {
-            let next = Math.max(floor, Number(e.target.value))
-            if (budget != null && next > val) next = Math.min(next, val + Math.max(0, budget - spent))
-            p[group][key] = clamp(next, floor, STAT_MAX_POINTS) * STAT_UNIT
-          })} />
-        <span style={{ width: 22, textAlign: 'right' }} className={val === 0 ? 'dim' : ''}>{val}</span>
-      </div>
+      <PointDots key={key} label={key} value={val} max={STAT_MAX_POINTS}
+        granted={floor} color={row?.color} title={STAT_DESC[key]}
+        onChange={(n) => patch((p) => {
+          let next = Math.max(floor, n)
+          if (budget != null && next > val) next = Math.min(next, val + Math.max(0, budget - spent))
+          p[group][key] = clamp(next, floor, STAT_MAX_POINTS) * STAT_UNIT
+        })} />
     )
   }
   return (

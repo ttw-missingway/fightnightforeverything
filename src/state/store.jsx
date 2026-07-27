@@ -142,6 +142,12 @@ export function resetSaveById(id) {
       points: (save.prestige?.points || 0) + prestigeGain,
       runs: runNumber,
       rungPoints: (save.prestige?.rungPoints || 0) + rungPointsThisRun(save),
+      // Earned unlocks are the point of a lineage: whatever the run cost you,
+      // the tools you proved you could do without are still yours. (The run
+      // counters those claims were built from do NOT carry — a new run has to
+      // earn the ones it hasn't got all over again.)
+      achievements: structuredClone(save.prestige?.achievements || {}),
+      unlocks: structuredClone(save.prestige?.unlocks || {}),
     },
     archives: [...(save.archives || []), archive].slice(-5),
   })

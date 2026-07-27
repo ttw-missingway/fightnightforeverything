@@ -263,6 +263,25 @@ export const DIFFICULTIES = [
 export const difficultyOf = (save) =>
   DIFFICULTIES.find((d) => d.key === (save?.settings?.difficulty || 'normal')) || DIFFICULTIES[1]
 
+/**
+ * The reading aids, and whether this owner still wants them.
+ *
+ * `tips` = the coaching row on the danger banner. `vitals` = the venue strip
+ * of the four numbers that decide a run. `rumors` = the rumor mill on the
+ * concession stand and the recap.
+ *
+ * Default ON, and unknown/absent means on — a save that predates the setting
+ * should never quietly lose the thing it has always shown. Failure countdowns
+ * are NOT in here: those aren't help, they're the game telling you what state
+ * it is in, and you don't get to switch off the state.
+ */
+export const HELPERS = [
+  ['tips', '💡 Coaching tips', "Levers you haven't touched that are costing you — \"nobody is cleaning up\"."],
+  ['vitals', '💰 Venue strip', 'The standing cash / yesterday / daily nut / venue readout above every page.'],
+  ['rumors', '🗣 Rumor mill', 'What the room is talking about: feuds, grudges, who is about to walk.'],
+]
+export const helperOn = (save, key) => save?.settings?.helpers?.[key] !== false
+
 // Default per-item prices when something is first stocked/installed.
 export const DEFAULT_FOOD_PRICE = 4 // dollars per serving
 export const DEFAULT_GAME_TOKENS = 2 // tokens to play a side cabinet once

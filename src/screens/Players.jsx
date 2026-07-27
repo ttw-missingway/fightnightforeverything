@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore, downloadJson, fileStem } from '../state/store.jsx'
-import { StatBar, moodFace, Portrait } from '../components/ui.jsx'
+import { StatBar, PointDots, moodFace, Portrait } from '../components/ui.jsx'
 import { playerArt, lookArt } from '../components/art.js'
 import { lookOf } from '../game/skins.js'
 import PlayerForm from '../components/PlayerForm.jsx'
@@ -335,8 +335,9 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
                 {p.temperament === t.key && <span className="small"> · their temperament</span>}
               </h4>
               {t.stats.map((k) => (
-                <StatBar key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
-                  value={Math.round((p.personal[k] || 0) / STAT_UNIT * 10) / 10}
+                <PointDots key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
+                  value={Math.round((p.personal[k] || 0) / STAT_UNIT)}
+                  granted={p.temperament === t.key ? 1 : 0}
                   title={Object.fromEntries(PERSONAL_STATS)[k]} />
               ))}
             </div>
@@ -349,8 +350,9 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
                 {p.socialTemperament === t.key && <span className="small"> · their temperament</span>}
               </h4>
               {t.stats.map((k) => (
-                <StatBar key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
-                  value={Math.round((p.social[k] || 0) / STAT_UNIT * 10) / 10}
+                <PointDots key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
+                  value={Math.round((p.social[k] || 0) / STAT_UNIT)}
+                  granted={p.socialTemperament === t.key ? 1 : 0}
                   title={Object.fromEntries(SOCIAL_STATS)[k]} />
               ))}
             </div>

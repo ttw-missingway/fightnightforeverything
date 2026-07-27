@@ -143,6 +143,18 @@ tr.clickable:hover td { background: var(--card2); }
 .statbar .fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--pink)); }
 .statbar .val { width: 34px; text-align: right; }
 
+/* Point-buy stats: white dots, not numbers. See ui.jsx PointDots. */
+.pdots { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
+.pdots .label { width: 118px; color: var(--dim); }
+.pdots .dots { display: inline-flex; gap: 6px; }
+.pdot {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--bg2);
+}
+.pdot.on { background: #fff; border-color: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.35); }
+.pdot.clickable { cursor: pointer; }
+.pdot.clickable:hover { border-color: #fff; }
+
 .event { border-left: 3px solid var(--border); padding: 6px 12px; margin: 6px 0; font-size: 14px; }
 .event.match { border-left-color: var(--pink); }
 .event.interaction { border-left-color: var(--cyan); }
@@ -200,6 +212,7 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   .hero h1 { font-size: 38px; }
   h2 { font-size: 20px; }
   .statbar .label { width: 88px; font-size: 12px; }
+  .pdots .label { width: 88px; font-size: 12px; }
   .bracket .round { min-width: 190px; }
   .card { padding: 10px 12px; }
   .zonecard { padding: 16px 12px; }

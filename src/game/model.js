@@ -248,6 +248,40 @@ export function rungAllowanceLeft(save) {
   return Math.max(0, RUNG_ALLOWANCE - spent)
 }
 
+/**
+ * The per-run counters that achievements are judged on.
+ *
+ * Achievements are mostly "did you do this WITHOUT the tool", and that is a
+ * claim about a whole run, not about the state it happens to be in when a
+ * check runs. A high-water mark or a never-touched flag is the only honest way
+ * to ask it — you cannot read "never used idle mode" off a toggle that is
+ * currently off. They live on the run, not on `prestige`, so a new run starts
+ * the claim over.
+ */
+export function newTally() {
+  return {
+    foodSold: 0, // servings over the counter
+    soloBlackDays: 0, // consecutive days with no staff AND a day that finished up
+    peakToxicity: 0, // worst the room ever got
+    bestReception: 0, // best patch reception score landed
+    usedDiscipline: false, // any warning, separation or banishment
+    usedIdle: false, // idle mode was switched on at any point
+    usedAds: false, // any paid channel was ever running
+  }
+}
+
+/** Add to a run counter (no-op on a save too old to have the bag). */
+export function bump(save, key, n = 1) {
+  if (!save?.tally) return
+  save.tally[key] = (save.tally[key] || 0) + n
+}
+
+/** Raise a high-water counter, never lower it. */
+export function bumpPeak(save, key, value) {
+  if (!save?.tally) return
+  if (value > (save.tally[key] || 0)) save.tally[key] = value
+}
+
 export function awardMilestone(save, key, points, text) {
   save.milestones ??= {}
   if (save.milestones[key]) return false
@@ -387,6 +421,12 @@ export function newSave(partial = {}) {
       nameDisplay: 'alias', // 'alias' | 'fullname'
       mode: 'consequential', // 'consequential' (locked-in, costs, patch fallout) | 'sandbox' (adjust freely)
       difficulty: 'normal', // key into constants.DIFFICULTIES (consequential runs)
+      // Reading aids, on by default and free forever. These deliberately are
+      // NOT unlockables: the owner who most needs to be told the staff are
+      // unpaid is the one with nothing banked to spend on being told. They
+      // switch OFF instead, for the player who has learned the systems and
+      // wants the room back. See helperOn() in constants.js.
+      helpers: { tips: true, vitals: true, rumors: true },
     },
     game: {
       name: 'Untitled Fighter',
@@ -460,9 +500,13 @@ export function newSave(partial = {}) {
     quietDays: 0, // consecutive days the floor was effectively empty — the dynamics funnel
     fadedDays: 0, // consecutive days nobody outside cares anymore — the opinion funnel
     separations: [], // {key, aId, bId, untilAbs} — pairs the owner is keeping apart to cool a feud
-    prestige: { points: 0, runs: 0 }, // legacy points banked across runs; spent on player creation
+    // Everything on this object outlives the run. `achievements` and `unlocks`
+    // are the lineage's permanent record — see achievements.js — and
+    // resetSaveById carries the whole thing forward.
+    prestige: { points: 0, runs: 0, achievements: {}, unlocks: {} },
     milestones: {}, // milestone keys already earned this run (each awards once)
     prestigePending: 0, // legacy points earned THIS run — banked when the run ends
+    tally: newTally(), // per-run counters the achievement checks read (reset with the run)
     archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
     socialFeed: [], // fake posts about the scene — newest first, capped
     dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
@@ -733,8 +777,15 @@ export function migrateSave(save) {
   save.arcade.closedUntilAbs ??= null
   save.staffing ??= newStaffing()
   save.prestige ??= { points: 0, runs: 0 }
+  save.prestige.achievements ??= {}
+  save.prestige.unlocks ??= {}
+  save.settings.helpers ??= { tips: true, vitals: true, rumors: true }
   save.milestones ??= {}
   save.prestigePending ??= 0
+  // A save that predates the counters starts them now rather than backfilling:
+  // an achievement is something you did, not something the migration decided
+  // you must have done at some point.
+  save.tally = { ...newTally(), ...(save.tally || {}) }
   save.rosterCollapsed ??= false
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   save.attentionDrift ??= { untilAbs: 0, value: 0 }

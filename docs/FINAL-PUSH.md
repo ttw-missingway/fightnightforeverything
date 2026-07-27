@@ -157,16 +157,45 @@ guides in six runs.
 
 No balance dependency; can be built in parallel with 1–3.
 
-- [ ] **Attribution points as white dots**, replacing the `5/5` text.
-- [ ] **Helpers toggle** (on by default): UI warnings, the financial snapshot
+- [x] **Attribution points as white dots**, replacing the `5/5` text.
+- [x] **Helpers toggle** (on by default): UI warnings, the financial snapshot
       strip, and the rumor tab. These are *not* shop items — the players who most
       need them are exactly the ones with no currency. Experienced players switch
       them off.
-- [ ] **Achievement scaffolding.** Every unlock is earned by an achievement
+- [x] **Achievement scaffolding.** Every unlock is earned by an achievement
       related to it — typically *doing the thing without the tool*, after which
       the tool is the reward. Unlocks also pay attribution points.
-- [ ] Persistence lives on `save.prestige`, which already survives
+- [x] Persistence lives on `save.prestige`, which already survives
       `resetSaveById` per save lineage.
+
+**Built.** `PointDots` (ui.jsx) replaces the slider-and-number everywhere a 0–5
+stat appears — creation form and player sheet — with the temperament's free
+point drawn in that row's colour so you can see which point isn't yours.
+`settings.helpers` gates the coaching tips, the venue strip and the rumor mill
+individually; the **failure countdowns deliberately stay**, because a run three
+days from foreclosure is the state of the world, not advice. Twelve
+achievements in `src/game/achievements.js`, checked once a day in `advanceDay`,
+awarding into `prestige.achievements`/`unlocks`/`points` immediately (not into
+the run's pending pot — a lineage fact shouldn't be lost by the run that most
+needed it). New per-run counter bag `save.tally` for the "did you do it the
+whole way through" claims a snapshot can't answer. Legacy tab in the Hall of
+Fame.
+
+Two things to carry into later phases:
+
+- **Nothing gates on `unlocks` yet.** `isUnlocked()` is the seam and returns
+  true for anything not in the catalogue. Wiring it up is Phase 5's job,
+  because that is where the tools get priced.
+- **The payouts are first numbers.** The whole ladder pays 23, pitched against
+  `RUNG_ALLOWANCE` (24) rather than against a Normal creation budget of *five*.
+  Measured on a 400-day autopilot run, six of twelve land from just surviving;
+  the other six need intent (a room brought back from toxic, a loved patch, 60
+  solo days in the black, an EVO title). Recalibrate at Phase 7.
+- **Food pricing is doing far more than expected** — noticed while calibrating
+  `short-order`. Servings sold over 336 days: 111 at $4, 166 at $3, **469 at
+  $2**. Generated players start with `income` at zero under the sparse
+  point-buy, so a $4 counter is nearly a closed counter. Worth a look in the
+  Phase 7 pass; the achievement is calibrated around it for now.
 
 ---
 

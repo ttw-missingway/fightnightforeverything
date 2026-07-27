@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf,
-  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf } from '../game/constants.js'
+  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf, helperOn } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
@@ -362,7 +362,7 @@ function LiveDay({ save, nav }) {
 
   // The rumor mill lives at the counter. Read it once here so the floor-plan
   // card can flag hot gossip — a nudge to slow down and look before scrubbing on.
-  const rumors = gatherRumors(save)
+  const rumors = helperOn(save, 'rumors') ? gatherRumors(save) : []
   const hotRumors = rumors.filter((r) => r.heat >= 55).length
   const concessionTeaser = (concessionPeople === 0 ? 'quiet right now'
     : `${concessionPeople} ${concessionPeople === 1 ? 'person' : 'people'} hanging out`)
@@ -619,6 +619,11 @@ function RumorMill({ save, nav, limit = 5, title = '🗣 The Rumor Mill' }) {
     for (const r of allRumors(s)) s.dismissedRumors[r.id] = r.heat
     pruneDismissed(s)
   })
+
+  // Switched off, the room keeps its secrets. The feuds and the souring stars
+  // are all still there and still doing what they do — nobody is telling you
+  // about them any more. (Not the same as an empty mill, so no panel at all.)
+  if (!helperOn(save, 'rumors')) return null
 
   if (!rumors.length) {
     return (

@@ -78,6 +78,7 @@ function pride(p) {
  */
 export function warnPlayer(save, player, behavior) {
   player.warnings ??= []
+  if (save.tally) save.tally.usedDiscipline = true
   const priorSame = player.warnings.filter((w) => w.behavior === behavior).length
   const reformChance = clamp(0.6 * receptiveness(player) - priorSame * 0.12, 0.05, 0.85)
   const backfireChance = clamp(0.45 * pride(player) + priorSame * 0.12, 0.03, 0.85)
@@ -131,6 +132,7 @@ const sepKey = (aId, bId) => (aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`)
 
 export function separate(save, aId, bId, days = 21) {
   save.separations ??= []
+  if (save.tally) save.tally.usedDiscipline = true
   const key = sepKey(aId, bId)
   const untilAbs = absDayOf(save.day, save.year) + days
   const ex = save.separations.find((s) => s.key === key)
@@ -176,6 +178,7 @@ export function pruneSeparations(save) {
 
 export function banish(save, player, events) {
   if (player.banished) return
+  if (save.tally) save.tally.usedDiscipline = true
   player.banished = true
   player.banishedDay = save.day
   player.banishedYear = save.year

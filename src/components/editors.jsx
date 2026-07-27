@@ -25,6 +25,7 @@ import {
 import {
   ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES,
   DIFFICULTIES, difficultyOf, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS,
+  HELPERS, helperOn,
 } from '../game/constants.js'
 import {
   FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
@@ -105,6 +106,28 @@ export function SettingsEditor({ save, update }) {
             <button className="small" title="random name" onClick={() => update((s) => { s.stream.channelName = generateChannelName() })}>🎲</button>
           </div>
         </Field>
+        {/* Free forever, and switchable off. These are reading aids, not
+            rewards — the owner who most needs them is the one with nothing
+            banked, so they can never be something you buy. */}
+        <h4 style={{ margin: '14px 0 2px' }}>Helpers</h4>
+        <p className="dim small" style={{ margin: '0 0 6px' }}>
+          On by default. Switch them off once you know the place — nothing about the
+          simulation changes, you just stop being told about it.
+        </p>
+        {HELPERS.map(([key, label, blurb]) => (
+          <label key={key} className="row" style={{ alignItems: 'flex-start', gap: 8, marginBottom: 6, cursor: 'pointer' }}>
+            <input type="checkbox" style={{ marginTop: 3 }}
+              checked={helperOn(save, key)}
+              onChange={(e) => update((s) => {
+                s.settings.helpers ??= {}
+                s.settings.helpers[key] = e.target.checked
+              })} />
+            <span>
+              <span className="small">{label}</span>
+              <span className="dim small" style={{ display: 'block' }}>{blurb}</span>
+            </span>
+          </label>
+        ))}
       </div>
       <div className="card">
         <h3>World Rules {locked && <span className="pill" style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>🔒 consequential</span>}</h3>
