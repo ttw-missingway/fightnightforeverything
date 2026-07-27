@@ -270,3 +270,25 @@ it"), which he clocked as AI-ish.
 Regex-enforced now: "the thing" construction, specific game numbers, "throw
 at", false-precision quantities. The referent rule and the register rule can
 only live in the prompt.
+
+## Corpus generated — 2026-07-27
+
+**120/120 situations, 1,280 exchanges, 4,856 lines, $7.13.** No failures.
+
+Payload: 272KB raw, **85KB gzipped** — well inside the 400KB Dylan approved, so
+there is headroom to top up thin situations later without a bundle problem.
+
+Scene lengths came out 282 three-turn / 980 four-turn / 18 five-turn.
+
+Cache warm-up before fan-out worked exactly as intended: **532,456 cache reads
+and zero writes** across the run. The category-B smoke test, which fanned out
+immediately, had written 28k and read only 4.7k — six workers racing to write
+the same prefix before any could read it. Warming one request first saved
+roughly $3 on this run alone, and matters more the bigger the corpus gets.
+
+152 exchanges cut by the validator. Sampled reasons: 27 repeated content
+phrases, 11 weekday names, 5 gendered pronouns, 1 false-precision joke. The
+weekday and pronoun catches are the ones that matter — those would have shipped
+as real bugs (the sim owns the calendar, and {t} has no stated gender).
+
+Next: casting layer in makeBeats.
