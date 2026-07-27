@@ -30,6 +30,71 @@ specific: dry, lived-in, unglamorous, funny in a way that comes from familiarity
 rather than from telling jokes. Nobody is performing for an audience.
 `.trim()
 
+// The physical room, from Dylan. Canon — scenes may reference anything here and
+// must not contradict it. This exists because the model invents arcade detail
+// unprompted (it produced a sticky bench, a signup sheet, and a permanently
+// abandoned coin), and across thousands of scenes those inventions start
+// contradicting each other. Better to hand it the real place.
+export const THE_ROOM = `
+You come in through double glass doors into a large lobby. A circular desk sits
+in the middle of it. The front side, facing the doors, is registers and
+attendants, with whiteboards behind them for events, deals, announcements. Go
+round the other side and it is glass cases of prizes and a ticket exchange
+counter, with the big-ticket stuff stacked behind the attendants — oversized
+stuffed animals, scooters, inflatables.
+
+Past the desk are tables bolted to the floor: long ones with bench seating for
+big parties, and higher circular ones with barstools. White, patterned in
+purple and teal. Behind those is the concession counter — staff, a menu board
+hung behind them, a register, and off to one side the condiments, paper towels
+and plastic silverware.
+
+Right of concession are the bathrooms, with a photo booth wedged between the
+men's and the women's. Right of the bathrooms is the general arcade floor:
+skee-ball, the classic cabinets, DDR, Wave Racer — everything that is not THE
+fighting game. Left of concession, an open area with pinball machines lining
+the walls.
+
+Keep going right, along the wall that runs back toward the entrance, and you
+reach two velvet curtains. Through them is a dim room. This is where the
+fighting-game setups are. Folding chairs in rows, a projector throwing the
+stream onto a screen, a popcorn machine, a couple of vending machines.
+
+That dim curtained room is where nearly all of this dialogue happens. It is
+adjacent to a loud, bright, family arcade full of skee-ball and prize counters,
+and the contrast is part of what the place is: a serious little room behind a
+curtain, inside somewhere that sells inflatable hammers to nine-year-olds.
+`.trim()
+
+// Fighting-game vocabulary. Dylan's audience IS fighting-game players, and
+// using these terms as flavour rather than correctly is worse than not using
+// them — one generated scene said a player "couldn't punish" someone's reads
+// going bad, which is not what punishing is and reads as a tourist writing.
+export const FG_GLOSSARY = `
+- PUNISH: hitting a move that left the opponent vulnerable — one that was minus
+  on block, or whiffed. You punish A MOVE. You cannot punish a read, a habit, a
+  decision, or a bad day. "Whiff punish" is the same thing against a move that
+  hit nothing.
+- NEUTRAL: the phase where neither player has the advantage and both are looking
+  for a way in.
+- FOOTSIES / SPACING: fighting for ground in neutral with long pokes.
+- OKI: the pressure applied to an opponent getting up off a knockdown.
+- MIX-UP: forcing a guess, usually high vs low, or strike vs throw.
+- PLUS / MINUS ON BLOCK: whether you recover before or after they do when they
+  block your move. "Minus" is what makes something punishable.
+- CONFIRM: seeing a hit land and converting it into a full combo. A "drop" is
+  failing that conversion.
+- READ: correctly predicting what they will do. You "get a read", you don't
+  punish one.
+- LAB / LABBING: practising something alone in training mode.
+- TECH: (1) escaping a throw, (2) newly discovered technology. Both are used.
+- METER: the resource supers and other cash-ins are spent from.
+- COUNTERPICK / POCKET PICK: switching characters for a specific matchup.
+
+Use these only where a real player would, and only correctly. A scene with no
+jargon at all is always better than a scene with jargon used loosely.
+`.trim()
+
 // Each player has a VOICE derived from their stats. These definitions are what
 // make two characters sound different, so they have to be concrete rather than
 // adjectives — "fiery" as a mood produces the same line as "neutral" with an
@@ -97,6 +162,20 @@ export const ANTI_PATTERNS = `
   service announcement for Y", no other line uses that construction.
 - Do NOT write anything that assumes a specific fighting game, real-world title,
   character, or esports personality. The game is one the player invented.
+- Do NOT end on a wry observational flourish. This is THE tell, and it is what
+  got two scenes rejected outright as "very AI-ish": setup, beat, then a knowing
+  little button like "I asked about it once and got three different answers,
+  none of them confident" or "say that one more time but louder and toward the
+  door". People do not talk in closing lines. End flat, or on a non-answer, or
+  mid-thought.
+- Do NOT require more than ONE inference from the reader. Implication is good;
+  an exchange where you must reconstruct who is leaving, what was unsaid, AND
+  what the joke refers to just reads as confusing.
+- Do NOT write pure logistics. If nothing in the exchange does anything except
+  arrange two people in space, it is boring and will be cut.
+- Do NOT assume elapsed time the sim has not accrued ("I've been coming here a
+  long time", "we've been doing this for years"). If a scene needs that, it
+  must declare "arcade:established" in its cast requirements.
 `.trim()
 
 // ---------- The kinds ----------

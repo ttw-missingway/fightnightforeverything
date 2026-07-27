@@ -171,3 +171,51 @@ Three findings:
    slightly off-context. This is the real design work remaining.
 
 Next: build the casting layer in `makeBeats`. The corpus shape is settled.
+
+## Dylan's tier pass on the 22 (2026-07-27) — READ BEFORE GENERATING ANYTHING
+
+    perfect      3, 10, 14, 15
+    good         1, 12, 16, 19
+    good/funny   5, 21, 22      (a little of this, not too much)
+    FG terms wrong  13
+    boring       6, 9, 18, 20
+    confusing    2, 4, 8, 11
+    horrible     7, 17          ("sounds very AI-ish")
+
+What separates them — this is the calibration, not the scores:
+
+**Perfect = concrete and practical, no reach for cleverness.** 3 is two people
+swapping sides over a button excuse. 15 is a broken stick. 10 is a bench nobody
+wants. 14 is two players correctly describing an adjustment one of them made
+mid-set — Dylan's note was "sounds legitimate", which is the bar: real players
+discussing real play.
+
+**Horrible = a writerly tag on the end.** 7 closes "Say that one more time but
+louder and toward the door"; 17 closes "I asked about it once and got three
+different answers, none of them confident." Both land a wry observational
+button that a person would not say and an essayist would. That rhythm — setup,
+beat, knowing flourish — is the AI tell. Cut it wherever it appears, including
+from lines that are otherwise good.
+
+**Confusing = too elliptical.** 4 ("Coat's on. Bold.") needs you to infer A is
+leaving; 8 and 11 need you to reconstruct an unstated premise. Implication is
+good, but the reader gets one inference per exchange, not three.
+
+**Boring = logistics with no turn.** 6, 9, 18, 20 are just people arranging
+themselves. Every exchange needs one thing that isn't information transfer.
+
+**Two new hard constraints, both from Dylan:**
+
+1. **Fighting-game vocabulary must be used CORRECTLY** (13 failed on this). You
+   punish a move that is minus on block or whiffed — you do not "punish"
+   someone's reads going bad. The audience is his fighting-game friends; misuse
+   grates on exactly the people who will play this. The spec now carries a
+   glossary and the rule.
+
+2. **Scenes that assume elapsed time need a cast condition.** 12 is good but
+   only works in an arcade that has existed a while ("I've been coming here a
+   long time"). Same class as the weekday/month bug: add `arcade:new` /
+   `arcade:established` to the requirement vocabulary and gate on it.
+
+The four perfect ones plus 1, 12, 16, 19 are the few-shot seed. 7 and 17 go in
+the prompt as explicit negative examples.
