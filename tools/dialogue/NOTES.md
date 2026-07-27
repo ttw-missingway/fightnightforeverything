@@ -129,3 +129,45 @@ yes, build casting. If no, the line corpus is still a real improvement alone.
 - One request per bucket on purpose: a bad bucket is a five-cent regeneration.
 - The 296 hand-written lines are the few-shot seed AND stay in the shipped
   corpus. They are the quality bar.
+
+## Pilot 2 (exchanges) — done, 2026-07-27. IT WORKS.
+
+22 exchanges / ~78 lines across three situations, **$0.210**. The exchange unit
+answers the question: the model can write a scene that sounds like two people
+talking to each other, given only voices and relationship.
+
+    A: "Don't say anything to me for a minute."
+    B: "I was going to ask if you wanted half this sandwich."
+    A: "Which half."
+
+    A: "Is it the sticky one?"
+    B: "They're all the sticky one."
+
+    A: "There's a coin sitting on the cabinet, is that in play?"
+    B: "That coin predates me. I asked about it once and got three different
+        answers, none of them confident."
+
+Every turn depends on the one before it. That is exactly what no pool of
+independent lines could produce, and `first-meeting` — the case the sim
+currently handles worst — improved the most.
+
+Three findings:
+
+1. **Turn count is not honored.** Asked for 3, `long-close-set` returned 6 —
+   and the 6-turn scenes are the best writing in the set. Structured outputs
+   don't support array length constraints, so enforce in the validator. Worth
+   deciding deliberately: variable-length scenes are probably *better*, but it
+   should be a choice rather than drift.
+
+2. **The 3-gram dedupe throws false positives.** It killed two good exchanges
+   on "of it i" and "to me i" — stopword trigrams, not distinctive phrases.
+   Fix: require at least one content word in the gram, or move to 4-grams.
+
+3. **Casting is now the concrete problem, and the requirement vocabulary is too
+   thin.** Scenes encode physical context the cast conditions don't capture —
+   "Coat's on. Bold." assumes A is leaving; the sandwich exchange assumes B is
+   sitting with food. `lost + rel:close` doesn't express that. Either enrich the
+   vocabulary (leaving/arriving/eating/spectating) or accept some scenes land
+   slightly off-context. This is the real design work remaining.
+
+Next: build the casting layer in `makeBeats`. The corpus shape is settled.
