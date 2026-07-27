@@ -7,7 +7,7 @@
 import { clamp, chance, choice, randInt, uid, hash01 } from './util.js'
 import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
 import { difficultyOf, absDayOf, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
-import { chronicle, bump } from './model.js'
+import { chronicle, bump, bumpPeak } from './model.js'
 import { worldRentMult } from './worldevents.js'
 
 export const foodPriceOf = (save, name) => save.arcade.foodPrices?.[name] ?? DEFAULT_FOOD_PRICE
@@ -460,7 +460,14 @@ export function playerSpending(save, attendees, gamesToday, events) {
   if (worstLine && worstLine[1] >= 2) {
     events.push({ type: 'economy', text: `👾 The ${worstLine[0]} cabinet had a line all night — ${worstLine[1]} people never got a turn.` })
   }
+  // What the counter and the floor did tonight, for the achievement ledger.
+  // Turns taken and turns missed are both recorded: a cabinet with a line all
+  // night is the arcade asking for a bigger attraction.
   bump(save, 'foodSold', foodSales)
+  bump(save, 'foodRevenue', foodRevenue)
+  bumpPeak(save, 'bestFoodNight', foodSales)
+  bump(save, 'cabinetPlays', Object.values(seats).reduce((n, v) => n + v, 0))
+  bump(save, 'cabinetTurnaways', Object.values(lines).reduce((n, v) => n + v, 0))
   const income = Math.round((tokens * tokenPrice + foodRevenue) * 100) / 100
   if (income > 0) {
     econLog(save, income, `${tokens} token${tokens === 1 ? '' : 's'}, ${foodSales} concession sale${foodSales === 1 ? '' : 's'}`)

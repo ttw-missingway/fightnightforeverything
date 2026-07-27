@@ -260,12 +260,24 @@ export function rungAllowanceLeft(save) {
  */
 export function newTally() {
   return {
-    foodSold: 0, // servings over the counter
+    // The counter
+    foodSold: 0, // servings over the counter, all run
+    foodRevenue: 0, // dollars taken at the counter, all run
+    bestFoodNight: 0, // most servings in a single night
+    // The floor
+    cabinetPlays: 0, // turns taken on side cabinets
+    cabinetTurnaways: 0, // people who wanted a turn and never got one
+    fullFloorDays: 0, // consecutive days with four or more cabinets running
+    // The books
     soloBlackDays: 0, // consecutive days with no staff AND a day that finished up
+    blackStreak: 0, // consecutive days that didn't close in the red
+    // The room
     peakToxicity: 0, // worst the room ever got
+    peakHype: 0, // best the channel ever ran
+    peakRelevance: 0, // highest national interest the game reached
     bestReception: 0, // best patch reception score landed
+    evoWinYears: [], // years a player of YOURS won EVO — a dynasty is a streak here
     usedDiscipline: false, // any warning, separation or banishment
-    usedIdle: false, // idle mode was switched on at any point
     usedAds: false, // any paid channel was ever running
   }
 }

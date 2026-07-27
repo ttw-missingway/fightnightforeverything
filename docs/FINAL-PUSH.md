@@ -186,21 +186,66 @@ record (earned ones dated, locked ones showing what proves them), and a gold
 banner exists because the first cut only wrote a chronicle line — a permanent
 unlock nobody tells you about is indistinguishable from nothing happening.
 
-Two things to carry into later phases:
+### The ladder — 30 achievements
+
+Restructured from the first cut of twelve. One unlock per thing unlocked, so
+each food pack, each attraction and each ad channel is earned on its own.
+
+| # | Unlocks | Earned by |
+|---|---|---|
+| 1–4 | Idle at real time / Fast / Faster / Blitz | survive the summer · reach New Year · one year · five years |
+| 5 | VODs tab | run 12 tournaments |
+| 6 | Community tier list | a guide out of your scene catches on |
+| 7 | Feed tab | 400 followers |
+| 8 | Game Studio | national interest reaches 65 |
+| 9–12 | Food packs: Fryer / Sweets / Hot Line / Late Night | 200 servings · $900 taken · 18 in a night · 1,200 servings |
+| 13–18 | Attractions: pinball / bowling / classics / laser tag / VR / pickleball | 1,200 cabinet turns · 20 through the door · 4 cabinets for a year · 3 teams of 3+ · 80 hype · 8 friend pairs |
+| 19–21 | Ads: radio+social / billboards / TV | 150 followers unadvertised · 28 through the door · 5,000 followers |
+| 22–25 | Discipline / hotfixes / family business / bigger allowance | toxic room recovered clean · a beloved patch · 180 solo days up · win EVO |
+| 26–30 | Cosmetics | dynasty · perfect books · the lifer · written in stone · the hard way |
+
+**Payout rule.** Catalogue unlocks (idle speeds, food, attractions, ads) pay
+NO creation points — the content is the reward. Only the scene ones and the
+five cosmetics pay, totalling 27 against `RUNG_ALLOWANCE`'s 24. Without that
+rule thirty achievements would have handed out sixty points against a Normal
+budget of five.
+
+**Every threshold is measured.** Four of the first-cut numbers were impossible
+and the sim said so:
+
+| priced by intuition | what the sim measured | now |
+|---|---|---|
+| 100 people turned away from a full cabinet | **zero** turnaways in 500 days at every floor size | replaced — laser tag is priced in teams |
+| 20 pairs of close friends | ceiling of **2** mutual close friendships; 12 ordinary ones | 8 pairs at the "friends" band |
+| national interest 80 | unpatched relevance **cannot climb** — staleness outruns every sustain term. Neglected ceiling 57, strong scene 69 | 65, the line between those two |
+| a year with no down day | rent lands on the 1st, so that day always closes down | a year without the *balance* going red |
+
+Also recalibrated against measurement: pinball 400 → 1,200 turns (2,700 in a
+real run), a full house 24 → 20 and billboards 30 → 28 (peak attendance tops
+out around 28–33), the hot line 25 → 18 a night (30 is the hard cap and 17–19
+is a busy counter), TV 2,500 → 5,000 followers.
+
+Measured end state: a maxed-out scene — funded, fully staffed, all channels
+running — lands **15–18 of 30** over 700 days. The rest need intent.
+
+Carry into later phases:
 
 - **Nothing gates on `unlocks` yet.** `isUnlocked()` is the seam and returns
   true for anything not in the catalogue. Wiring it up is Phase 5's job,
-  because that is where the tools get priced.
-- **The payouts are first numbers.** The whole ladder pays 23, pitched against
-  `RUNG_ALLOWANCE` (24) rather than against a Normal creation budget of *five*.
-  Measured on a 400-day autopilot run, six of twelve land from just surviving;
-  the other six need intent (a room brought back from toxic, a loved patch, 60
-  solo days in the black, an EVO title). Recalibrate at Phase 7.
-- **Food pricing is doing far more than expected** — noticed while calibrating
-  `short-order`. Servings sold over 336 days: 111 at $4, 166 at $3, **469 at
-  $2**. Generated players start with `income` at zero under the sparse
-  point-buy, so a $4 counter is nearly a closed counter. Worth a look in the
-  Phase 7 pass; the achievement is calibrated around it for now.
+  because that is where the tools get priced. The packs named here have no
+  contents either — `FOODS` currently holds 12 items against the 25 the four
+  packs need, and the six attractions are entirely new content.
+- **`enough-for-teams` is the one unmeasured threshold.** Teams only form
+  around a user-created player, and the headless harness has no cast, so three
+  teams of three is reasoned rather than measured. Check it with a real cast.
+- **A perfect patch should be harder to earn**, not just harder to score.
+  `first-time-right` moved 14 → 24, but that is a threshold change on the same
+  distribution; making a genuinely great reception rarer is a `computeReception`
+  change and belongs with the Phase 7 pass.
+- **Food pricing is doing far more than expected.** Servings sold over 336
+  days: 111 at $4, 166 at $3, **469 at $2**. Generated players start with
+  `income` at zero under the sparse point-buy, so a $4 counter is nearly a
+  closed counter. The food achievements are calibrated around it for now.
 
 ---
 
@@ -243,6 +288,32 @@ Self-contained subsystem; slot anywhere after Phase 4.
       Starting bandwidth ≈ one weekly 8-player plus one monthly 16-player.
 - [ ] Bandwidth is purchasable and persistent
 - [ ] Tournaments cost cleanliness, scaled by size
+
+---
+
+## Phase 6b — the school year, and the EVO hook
+
+Not started. Agreed 2026-07-27; slots after Phase 6.
+
+The cast is high-school and college kids, so the calendar should behave like
+theirs. Two changes, one hook:
+
+- [ ] **A run opens in summer**, not on January 1. The arcade's best months are
+      its first months, which is also when a new owner most needs the room to
+      be full.
+- [ ] **Attendance takes a real hit when school goes back.** The summer crowd
+      thins in September and the scene has to survive its first winter on
+      whoever stayed. This is the first difficulty cliff a new owner meets, and
+      it arrives early enough to teach rather than to end the run.
+- [ ] **EVO moves to June 22** — days after a run opens. Nobody you made will
+      be anywhere near ready for the first one, and that is the point: it is a
+      date on the calendar from day one, it happens *to* you while you are
+      still learning the room, and everything you do for the next year is
+      pointed at the next one.
+
+Depends on: the idle ladder in Phase 4 is already sized to this calendar (62
+days = the summer, 175 = New Year's Day) and its names come true when the
+start moves. Nothing else reads the season yet.
 
 ---
 

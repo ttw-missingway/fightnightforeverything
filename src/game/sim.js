@@ -1883,14 +1883,22 @@ export function advanceDay(save) {
   // snapshot of the current state can answer. Observed here rather than at the
   // call sites so idle catch-up days count exactly like played ones.
   if (save.tally) {
-    if (save.idle?.enabled) save.tally.usedIdle = true
     if ((save.arcade?.ads || []).length) save.tally.usedAds = true
     bumpPeak(save, 'peakToxicity', save.scene?.toxicity || 0)
-    // "Alone and in the black" has to be a streak: a single good Tuesday with
-    // nobody on the payroll isn't running a family business, it's a Tuesday.
+    bumpPeak(save, 'peakHype', save.stream?.hype || 0)
+    bumpPeak(save, 'peakRelevance', save.relevance || 0)
+    // Three streaks, all reset by a single bad day, because that is what makes
+    // them worth anything. "Alone and in the black" isn't a good Tuesday with
+    // nobody on the payroll — it's every day for half a year.
     const staff = staffCounts(save)
     save.tally.soloBlackDays = staff.employees + staff.managers === 0 && todayNet > 0
       ? (save.tally.soloBlackDays || 0) + 1
+      : 0
+    save.tally.blackStreak = todayNet >= 0 && (save.economy?.money ?? 0) >= 0
+      ? (save.tally.blackStreak || 0) + 1
+      : 0
+    save.tally.fullFloorDays = (save.arcade?.otherGames || []).length >= 4
+      ? (save.tally.fullFloorDays || 0) + 1
       : 0
   }
   // Legacy milestones: making it matters, growing matters — existing doesn't.

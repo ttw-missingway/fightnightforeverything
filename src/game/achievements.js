@@ -1,166 +1,313 @@
-import { absDayOf } from './constants.js'
+import { absDayOf, DAYS_PER_YEAR } from './constants.js'
 import { chronicle } from './model.js'
 
 /**
  * The permanent ladder: what a lineage keeps when a run ends.
  *
- * Two rules decide this whole list.
+ * Two rules decide this list.
  *
- * The first is that an unlock is EARNED, never bought. Everything here is a
- * tool that makes the arcade easier to run, and a tool you can buy is a tool
- * the struggling owner never gets — the same trap the helpers setting exists
- * to avoid, one tier up. So the currency is proof.
+ * The first is that an unlock is EARNED, never bought. Everything here makes
+ * the arcade easier or richer to run, and a thing you can buy is a thing the
+ * struggling owner never gets — the same trap the helpers setting exists to
+ * avoid, one tier up. So the currency is proof.
  *
- * The second is what the proof is FOR. Typically it is doing the thing without
- * the tool: you run a full season an hour at a time and idle mode is the
- * reward; you keep a poisonous room together with nothing but matchmaking and
- * the discipline screen is the reward. That ordering is deliberate — the tool
- * arrives with the understanding of what it is for already in place, and a
- * shortcut you have earned the long way round reads as relief instead of as
- * the way the game is meant to be played.
+ * The second is what the proof is FOR. Often it is doing the thing without the
+ * tool: you keep a poisonous room together with nothing but matchmaking and
+ * the discipline screen is the reward. Where that doesn't fit, the proof is
+ * the NEED — six teams organising themselves is the argument for laser tag,
+ * and it arrives from your own floor rather than from a price list.
  *
- * Every unlock also pays creation points, because a lineage that has proved
- * all this should be able to build better people, not just click fewer times.
- * The whole ladder is worth 23 — deliberately about what RUNG_ALLOWANCE pays,
- * so the two legacy tracks are peers rather than one swamping the other. Read
- * against a Normal creation budget of FIVE, not against some hundred-point
- * pool: a payout of 4 here would be most of a build. (Phase 7 recalibrates
- * this against everything else; these are first numbers, not settled ones.)
+ * EVERY THRESHOLD HERE IS MEASURED, not guessed. The first cut priced several
+ * of these off intuition and the sim refused all of them: cabinet queues never
+ * happen (zero in 500 days at any floor size), mutual close friendships top
+ * out at two, and national interest cannot climb at all while the game is
+ * unpatched. Anything changed here should be re-measured, not reasoned about.
+ *
+ * PAYOUT RULE. Creation points are scarce (a Normal build is FIVE), so only
+ * unlocks that prove something about the players or the scene pay them.
+ * Catalogue unlocks — idle speeds, food packs, attractions, ad channels — pay
+ * nothing: the content is the reward. Without that rule thirty achievements
+ * would quietly hand out sixty points against a five-point budget. Total here
+ * is 27, pitched against RUNG_ALLOWANCE (24) so the two legacy tracks stay
+ * peers. Phase 7 recalibrates.
  *
  * PHASE 4 SCOPE: this file is the ledger and the award loop. Nothing consults
- * `unlocks` to gate a feature yet — that is Phase 5, where the catalogue is
- * priced. Until then every tool stays available and the ladder just records
- * what you have shown you can do.
+ * `unlocks` to gate a feature, and the packs it names have no contents yet —
+ * both are Phase 5, where the catalogue is authored and priced.
  */
+
+/**
+ * The idle ladder is measured in DAYS SURVIVED, not calendar dates, and the
+ * numbers are the seasons of the planned summer start (see FINAL-PUSH.md):
+ * open in late June, 62 days carries you through to the end of the summer,
+ * 175 reaches New Year's Day, then a year, then five.
+ *
+ * Written this way on purpose. A run currently opens on January 1, so reading
+ * the literal calendar would put "survive the summer" AFTER "reach New Year's"
+ * and the ladder would climb backwards. Elapsed days give the same lengths
+ * either way, and the names come true the day the start moves.
+ */
+const SUMMER = 62
+const TO_NEW_YEAR = 175
+
 export const ACHIEVEMENTS = [
+  // ---------- Idle speeds: you earn the right to skip ahead ----------
   {
-    key: 'hand-cranked',
-    icon: '🕐',
-    name: 'Hand-cranked',
-    unlock: 'idle',
-    unlockLabel: 'Idle mode — the arcade runs while you watch',
-    points: 1,
-    how: 'Reach day 84 without ever switching on idle mode.',
-    check: (s, absDay) => absDay >= 84 && !s.tally?.usedIdle,
+    key: 'summer-holds', icon: '☀️', name: 'The summer holds',
+    unlock: 'idle-realtime', unlockLabel: 'Idle mode at real time', points: 0,
+    how: 'Keep the doors open through your first summer.',
+    check: (s, absDay) => absDay >= SUMMER,
   },
   {
-    key: 'full-card',
-    icon: '📼',
-    name: 'Ran the whole card',
-    unlock: 'vods',
-    unlockLabel: 'The VODs tab — every bracket, rewatchable',
-    points: 1,
+    key: 'new-year', icon: '🎆', name: 'Still here in January',
+    unlock: 'idle-fast', unlockLabel: 'Idle speed: Fast', points: 0,
+    how: "Make it to New Year's Day.",
+    check: (s, absDay) => absDay >= TO_NEW_YEAR,
+  },
+  {
+    key: 'one-year', icon: '📅', name: 'A year of this',
+    unlock: 'idle-faster', unlockLabel: 'Idle speed: Faster', points: 0,
+    how: 'Run the arcade for one whole year.',
+    check: (s, absDay) => absDay >= DAYS_PER_YEAR,
+  },
+  {
+    key: 'five-years', icon: '🏛', name: 'An institution',
+    unlock: 'idle-blitz', unlockLabel: 'Idle speed: Blitz', points: 0,
+    how: 'Five whole years, one arcade.',
+    check: (s, absDay) => absDay >= DAYS_PER_YEAR * 5,
+  },
+
+  // ---------- The tabs: information you have proved you can read ----------
+  {
+    key: 'full-card', icon: '📼', name: 'Ran the whole card',
+    unlock: 'vods', unlockLabel: 'The VODs tab — every bracket, rewatchable', points: 1,
     how: 'Run twelve tournaments to a finish.',
     check: (s) => (s.hallOfFame || []).length >= 12,
   },
   {
-    key: 'own-eyes',
-    icon: '📊',
-    name: 'Read it yourself',
-    unlock: 'tiers',
-    unlockLabel: 'The community tier list',
-    points: 2,
-    // A tier list is a borrowed opinion. A scene that writes its own guides has
-    // formed a real one — and somebody had to put the reps in to write each.
-    how: 'Have your scene write three character guides of its own.',
-    check: (s) => (s.guides || []).length >= 3,
+    key: 'own-eyes', icon: '📊', name: 'Read it yourself',
+    unlock: 'tiers', unlockLabel: 'The community tier list', points: 2,
+    // A tier list is a borrowed opinion. A guide the scene actually picked up
+    // is one your room wrote, and somebody put in the reps to be worth reading.
+    how: 'Have a character guide out of your scene catch on.',
+    check: (s) => (s.guides || []).some((g) => g.landed),
   },
   {
-    key: 'word-of-mouth',
-    icon: '📱',
-    name: 'Word of mouth',
-    unlock: 'feed',
-    unlockLabel: 'The Feed — what the internet is saying',
-    points: 1,
+    key: 'word-of-mouth', icon: '📱', name: 'Word of mouth',
+    unlock: 'feed', unlockLabel: 'The Feed — what the internet is saying', points: 1,
     how: 'Reach 400 followers.',
     check: (s) => (s.stream?.followers || 0) >= 400,
   },
   {
-    key: 'as-shipped',
-    icon: '📦',
-    name: 'As shipped',
-    unlock: 'studio',
-    unlockLabel: 'The Game Studio — patch your own game',
-    points: 2,
-    how: 'Reach the end of Year 1 having never released a patch.',
-    check: (s, absDay) => absDay >= 168 && s.game.version === '1.0',
+    key: 'worth-watching', icon: '🌐', name: 'Worth watching',
+    unlock: 'studio', unlockLabel: 'The Game Studio — patch your own game', points: 2,
+    // National interest in the GAME — fed by streaming, guides that land, and
+    // players who perform. A run OPENS at 55, so the bar has to sit above that
+    // or it is just a survival timer: measured, a neglected scene sags to a
+    // ceiling of 57 while a streamed, staffed, well-advertised one reaches 69.
+    // 65 is the line between those two, and it has to be cleared on the build
+    // as it shipped — after which you have earned the right to change it.
+    how: 'Push national interest in the game to 65 — on stream, guides, and results.',
+    check: (s) => (s.tally?.peakRelevance || 0) >= 65,
   },
+
+  // ---------- Food packs: the counter argues for itself ----------
   {
-    key: 'short-order',
-    icon: '🍿',
-    name: 'Short order',
-    unlock: 'foodpacks',
-    unlockLabel: 'Food packs — five more things to stock',
-    points: 1,
+    key: 'the-fryer', icon: '🍟', name: 'The fryer never rests',
+    unlock: 'food-fryer', unlockLabel: 'Food pack: The Fryer — hot, salty, fast', points: 0,
     how: 'Sell 200 servings across a single run.',
     check: (s) => (s.tally?.foodSold || 0) >= 200,
   },
   {
-    key: 'full-house',
-    icon: '🎪',
-    name: 'Full house',
-    unlock: 'arcadepacks',
-    unlockLabel: 'Attraction packs — pinball, bowling, VR and the rest',
-    points: 2,
-    how: 'Draw 24 people through the door in one night.',
-    check: (s) => (s.peakAttendance || 0) >= 24,
+    key: 'sweet-tooth', icon: '🍬', name: 'Sweet tooth',
+    unlock: 'food-sweets', unlockLabel: 'Food pack: The Sweet Counter — sugar and cold drinks', points: 0,
+    how: 'Take $900 across the concession counter in a single run.',
+    check: (s) => (s.tally?.foodRevenue || 0) >= 900,
   },
   {
-    key: 'kept-the-peace',
-    icon: '🕊',
-    name: 'Kept the peace',
-    unlock: 'discipline',
-    unlockLabel: 'Separating and banning players',
-    points: 3,
-    // The purest form of the rule: the room got genuinely poisonous and you
-    // brought it back with matchmaking, staffing and a clean floor alone.
+    key: 'hot-line', icon: '🍜', name: 'On the hot line',
+    unlock: 'food-hotline', unlockLabel: 'Food pack: The Hot Line — food people sit down for', points: 0,
+    // Six servings per item per night is the ceiling, so this is a counter
+    // running at capacity across a properly stocked case.
+    how: 'Serve 18 people in a single night.',
+    check: (s) => (s.tally?.bestFoodNight || 0) >= 18,
+  },
+  {
+    key: 'last-call', icon: '🌙', name: 'Last call',
+    unlock: 'food-latenight', unlockLabel: 'Food pack: Late Night — what closing-time crowds eat', points: 0,
+    how: 'Sell 1,200 servings across a single run.',
+    check: (s) => (s.tally?.foodSold || 0) >= 1200,
+  },
+
+  // ---------- Attractions: six rooms the floor asked you for ----------
+  {
+    key: 'silver-ball', icon: '🎱', name: 'The silver ball',
+    unlock: 'attr-pinball', unlockLabel: 'Attraction pack: the pinball collection', points: 0,
+    how: 'Take 1,200 turns on your side cabinets.',
+    check: (s) => (s.tally?.cabinetPlays || 0) >= 1200,
+  },
+  {
+    key: 'full-house', icon: '🎳', name: 'Full house',
+    unlock: 'attr-bowling', unlockLabel: 'Attraction pack: the bowling alley', points: 0,
+    how: 'Draw 20 people through the door in one night.',
+    check: (s) => (s.peakAttendance || 0) >= 20,
+  },
+  {
+    key: 'the-classics', icon: '👾', name: 'The classics',
+    unlock: 'attr-classics', unlockLabel: 'Attraction pack: classic arcade cabinets', points: 0,
+    how: 'Keep four or more side cabinets running for a full year straight.',
+    check: (s) => (s.tally?.fullFloorDays || 0) >= DAYS_PER_YEAR,
+  },
+  {
+    key: 'enough-for-teams', icon: '🔫', name: 'Enough for teams',
+    unlock: 'attr-lasertag', unlockLabel: 'Attraction pack: laser tag', points: 0,
+    // Laser tag is the one attraction nobody plays alone, so it is priced in
+    // squads rather than turnstiles: six real teams means a room that already
+    // organises itself into sides.
+    // Three, not six: a team only ever forms around one of YOUR players
+    // (social.js tryFoundTeam), so this is bounded by how big a cast you could
+    // afford to create — and on Normal that is a handful of people.
+    how: 'Have three teams of three or more running at once.',
+    check: (s) => Object.values(s.teams || {}).filter((t) => (t.memberIds || []).length >= 3).length >= 3,
+  },
+  {
+    key: 'the-spectacle', icon: '🥽', name: 'The spectacle',
+    unlock: 'attr-vr', unlockLabel: 'Attraction pack: VR', points: 0,
+    how: 'Get the channel to 80 hype.',
+    check: (s) => (s.tally?.peakHype || 0) >= 80,
+  },
+  {
+    key: 'the-hangout', icon: '🥒', name: 'The hangout',
+    unlock: 'attr-pickleball', unlockLabel: 'Attraction pack: pickleball', points: 0,
+    // Not a competitive bar at all: pickleball is for the room that stopped
+    // being only about the bracket, so it is priced in friendships. Eight
+    // pairs against a measured ceiling of twelve — this is most of a room.
+    how: 'Have eight pairs of genuine friends in the room at once.',
+    check: (s) => friendPairs(s) >= 8,
+  },
+
+  // ---------- Advertising: outgrow the channel you're on ----------
+  {
+    key: 'airtime', icon: '📻', name: 'Airtime',
+    unlock: 'ads-airwaves', unlockLabel: 'Advertising: radio and social', points: 0,
+    how: 'Reach 150 followers without ever paying for advertising.',
+    check: (s) => !s.tally?.usedAds && (s.stream?.followers || 0) >= 150,
+  },
+  {
+    key: 'landmark', icon: '🪧', name: 'A landmark',
+    unlock: 'ads-billboards', unlockLabel: 'Advertising: billboards', points: 0,
+    how: 'Draw 28 people through the door in one night.',
+    check: (s) => (s.peakAttendance || 0) >= 28,
+  },
+  {
+    key: 'primetime', icon: '📺', name: 'Primetime',
+    unlock: 'ads-tv', unlockLabel: 'Advertising: television', points: 0,
+    how: 'Reach 5,000 followers.',
+    check: (s) => (s.stream?.followers || 0) >= 5000,
+  },
+
+  // ---------- The scene: the ones that pay ----------
+  {
+    key: 'kept-the-peace', icon: '🕊', name: 'Kept the peace',
+    unlock: 'discipline', unlockLabel: 'Separating and banning players', points: 3,
     how: 'Let the room turn toxic and bring it back — without one warning, separation or ban.',
     check: (s) => (s.tally?.peakToxicity || 0) >= 0.3
       && (s.scene?.toxicity ?? 1) <= 0.12
       && !s.tally?.usedDiscipline,
   },
   {
-    key: 'first-time-right',
-    icon: '🎯',
-    name: 'Right the first time',
-    unlock: 'hotfix',
-    unlockLabel: 'Hotfixes — small corrections without a full patch',
-    points: 2,
-    how: 'Land a patch the community genuinely loves.',
-    check: (s) => (s.tally?.bestReception || 0) >= 14,
+    key: 'first-time-right', icon: '🎯', name: 'Right the first time',
+    unlock: 'hotfix', unlockLabel: 'Hotfixes — small corrections without a full patch', points: 2,
+    how: 'Land a patch the community adores.',
+    check: (s) => (s.tally?.bestReception || 0) >= 24,
   },
   {
-    key: 'solo-shift',
-    icon: '🧹',
-    name: 'Solo shift',
-    unlock: 'family',
-    unlockLabel: 'The family business — staff who never quit and never bill you',
-    points: 3,
-    how: 'Sixty days running the floor alone and finishing every one of them up.',
-    check: (s) => (s.tally?.soloBlackDays || 0) >= 60,
+    key: 'solo-shift', icon: '🧹', name: 'Solo shift',
+    unlock: 'family', unlockLabel: 'The family business — staff who never quit and never bill you', points: 3,
+    how: 'Half a year running the floor completely alone, finishing every single day up.',
+    check: (s) => (s.tally?.soloBlackDays || 0) >= 180,
   },
   {
-    key: 'world-champion',
-    icon: '👑',
-    name: 'World champion',
-    unlock: 'points',
-    unlockLabel: 'A permanently larger creation allowance',
-    points: 3,
+    key: 'world-champion', icon: '👑', name: 'World champion',
+    unlock: 'points', unlockLabel: 'A permanently larger creation allowance', points: 3,
     how: 'Send a player of yours to EVO and have them win it.',
     check: (s) => Object.values(s.players).some((p) => !p.npc && (p.evoTitles || 0) >= 1),
   },
+
+  // ---------- The long haul ----------
+  //
+  // Five that nobody earns by accident. Each pays a COSMETIC, because at this
+  // level the reward is not another tool — it is the room looking like the
+  // place where that happened, to you and to anyone you share the world with.
+  // (Phase 5/6 renders them; the ledger just records which are yours.)
   {
-    key: 'handbills',
-    icon: '📄',
-    name: 'Handbills and hearsay',
-    unlock: 'ads',
-    unlockLabel: 'The rest of the advertising channels',
-    points: 2,
-    how: 'Get a year in with 24 regulars, having never paid for advertising.',
-    check: (s, absDay) => !s.tally?.usedAds && absDay >= 168
-      && Object.values(s.players).filter((p) => p.isRegular && !p.retired && !p.banished).length >= 24,
+    key: 'dynasty', icon: '🏆', name: 'Dynasty',
+    unlock: 'cosmetic-banners', unlockLabel: 'Championship banners hang over the floor', points: 2,
+    cosmetic: true,
+    how: 'Win EVO three years running.',
+    check: (s) => hasStreak(s.tally?.evoWinYears || [], 3),
+  },
+  {
+    key: 'perfect-books', icon: '💎', name: 'Perfect books',
+    unlock: 'cosmetic-marquee', unlockLabel: "The arcade's name in gold", points: 2,
+    cosmetic: true,
+    how: 'A full year without the account once going into the red.',
+    check: (s) => (s.tally?.blackStreak || 0) >= DAYS_PER_YEAR,
+  },
+  {
+    key: 'the-lifer', icon: '🎖', name: 'The lifer',
+    unlock: 'cosmetic-laurel', unlockLabel: 'A laurel on the player who never left', points: 2,
+    cosmetic: true,
+    how: 'Carry one player to a thousand days on the floor without them ever burning out.',
+    check: (s) => Object.values(s.players).some((p) =>
+      !p.npc && !p.retired && !p.banished && (p.daysAttended || 0) >= 1000),
+  },
+  {
+    key: 'written-in-stone', icon: '📚', name: 'Written in stone',
+    unlock: 'cosmetic-library', unlockLabel: 'The Codex becomes a proper library', points: 2,
+    cosmetic: true,
+    how: 'Five guides out of your scene catch on in a single run.',
+    check: (s) => (s.guides || []).filter((g) => g.landed).length >= 5,
+  },
+  {
+    key: 'the-hard-way', icon: '🔥', name: 'The hard way',
+    unlock: 'cosmetic-neon', unlockLabel: 'An exclusive neon for the storefront', points: 2,
+    cosmetic: true,
+    how: 'Reach Year 5 on Master.',
+    check: (s, absDay) => s.settings?.difficulty === 'master' && absDay >= DAYS_PER_YEAR * 4,
   },
 ]
+
+/**
+ * Pairs who both count the other a friend (rel ≥ 20, mutual).
+ *
+ * The threshold is the "friends" band, not "close friends" — measured over a
+ * 500-day well-run scene the room reached TWO mutual close-friendships and
+ * twelve ordinary ones, so pricing this at the higher band would have made it
+ * unreachable rather than hard.
+ */
+function friendPairs(save) {
+  const active = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !p.banished)
+  let pairs = 0
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      const a = active[i], b = active[j]
+      if ((a.relationships?.[b.id] ?? 0) >= 20 && (b.relationships?.[a.id] ?? 0) >= 20) pairs += 1
+    }
+  }
+  return pairs
+}
+
+/** Does this list of years contain `n` consecutive ones? */
+function hasStreak(years, n) {
+  const sorted = [...new Set(years)].sort((a, b) => a - b)
+  let run = 0
+  for (let i = 0; i < sorted.length; i++) {
+    run = i > 0 && sorted[i] === sorted[i - 1] + 1 ? run + 1 : 1
+    if (run >= n) return true
+  }
+  return false
+}
 
 /** Has this lineage earned it? (Reads the permanent record, not the run.) */
 export const hasAchievement = (save, key) => !!save?.prestige?.achievements?.[key]
@@ -177,7 +324,7 @@ export const isUnlocked = (save, unlockKey) => {
 }
 
 /**
- * Award anything newly proved. Called once a day from endDay.
+ * Award anything newly proved. Called once a day from advanceDay.
  *
  * Points land in `prestige.points` immediately rather than in the run's
  * pending pot: an achievement is a lineage fact the moment it happens, and
@@ -207,7 +354,8 @@ export function checkAchievements(save) {
     save.prestige.achievements[a.key] = { day: save.day, year: save.year, run: (save.prestige.runs || 0) + 1 }
     save.prestige.unlocks[a.unlock] = true
     save.prestige.points = (save.prestige.points || 0) + a.points
-    chronicle(save, a.icon, `${a.name} — ${a.unlockLabel} is yours for good (+${a.points} creation point${a.points === 1 ? '' : 's'})`)
+    const pay = a.points > 0 ? ` (+${a.points} creation point${a.points === 1 ? '' : 's'})` : ''
+    chronicle(save, a.icon, `${a.name} — ${a.unlockLabel} is yours for good${pay}`)
     save.unlockNotices.push(a.key)
     earned.push(a)
   }

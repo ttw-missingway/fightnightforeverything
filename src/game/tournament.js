@@ -803,6 +803,8 @@ export function runEvo(save) {
     if (place <= 4) awardMilestone(save, 'evo-top4', 3, `${pName(save, p)} made EVO top 4 — nobody laughs at this scene anymore`)
     if (place === 1) {
       p.tournamentWins += 1; p.evoTitles = (p.evoTitles || 0) + 1; p.mood = 10
+      // A dynasty is a STREAK of these, so the year has to be on the record.
+      if (!p.npc && save.tally) save.tally.evoWinYears = [...(save.tally.evoWinYears || []), save.year]
       remember(save, p, 'evo', `WINNING EVO Year ${save.year}`)
       awardMilestone(save, `evo-champion-y${save.year}`, 8, `EVO CHAMPION, Year ${save.year} — from this arcade`)
       // The Champion Dividend: a world title out of YOUR arcade changes
