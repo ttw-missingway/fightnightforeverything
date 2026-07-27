@@ -5,6 +5,7 @@ import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, aw
 import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
 import { castScene, sceneBeats, SCENE_CHANCE } from './scenes.js'
 import { metaAppeal, roleModelPicks, pickInterest, resultsWeight, INTEREST_DAYS, INTEREST_LABEL } from './interest.js'
+import { maybeWriteGuide, resolveGuides } from './guides.js'
 import { selectableChars } from './forms.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
@@ -1651,9 +1652,17 @@ export function endDay(save) {
       maybePocketPickup(save, p)
       resolveInterest(save, p, events) // graduate or drop before taking a new one
       maybeTakeInterest(save, p, events)
+      // The other direction from all that character-hopping: the person who
+      // stayed put and went deep writes the book on it.
+      const g = maybeWriteGuide(save, p, events, chance)
+      if (g) {
+        events.push({ type: 'guide',
+          text: `${pName(save, p)} has written a ${g.charName} guide — the room's first real document on the character.` })
+      }
     } else maybeSettleMain(save, p, events)
     checkFallingOut(save, p, events)
   }
+  resolveGuides(save, events, chance, (pl) => pName(save, pl))
   dailyTeamDynamics(save, events)
   maybeScheduleMoneyMatch(save, events)
 

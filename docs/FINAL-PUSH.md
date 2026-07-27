@@ -8,9 +8,15 @@ price is a judgement about how valuable a thing is, and half those judgements
 are wrong today because stamina does nothing, drama is a net tax, and hype
 rewards a boring room.
 
-Check items off as they land. Each phase ends with a measurement gate, because
-this whole plan came out of measurements that contradicted what the code's own
-comments claimed.
+Check items off as they land.
+
+**Measurement policy (decided after Phase 2):** do NOT re-balance after every
+phase. Each phase knocks the next one out of true, so per-phase gates spend
+effort tuning numbers that the following phase will move anyway — Phase 2 spent
+four attempts chasing a drama gap that Phase 3's guides may shift on their own.
+Implement 3 → 6, then do the whole rebalance once, at Phase 7. Gates already
+recorded below are kept as a record of what was true at the time, not as a bar
+each future phase has to clear.
 
 ---
 
@@ -127,15 +133,20 @@ That diagnosis is the next task, not another tweak.
 Gives `loyalty`/`mastery` a visible output, fills the Codex with earned content,
 and creates a route to notoriety that is not personality.
 
-- [ ] A player who **leads their peers** in skill on a character can write a
+- [x] A player who **leads their peers** in skill on a character can write a
       guide. Gate on *n ≥ 3 players with real reps on that character* — after
       the taste-layer work, contrarians are often the only person on their pick
       and would trivially qualify on day one.
-- [ ] Guide **quality** keys off absolute skill; quality drives the chance it
+- [x] Guide **quality** keys off absolute skill; quality drives the chance it
       catches on.
-- [ ] A popular guide raises **arcade relevance** and the **author's
+- [x] A popular guide raises **arcade relevance** and the **author's
       popularity**.
-- [ ] Guides live in the **Codex**.
+- [x] Guides live in the **Codex**.
+
+**Built.** ~2 guides per 500-day run, ~1 catching on. Thresholds are calibrated
+against measured per-character skill (best-on-a-character runs 5–20, NOT the
+30–37 you see for skill-on-your-main) — the first cut used 45 and produced zero
+guides in six runs.
 
 ---
 

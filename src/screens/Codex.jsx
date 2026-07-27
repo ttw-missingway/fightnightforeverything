@@ -5,6 +5,7 @@ import { formatDay } from '../game/constants.js'
 import { Portrait } from '../components/ui.jsx'
 import { charArt } from '../components/art.js'
 import { selectableChars, formsOf, originOf } from '../game/forms.js'
+import { guidesFor } from '../game/guides.js'
 
 // The Codex: an index of every discovered technique (who found it, which
 // character it belongs to) and every character (milestones, mains, tech).
@@ -114,6 +115,7 @@ function CharacterIndex({ save }) {
           .sort((a, b) => (b.charSkill[c.id] || 0) - (a.charSkill[c.id] || 0))
         const innovs = save.innovations.filter((i) => i.charId === c.id)
         const milestones = [...(save.charMilestones || [])].filter((m) => m.charId === c.id).reverse()
+        const guides = guidesFor(save, c.id)
         return (
           <div className="card" key={c.id}>
             <div className="row spread">
@@ -157,6 +159,29 @@ function CharacterIndex({ save }) {
                     )
                   })}
                 </div>
+              </>
+            )}
+
+            {guides.length > 0 && (
+              <>
+                {/* The definitive write-ups. This is how somebody who never
+                    courted a camera ends up known for a character. */}
+                <h4>Guides</h4>
+                {guides.map((g) => {
+                  const author = save.players[g.authorId]
+                  return (
+                    <div className="row spread" key={g.id}
+                      style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
+                      <span className="small">
+                        <span className={g.landed ? 'cyan' : 'dim'}>📘 {c.name} guide</span>
+                        <span className="dim"> by {author ? displayName(author, save) : 'a departed regular'}</span>
+                        {g.landed === true && <span className="green"> · widely read</span>}
+                        {g.landed === null && <span className="dim"> · just published</span>}
+                      </span>
+                      <span className="dim small">{formatDay(g.day, g.year)}</span>
+                    </div>
+                  )
+                })}
               </>
             )}
 

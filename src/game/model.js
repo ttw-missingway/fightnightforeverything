@@ -415,6 +415,7 @@ export function newSave(partial = {}) {
     patchGames: 0, // sets played on the current build — balance data accrues from these
     chronicle: [], // the collective memory: {day, year, icon, text} — capped
     tierLists: [], // community tier lists, newest first — one lands ~a week after each patch
+    guides: [], // character guides written by the scene's specialists — see guides.js
     pendingTierList: null, // {version, dueAbs} — absolute day the next list drops
     arcade: {
       name: 'The Arcade',
@@ -790,6 +791,7 @@ export function migrateSave(save) {
   save.lastPatch ??= { day: save.day, year: save.year }
   save.chronicle ??= []
   save.tierLists ??= []
+  save.guides ??= []
   save.pendingTierList ??= null
   // Existing saves get data credit for time already played on their build.
   save.patchGames ??= Math.min(300, ((save.year - 1) * 336 + save.day - ((save.lastPatch.year - 1) * 336 + save.lastPatch.day)) * 10)
