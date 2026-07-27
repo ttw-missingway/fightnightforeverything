@@ -28,7 +28,7 @@ the room. `†` = needs `arcade:established` (assumes real elapsed time).
 12. `[2]` Winner is on a long streak against this person and it has stopped being fun
 13. `[2]` Loser deflects into food, the vending machine, the room, anything
 14. `[2]` Winner lowballs their own win to keep the peace
-15. `[2]` Loser is furious and it is not really about the game
+15. `[2]` Loser is furious and not making sense
 
 ## B. Straight after a set — mutual
 

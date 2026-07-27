@@ -14,7 +14,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { GAME_CONTEXT, VOICE_DIMENSIONS, TIERS, ANTI_PATTERNS } from './spec.mjs'
+import { GAME_CONTEXT, THE_ROOM, FG_GLOSSARY, VOICE_DIMENSIONS, TIERS, ANTI_PATTERNS } from './spec.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT = join(HERE, 'out')
@@ -64,6 +64,19 @@ function systemPrompt() {
   const tiers = Object.entries(TIERS).map(([k, v]) => `  ${k} — ${v}`).join('\n')
   return `${GAME_CONTEXT}
 
+## The room
+
+${THE_ROOM}
+
+Reference the room only where it earns its place — roughly one scene in five,
+and mostly in scenes that are ABOUT the room. Everywhere else the setting
+should be felt rather than described. Curtains and projectors mentioned in
+every scene become a tic.
+
+## Fighting-game vocabulary
+
+${FG_GLOSSARY}
+
 ## Voice dimensions
 
 ${voices}
@@ -98,7 +111,46 @@ durations ("twelve years"), no invented score lines. The game tracks all of
 that and your guess will contradict it.
 
 Do not reuse a distinctive phrase or construction across exchanges. If one
-exchange uses a particular joke shape, no other exchange in this set may.`
+exchange uses a particular joke shape, no other exchange in this set may.
+
+## Calibration — the designer graded an earlier batch
+
+THESE WORKED. Concrete, practical, no reach for cleverness. The last one he
+singled out as "sounds legitimate" — two players correctly describing real play:
+
+  A: "Something was off with my buttons that whole set."
+  B: "Swap sides with me, I genuinely don't care."
+  A: "No. I'm attached to them now."
+
+  A: "Is the left stick supposed to do that?"
+  B: "It's been doing that. Everyone's decided to live with it, which I think
+      tells you most of what you need to know about this place."
+  A: "Right side, then."
+
+  A: "Is it the sticky one?"
+  B: "They're all the sticky one."
+
+  A: "You changed something midway. Around when I went up."
+  B: "Stopped pressing after the knockdown. You were counting on it."
+  A: "I was. Took me three games to notice you'd quit."
+  B: "Took me three games to trust it would work."
+
+THESE WERE REJECTED as "very AI-ish". Study why — both are competent, and both
+close on a wry observational button that a person would never say out loud and
+an essayist absolutely would. That rhythm is the single biggest tell:
+
+  A: "You've gone quiet, which is usually the good part."
+  B: "That last round was clean. All of it. I don't have anything."
+  A: "Say that one more time but louder and toward the door."      ← the tell
+
+  A: "There's a coin sitting on the cabinet, is that in play?"
+  B: "That coin predates me. I asked about it once and got three different
+      answers, none of them confident."                            ← the tell
+  A: "I'll play around it."
+
+The difference is not quality of writing. It is that the good ones are people
+handling a situation, and the bad ones are people performing an observation
+about a situation. Write the first kind.`
 }
 
 function userPrompt(s) {
