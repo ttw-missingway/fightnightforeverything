@@ -1,4 +1,4 @@
-import { uid, rollStat, clamp } from './util.js'
+import { uid, clamp } from './util.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
@@ -675,6 +675,23 @@ export function chronicle(save, icon, text) {
 export function migrateSave(save) {
   save.hour ??= 0
   save.dayInProgress ??= null
+  // A save written while the arcade was OPEN carries a live day whose shape is
+  // whatever the build that wrote it used. Every map the hour loop writes into
+  // has to be backfilled here, or the first match of the day dereferences
+  // undefined and takes the rest of the day down with it — which is exactly
+  // what `charToday` did. Setting the day to null instead would be worse: it
+  // would silently discard a day the player is in the middle of.
+  if (save.dayInProgress) {
+    const dip = save.dayInProgress
+    dip.attendeeIds ??= []
+    dip.newcomers ??= []
+    dip.staysUntil ??= {}
+    dip.results ??= {}
+    dip.gamesToday ??= {}
+    dip.charToday ??= {}
+    dip.hours ??= []
+    dip.openingEvents ??= []
+  }
   save.charMilestones ??= []
   save.stream ??= { channelName: 'ArcadeTV', followers: 0, hype: 0, totalStreams: 0, peakViewers: 0 }
   save.stream.fatigue ??= 0
@@ -775,17 +792,25 @@ export function migrateSave(save) {
   for (const p of Object.values(save.players)) {
     p.settledMain ??= !!p.mainCharId // pre-exploration players keep their mains
     p.exploredChars ??= p.mainCharId ? [p.mainCharId] : []
-    p.personal.stamina ??= rollStat() // stats added later; varied, not uniform
-    p.personal.composure ??= rollStat()
-    p.social.hygiene ??= rollStat()
+    // Stats added after this save was written land EMPTY, not rolled. rollStat
+    // is the retired 1-10 roll (mean ~7); under the temperament point buy that
+    // is three and a half free creation points on a stat nobody chose.
+    p.personal.stamina ??= 0
+    p.personal.composure ??= 0
+    p.social.hygiene ??= 0
     // Income moved from a standalone field into the social stats (so it's
     // point-bought and capped like the rest) — carry over the old value.
-    p.social.income ??= (p.income != null ? p.income : rollStat())
+    p.social.income ??= (p.income != null ? p.income : 0)
     delete p.income
     p.tasteRerolled ??= false
     p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
     p.memories ??= []
     p.voice ??= deriveVoice(p)
+    // Voice is cached on the player, so the roster of any save made before the
+    // stat-scale fix is still carrying the one voice the broken thresholds
+    // could produce (chill/dry/terse, for everybody). Re-derive once so the
+    // fix reaches people already playing, not just new arrivals.
+    if (!save.voiceRescaled) p.voice = deriveVoice(p)
     p.catchphrase ??= ''
     p.playerTags ??= []
     p.attractedPlayerTags ??= []
@@ -855,6 +880,9 @@ export function migrateSave(save) {
       }
     }
   }
+  // Set only after the loop above has re-derived every cached voice, so a crash
+  // partway through does not leave half the roster on the old flat voice.
+  save.voiceRescaled = true
   save.game.techniques ??= [] // dormant — designed techniques are retired
   for (const t of save.arcade.schedule) {
     t.cadence ??= 'yearly' // old entries were yearly by construction
