@@ -186,11 +186,17 @@ export const isUnlocked = (save, unlockKey) => {
  *
  * Sandbox runs record nothing. The whole ladder is a claim about a scene that
  * had something at stake.
+ *
+ * Anything earned is also queued on `save.unlockNotices` for the UI to
+ * announce. This runs from `advanceDay`, the universal tick, which has no day
+ * report to write into — and a permanent unlock that only ever showed up as a
+ * chronicle line you had to go looking for may as well not have happened.
  */
 export function checkAchievements(save) {
   if (!save || save.settings?.mode === 'sandbox') return []
   save.prestige.achievements ??= {}
   save.prestige.unlocks ??= {}
+  save.unlockNotices ??= []
   const absDay = absDayOf(save.day, save.year)
   const earned = []
   for (const a of ACHIEVEMENTS) {
@@ -202,6 +208,7 @@ export function checkAchievements(save) {
     save.prestige.unlocks[a.unlock] = true
     save.prestige.points = (save.prestige.points || 0) + a.points
     chronicle(save, a.icon, `${a.name} — ${a.unlockLabel} is yours for good (+${a.points} creation point${a.points === 1 ? '' : 's'})`)
+    save.unlockNotices.push(a.key)
     earned.push(a)
   }
   return earned

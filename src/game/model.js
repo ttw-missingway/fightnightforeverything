@@ -507,6 +507,7 @@ export function newSave(partial = {}) {
     milestones: {}, // milestone keys already earned this run (each awards once)
     prestigePending: 0, // legacy points earned THIS run — banked when the run ends
     tally: newTally(), // per-run counters the achievement checks read (reset with the run)
+    unlockNotices: [], // achievement keys earned but not yet announced to the owner
     archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
     socialFeed: [], // fake posts about the scene — newest first, capped
     dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
@@ -786,6 +787,7 @@ export function migrateSave(save) {
   // an achievement is something you did, not something the migration decided
   // you must have done at some point.
   save.tally = { ...newTally(), ...(save.tally || {}) }
+  save.unlockNotices ??= []
   save.rosterCollapsed ??= false
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   save.attentionDrift ??= { untilAbs: 0, value: 0 }

@@ -15,6 +15,7 @@ import Vods from './screens/Vods.jsx'
 import { formatDay } from './game/constants.js'
 import { isVodWatched } from './game/model.js'
 import DangerBanner from './components/dangers.jsx'
+import { ACHIEVEMENTS } from './game/achievements.js'
 
 export default function App() {
   const { save, screen, nav, closeSave } = useStore()
@@ -66,6 +67,9 @@ export default function App() {
       {/* Above the tab content, so a run about to end is visible from every
           page rather than only in a recap line the owner already clicked past. */}
       <DangerBanner />
+      {/* Above the tab content for the same reason the danger rows are: it has
+          to be seen from wherever the owner happened to be standing. */}
+      <UnlockBanner />
 
       {screen.name === 'arcade' && <Arcade />}
       {screen.name === 'players' && <Players />}
@@ -81,6 +85,45 @@ export default function App() {
 
       <ForeclosureModal />
       <GameOverModal />
+    </div>
+  )
+}
+
+/**
+ * "You just earned that, and you keep it."
+ *
+ * The one moment in the game that is about the LINEAGE rather than the run,
+ * so it gets said out loud on whatever page you happen to be on. Without it
+ * the only record of a permanent unlock was a chronicle line three clicks
+ * away, which is indistinguishable from nothing having happened.
+ *
+ * Dismissing clears the queue — the Legacy tab is the permanent record, this
+ * is just the notification.
+ */
+function UnlockBanner() {
+  const { save, nav, mutate } = useStore()
+  const queued = (save?.unlockNotices || [])
+    .map((k) => ACHIEVEMENTS.find((a) => a.key === k))
+    .filter(Boolean)
+  if (!queued.length) return null
+  const dismiss = () => mutate((s) => { s.unlockNotices = [] })
+  return (
+    <div className="dangers">
+      {queued.map((a) => (
+        <div key={a.key} className="danger unlock">
+          <span className="d-icon">{a.icon}</span>
+          <div>
+            <div className="d-title">{a.name} — unlocked for good</div>
+            <div className="d-detail">
+              {a.unlockLabel}. Yours in every run from here, plus {a.points} creation
+              point{a.points === 1 ? '' : 's'}.
+            </div>
+            <div className="d-fix">{a.how}</div>
+          </div>
+          <button className="d-go" onClick={() => { dismiss(); nav('halloffame') }}>See it →</button>
+          <button className="d-go" onClick={dismiss}>Nice</button>
+        </div>
+      ))}
     </div>
   )
 }

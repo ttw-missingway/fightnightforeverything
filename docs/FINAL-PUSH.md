@@ -178,8 +178,13 @@ achievements in `src/game/achievements.js`, checked once a day in `advanceDay`,
 awarding into `prestige.achievements`/`unlocks`/`points` immediately (not into
 the run's pending pot — a lineage fact shouldn't be lost by the run that most
 needed it). New per-run counter bag `save.tally` for the "did you do it the
-whole way through" claims a snapshot can't answer. Legacy tab in the Hall of
-Fame.
+whole way through" claims a snapshot can't answer.
+
+Two surfaces: the **🎖 Legacy tab** in the Hall of Fame is the permanent
+record (earned ones dated, locked ones showing what proves them), and a gold
+**unlock banner** above the tab content announces one the day it lands. The
+banner exists because the first cut only wrote a chronicle line — a permanent
+unlock nobody tells you about is indistinguishable from nothing happening.
 
 Two things to carry into later phases:
 

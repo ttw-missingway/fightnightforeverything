@@ -1033,6 +1033,18 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 .danger.tip .d-go { border-color: rgba(93, 168, 255, 0.6); color: var(--blue); }
 .danger.tip .d-go:hover { border-color: var(--cyan); color: var(--cyan); }
 
+/* The one good-news row in a bar built for bad news, so it reads gold and
+   glows rather than sitting there looking like another thing gone wrong. */
+.danger.unlock {
+  background: rgba(255, 206, 79, 0.12);
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 18px rgba(255, 206, 79, 0.18);
+}
+.danger.unlock .d-detail { color: var(--text); opacity: 0.88; }
+.danger.unlock .d-go { border-color: rgba(255, 206, 79, 0.6); color: var(--gold); }
+.danger.unlock .d-go:hover { border-color: var(--gold); filter: brightness(1.25); }
+
 /* ---------- Day ledger ----------
    The sim has always written a labelled line for every movement of money and
    none of it was ever shown. Collapsed by default: the headline is the lesson,
