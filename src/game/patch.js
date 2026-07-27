@@ -442,6 +442,14 @@ export function releasePatch(save) {
   const label = receptionLabel(score)
   const version = bumpVersion(save.game.version)
   save.gameDraft.version = version
+  // Stamp the debut on anything this patch introduces, so "the new character"
+  // is a queryable fact rather than a line of prose in the notes. Everyone
+  // wants to try the new thing for a while — see interest.js.
+  const debutAbs = absDayOf(save.day, save.year)
+  for (const c of diff.added) {
+    const live = save.gameDraft.characters.find((x) => x.id === c.id)
+    if (live) live.debutAbs = debutAbs
+  }
   save.game = save.gameDraft
   computeMatchups(save.game) // the new designs are now the live truth
   save.gameDraft = null

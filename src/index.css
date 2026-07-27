@@ -1020,3 +1020,8 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   font-size: 12.5px; padding: 2px 0;
 }
 .ledger-row + .ledger-row { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+
+/* A lab character is not a main. Distinct from `.pill.on` (the main) so a
+   glance at a player tells you what they ARE versus what they're on this
+   month — the difference between a scene with a meta and a scene of fashion. */
+.pill.lab { border-color: rgba(124, 107, 255, 0.65); color: var(--indigo); }

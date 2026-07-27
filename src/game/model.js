@@ -89,6 +89,12 @@ export function newPlayer(partial = {}) {
     respect: 0,
     mainCharId: null, // current character (rotates daily while exploring)
     pocketPicks: [], // secondary charIds they'll counterpick with in bad matchups
+    // What they're CURRENTLY messing about with: {charId, reason, sinceAbs}.
+    // Not a main and not a pocket — a reaction to something that happened (a
+    // new release, a buff, the best player in the room). Played in casual sets
+    // only; tournaments read mainCharId, so a toy never follows anyone into
+    // bracket unless it earns the main slot first. See interest.js.
+    currentInterest: null,
     settledMain: false, // false = still trying characters out before committing
     exploredChars: [], // charIds tried during the exploration phase
     lockedMain: false, // user pinned the main; sim won't switch it
@@ -823,6 +829,10 @@ export function migrateSave(save) {
     p.retiredYear ??= null
     // Mid-game overhaul fields.
     p.pocketPicks ??= []
+    p.currentInterest ??= null
+    // A main that is also a pocket pick predates setMain(); switching onto a
+    // character already held in reserve never cleaned the reserve list.
+    if (p.mainCharId) p.pocketPicks = p.pocketPicks.filter((id) => id !== p.mainCharId)
     p.form ??= []
     p.evoTitles ??= 0
     p.belief ??= 0

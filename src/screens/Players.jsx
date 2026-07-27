@@ -7,6 +7,7 @@ import PlayerForm from '../components/PlayerForm.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from '../game/constants.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
 import { passionLabel } from '../game/career.js'
+import { INTEREST_LABEL } from '../game/interest.js'
 import { displayName } from '../game/util.js'
 import { skillCeiling } from '../game/match.js'
 import { voiceSummary } from '../game/dialogue.js'
@@ -127,6 +128,13 @@ export default function Players() {
                   {main && <Portrait url={lookArt(main, p.id)} size={20} alt={lookOf(p.id, main).name} />}{main && ' '}
                   {main ? lookOf(p.id, main).name : '—'}
                   {main && !p.settledMain && <span className="dim small"> (trying out)</span>}
+                  {/* Their main is what they ARE; the lab character is what
+                      they're on this month. Both belong in the roster view or
+                      a patch looks like it changed nothing. */}
+                  {p.settledMain && p.currentInterest && (() => {
+                    const ic = save.game.characters.find((c) => c.id === p.currentInterest.charId)
+                    return ic ? <span className="dim small"> · 🧪 {lookOf(p.id, ic).name}</span> : null
+                  })()}
                 </td>
                 <td>{Math.round(p.elo)}</td>
                 <td className="cyan">{bestSkill(p) || <span className="dim">—</span>}</td>
@@ -302,6 +310,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           </span>
           {main && p.settledMain && <span className="pill on">Mains {lookOf(p.id, main).name}{p.lockedMain ? ' 🔒' : ''}</span>}
           {main && !p.settledMain && <span className="pill">🔍 Exploring — {lookOf(p.id, main).name} today ({(p.exploredChars || []).length} tried)</span>}
+          <CharSlots save={save} p={p} lookOf={lookOf} />
           {team && <span className="pill gold">{team.name} [{team.acronym}]</span>}
           {p.tournamentWins > 0 && <span className="pill gold">🏆 ×{p.tournamentWins}</span>}
         </div>
@@ -518,5 +527,42 @@ function DisciplinePanel({ save, player: p, mutate }) {
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * The three things a player's character choices can mean, made visible.
+ *
+ * MAIN is who they are — it's already on the pill above, and it's what a
+ * tournament bracket is built from. POCKET PICKS are what they fall back on
+ * when the matchup is bad; the sim has tracked them since characters had
+ * matchups and never once showed them, so counterpicks read as random. The
+ * LAB slot is what they're currently messing about with — the new release,
+ * the character that just got buffed, whatever the best player in the room
+ * keeps winning with. It carries its reason, because "they're on Zoner this
+ * month" and "they're on Zoner this month because it got buffed" are
+ * different facts about the scene.
+ */
+function CharSlots({ save, p, lookOf }) {
+  if (!p.settledMain) return null
+  const charOf = (id) => save.game.characters.find((c) => c.id === id)
+  const ci = p.currentInterest
+  const lab = ci ? charOf(ci.charId) : null
+  const pockets = (p.pocketPicks || []).map(charOf).filter(Boolean)
+  if (!lab && !pockets.length) return null
+  return (
+    <>
+      {lab && (
+        <span className="pill lab" title={`Trying this out — ${INTEREST_LABEL[ci.reason] || 'curious'}. Casual sets only; brackets still get their main.`}>
+          🧪 Labbing {lookOf(p.id, lab).name}
+          <span className="dim"> — {INTEREST_LABEL[ci.reason] || 'curious'}</span>
+        </span>
+      )}
+      {pockets.length > 0 && (
+        <span className="pill" title="Counterpicks — pulled out when the matchup is bad">
+          🎒 Pocket: {pockets.map((c) => lookOf(p.id, c).name).join(', ')}
+        </span>
+      )}
+    </>
   )
 }

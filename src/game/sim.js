@@ -2,8 +2,9 @@ import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid
 import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf, statLevel } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup } from './model.js'
-import { daysSincePatch, releasePatch, communityDemands, charPower } from './patch.js'
+import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
 import { castScene, sceneBeats, SCENE_CHANCE } from './scenes.js'
+import { metaAppeal, roleModelPicks, pickInterest, resultsWeight, INTEREST_DAYS, INTEREST_LABEL } from './interest.js'
 import { selectableChars } from './forms.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
@@ -41,7 +42,7 @@ function popularityFactor(save) {
 
 // ---------- Main character selection ----------
 
-function charAppeal(save, player, char) {
+function charAppeal(save, player, char, models = null) {
   let score = char.popularity * 0.7
   score -= char.difficulty * (1 - player.personal.aptitude / 14) * 0.9
   // Personal taste: a stable per-player pull toward certain characters, so a
@@ -53,15 +54,26 @@ function charAppeal(save, player, char) {
     if (player.repelledTags.includes(t)) score -= 5
   }
   score += (player.charSkill[char.id] || 0) * 0.15 // sunk cost is real
-  // The analytical read the chart before they commit: strong characters PULL
-  // them, weak ones repel. Low-analysis players pick with their heart.
-  score += (charPower(save.game, char.id) - 50) * player.personal.analysis * 0.09
-  // Nothing sells a character like winning with them.
+  // Nothing sells a character like winning with them — unless championing the
+  // unloved IS the point, in which case losing with it is not an argument.
   const rec = player.charRecord?.[char.id]
   if (rec && rec.w + rec.l >= 8) {
-    score += (rec.w / (rec.w + rec.l) - 0.5) * 14
+    score += (rec.w / (rec.w + rec.l) - 0.5) * 14 * resultsWeight(player)
   }
+  // Everything that is about the META rather than the character: the tier list
+  // (chased by some, rebelled against by others), what the best players in the
+  // room are winning with, a brand-new release, a fresh buff. This replaces a
+  // lone `(charPower - 50) * analysis` term that could never do any work —
+  // charPower spans about three points across a whole roster and analysis is
+  // zero for most people under the point buy. See interest.js.
+  score += metaAppeal(save, player, char, models)
   return score + rand() * 3
+}
+
+/** charAppeal over a list, with the role-model scan done once instead of per character. */
+function appealScorer(save, player) {
+  const models = roleModelPicks(save, player.id)
+  return (char) => charAppeal(save, player, char, models)
 }
 
 export function pickMainChar(save, player) {
@@ -69,10 +81,11 @@ export function pickMainChar(save, player) {
   // a button mid-round, so nobody can main one.
   const chars = selectableChars(save.game)
   if (!chars.length) return null
+  const appeal = appealScorer(save, player)
   let best = null
   let bestScore = -Infinity
   for (const c of chars) {
-    const s = charAppeal(save, player, c)
+    const s = appeal(c)
     if (s > bestScore) { bestScore = s; best = c }
   }
   return best ? best.id : null
@@ -98,10 +111,11 @@ function pickExplorationChar(save, player) {
   if (!chars.length) return null
   const untried = chars.filter((c) => !player.exploredChars.includes(c.id))
   const pool = untried.length && chance(0.7) ? untried : chars
+  const appeal = appealScorer(save, player)
   let best = null
   let bestScore = -Infinity
   for (const c of pool) {
-    let s = charAppeal(save, player, c)
+    let s = appeal(c)
     if (c.id === player.mainCharId) s -= 3 // nudge toward variety day to day
     if (s > bestScore) { bestScore = s; best = c }
   }
@@ -131,10 +145,11 @@ function maybeSettleMain(save, player, events) {
   const candidates = player.exploredChars.length
     ? save.game.characters.filter((c) => player.exploredChars.includes(c.id))
     : save.game.characters
+  const appeal = appealScorer(save, player)
   let best = null
   let bestScore = -Infinity
   for (const c of candidates) {
-    const s = charAppeal(save, player, c) + (player.charSkill[c.id] || 0) * 0.2
+    const s = appeal(c) + (player.charSkill[c.id] || 0) * 0.2
     if (s > bestScore) { bestScore = s; best = c }
   }
   if (!best) return
@@ -164,6 +179,108 @@ function maybePocketPickup(save, player) {
   player.pocketPicks = [...(player.pocketPicks || []), choice(options).id]
 }
 
+/**
+ * Move a settled player onto a new main, keeping the other two slots honest.
+ *
+ * A main that is also listed as a pocket pick reads as a bug to anyone looking
+ * at the roster, and it happened whenever somebody switched onto a character
+ * they already had in reserve. Nothing cleaned up after a switch because
+ * nothing displayed the slots.
+ */
+function setMain(player, charId) {
+  player.mainCharId = charId
+  player.pocketPicks = (player.pocketPicks || []).filter((id) => id !== charId)
+  if (player.currentInterest?.charId === charId) player.currentInterest = null
+}
+
+// How often a lab character actually gets run in a friendly. High enough that
+// an interest resolves inside its window, low enough that the room doesn't
+// look like everybody abandoned their main the week a patch landed.
+const INTEREST_PLAY_RATE = 0.45
+
+/** Swap in today's lab character for a casual set, if they have one. */
+function interestRun(player, charId) {
+  const ci = player.currentInterest
+  if (!ci || charId !== player.mainCharId) return charId // never override a counterpick
+  return chance(INTEREST_PLAY_RATE + player.personal.aptitude * 0.02) ? ci.charId : charId
+}
+
+// ---------- Current interest ----------
+// The character somebody is CURRENTLY messing about with. Distinct from a main
+// (what they are) and a pocket (what they fall back on): an interest is a
+// reaction to something that happened in the game, and most of them come to
+// nothing. That is the point — a scene where every new release permanently
+// converts a third of the roster reads as fashion, not as people.
+
+function maybeTakeInterest(save, player, events) {
+  if (!player.settledMain || player.lockedMain) return
+  if (player.currentInterest) return
+  // Curiosity is cheap but not free — this fires on an attendee-day, so the
+  // rate compounds with how often they actually turn up.
+  if (!chance(0.05 + player.personal.aptitude * 0.012 + player.personal.learning * 0.01)) return
+  const picked = pickInterest(save, player, selectableChars(save.game))
+  if (!picked) return
+  player.currentInterest = { ...picked, sinceAbs: absDayOf(save.day, save.year) }
+  const char = save.game.characters.find((c) => c.id === picked.charId)
+  if (char) {
+    events.push({
+      type: 'main',
+      text: `${pName(save, player)} is messing about with ${char.name} — ${INTEREST_LABEL[picked.reason]}.`,
+    })
+  }
+}
+
+// An interest either earns the main slot, settles in as a pocket, or is
+// quietly dropped. Reps AND results decide, so the character somebody labs for
+// a month and keeps losing on does not get promoted for persistence alone.
+function resolveInterest(save, player, events) {
+  const ci = player.currentInterest
+  if (!ci) return
+  if (ci.charId === player.mainCharId) { player.currentInterest = null; return }
+  const char = save.game.characters.find((c) => c.id === ci.charId)
+  if (!char) { player.currentInterest = null; return } // deleted in a patch
+  const rec = player.charRecord?.[ci.charId] || { w: 0, l: 0 }
+  const games = rec.w + rec.l
+  const skill = player.charSkill[ci.charId] || 0
+  const age = absDayOf(save.day, save.year) - (ci.sinceAbs ?? 0)
+
+  // Promotion: enough reps, a winning record, and it now beats the main on
+  // their own taste. Loyalty is the brake — a loyal player has to be really
+  // convinced to drop what they are known for.
+  if (games >= 12 && rec.w > rec.l && skill >= 25) {
+    const appeal = appealScorer(save, player)
+    const mainChar = save.game.characters.find((c) => c.id === player.mainCharId)
+    const margin = 2 + player.personal.loyalty * 0.9
+    if (mainChar && appeal(char) > appeal(mainChar) + margin) {
+      const old = mainChar.name
+      setMain(player, ci.charId)
+      // What they were known for is exactly the thing they still know best.
+      if (!player.pocketPicks.includes(mainChar.id)) {
+        player.pocketPicks = [mainChar.id, ...player.pocketPicks].slice(0, 3)
+      }
+      events.push({
+        type: 'main',
+        text: `${pName(save, player)} has switched mains — ${old} out, ${char.name} in after ${games} games.`,
+      })
+      return
+    }
+  }
+
+  if (age < INTEREST_DAYS) return
+
+  // Time is up. If they got decent with it, it stays on as a counterpick;
+  // otherwise it was just a phase.
+  player.currentInterest = null
+  if (skill >= 20 && games >= 6 && (player.pocketPicks || []).length < 3 &&
+      !player.pocketPicks.includes(ci.charId)) {
+    player.pocketPicks = [...player.pocketPicks, ci.charId]
+    events.push({
+      type: 'main',
+      text: `${pName(save, player)} is keeping ${char.name} in their back pocket.`,
+    })
+  }
+}
+
 function maybeSwitchMain(save, player, events) {
   if (player.lockedMain || !player.mainCharId) return
   // Frustrated, disloyal players shop around. Winning keeps them anchored.
@@ -175,7 +292,7 @@ function maybeSwitchMain(save, player, events) {
   if (alt && alt !== player.mainCharId) {
     const oldChar = save.game.characters.find((c) => c.id === player.mainCharId)
     const newChar = save.game.characters.find((c) => c.id === alt)
-    player.mainCharId = alt
+    setMain(player, alt)
     events.push({
       type: 'main',
       text: `${pName(save, player)} is dropping ${oldChar?.name || '???'} and picking up ${newChar?.name || '???'}.`,
@@ -1157,6 +1274,12 @@ export function simHour(save) {
       let bCharId = pickMatchChar(save, b, a.mainCharId)
       if (aCharId === a.mainCharId && a.settledMain && (a.pocketPicks || []).length && chance(0.08)) aCharId = choice(a.pocketPicks)
       if (bCharId === b.mainCharId && b.settledMain && (b.pocketPicks || []).length && chance(0.08)) bCharId = choice(b.pocketPicks)
+      // Whatever they're currently messing about with gets run in CASUALS —
+      // this is the only place an interest accrues the reps and results that
+      // could earn it the main slot. Tournaments build their entrants from
+      // mainCharId, so a toy never follows anyone into bracket.
+      aCharId = interestRun(a, aCharId)
+      bCharId = interestRun(b, bCharId)
       const probA = winProbability(save, a, aCharId, b, bCharId)
       const result = resolveMatch(save, a, b, aCharId, bCharId)
       // Losing to something is where most real opinions come from.
@@ -1451,8 +1574,12 @@ export function endDay(save) {
       gainSkill(save, p, p.mainCharId, 0.07 + p.personal.determination * 0.012)
     }
     maybeInnovate(save, p, events)
-    if (p.settledMain) { maybeSwitchMain(save, p, events); maybePocketPickup(save, p) }
-    else maybeSettleMain(save, p, events)
+    if (p.settledMain) {
+      maybeSwitchMain(save, p, events)
+      maybePocketPickup(save, p)
+      resolveInterest(save, p, events) // graduate or drop before taking a new one
+      maybeTakeInterest(save, p, events)
+    } else maybeSettleMain(save, p, events)
     checkFallingOut(save, p, events)
   }
   dailyTeamDynamics(save, events)

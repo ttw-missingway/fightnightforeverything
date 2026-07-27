@@ -438,11 +438,27 @@ export function generateTierList(save) {
       + Math.min(titles[c.id] || 0, 3) * 0.7, // "it wins tournaments, it's top tier"
   })).sort((a, b) => b.perception - a.perception)
 
+  // Buckets are by RANK, not by absolute perception score.
+  //
+  // The absolute cutoffs this replaces (54.5 / 51.5 / 48.5 / 45.5) assumed
+  // perception spanned roughly 44-57. It doesn't: avgPower is an average
+  // matchup, which clusters between about 48 and 51 across a whole roster,
+  // while the popularity and titles bonuses add up to +5.3 — a bigger range
+  // than the power spread itself. So anything with a few mains cleared 51.5
+  // and the list came out S:1 A:6 B:2 C:0 D:0. A tier list with no low tier
+  // isn't a tier list, and there was nothing for a low-tier specialist to
+  // champion or a meta-chaser to climb toward.
+  //
+  // Ranking relatively is also just what communities do — a balanced game
+  // still gets a tier list, and somebody is still bottom of it.
+  const CUTS = [0.12, 0.34, 0.66, 0.88] // S | A | B | C | D, by rank fraction
   const tiers = { S: [], A: [], B: [], C: [], D: [] }
-  for (const { id, perception } of scored) {
-    const t = perception >= 54.5 ? 'S' : perception >= 51.5 ? 'A' : perception >= 48.5 ? 'B' : perception >= 45.5 ? 'C' : 'D'
+  const n = scored.length
+  scored.forEach(({ id }, i) => {
+    const f = n === 1 ? 0 : i / n
+    const t = f < CUTS[0] ? 'S' : f < CUTS[1] ? 'A' : f < CUTS[2] ? 'B' : f < CUTS[3] ? 'C' : 'D'
     tiers[t].push(id)
-  }
+  })
   // The community always crowns SOMEBODY.
   if (!tiers.S.length && scored.length) {
     const top = scored[0].id
