@@ -1153,3 +1153,4 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 .chirp { padding: 10px 14px; }
 .bmatch.unrevealed { opacity: 0.45; cursor: default; border-style: dashed; }
 .bmatch.up-next { border-color: var(--pink); box-shadow: 0 0 14px rgba(255, 45, 120, 0.28); }
+tr.world-mine td { background: rgba(45, 226, 230, 0.07); }

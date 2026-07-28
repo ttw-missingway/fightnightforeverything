@@ -17,7 +17,7 @@ import {
   landlordDaily, tokenDeterrence, arcadeClosed, isStaffed,
   adAwarenessBoost, adHypePerDay, playerStaffAppeal,
 } from './economy.js'
-import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand } from './socialmedia.js'
+import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand, worldFeedDaily } from './socialmedia.js'
 import { speak, isFirstMeeting, noteMeeting } from './dialogue.js'
 import { noteMatchOutcome, reconcileTakes, loudestTake, isConviction, takeKind, takeSubjectLabel, findTake, pushTake, disputeKind } from './takes.js'
 import { generateTierList } from './balance.js'
@@ -1921,6 +1921,8 @@ export function advanceDay(save) {
       ? (save.tally.fullFloorDays || 0) + 1
       : 0
   }
+  // The world keeps talking whether or not it has heard of you.
+  worldFeedDaily(save)
   // Legacy milestones: making it matters, growing matters — existing doesn't.
   if (save.settings.mode !== 'sandbox') {
     if ((save.stream?.followers || 0) >= 1000) awardMilestone(save, 'followers-1k', 2, 'A thousand people follow the channel now')

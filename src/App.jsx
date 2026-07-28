@@ -16,6 +16,7 @@ import { formatDay } from './game/constants.js'
 import { isVodWatched } from './game/model.js'
 import DangerBanner from './components/dangers.jsx'
 import EvoWeek from './screens/EvoWeek.jsx'
+import World from './screens/World.jsx'
 import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
 
 export default function App() {
@@ -51,6 +52,9 @@ export default function App() {
   const tabs = [
     ['arcade', '🕹 Arcade', null],
     ['players', '👥 Players', null],
+    // Never gated. Its entire job is to be the thing a new lineage is aiming
+    // at, and a locked ladder motivates nobody.
+    ['world', '🌍 World', null],
     ['teams', '🛡 Teams', null],
     ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs', 'vods'],
     ['halloffame', '🏛 Hall of Fame', null],
@@ -96,6 +100,7 @@ export default function App() {
 
       {screen.name === 'arcade' && <Arcade />}
       {screen.name === 'players' && <Players />}
+      {screen.name === 'world' && <World />}
       {screen.name === 'teams' && <Teams />}
       {screen.name === 'tournament' && <Tournament />}
       {screen.name === 'vods' && isUnlocked(save, 'vods') && <Vods />}

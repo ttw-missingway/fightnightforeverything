@@ -302,9 +302,24 @@ export function generateEvoRoster(save, count = EVO_ROSTER_SIZE) {
     const pool = selectableChars(save.game)
     const char = pool.length ? choice(pool) : null
     // Elites are strong but tiered: a few gods, many killers.
-    const tier = i < 3 ? 'god' : i < 12 ? 'legend' : 'killer'
-    const skill = tier === 'god' ? randInt(76, 86) : tier === 'legend' ? randInt(66, 78) : randInt(56, 70)
-    const elo = tier === 'god' ? randInt(2200, 2450) : tier === 'legend' ? randInt(2000, 2250) : randInt(1800, 2050)
+    // A WORLD, not a wall. When this list was twenty people it made sense for
+    // every one of them to be a monster; at sixty-four it has to have a tail,
+    // or the bottom of the world rankings sits permanently above the best
+    // player a local scene can produce and the ladder is decoration.
+    //
+    // Measured (Phase 7 harness): a well-cultivated arcade player reaches
+    // ~1600 elo and ~60 skill after three years. The `contender` band is set
+    // to overlap exactly that — the bottom of the top 64 is somewhere a real
+    // local hero can actually reach, and everything above it still isn't.
+    const tier = i < 3 ? 'god' : i < 12 ? 'legend' : i < 32 ? 'killer' : 'contender'
+    const skill = tier === 'god' ? randInt(76, 86)
+      : tier === 'legend' ? randInt(66, 78)
+      : tier === 'killer' ? randInt(56, 70)
+      : randInt(46, 60)
+    const elo = tier === 'god' ? randInt(2200, 2450)
+      : tier === 'legend' ? randInt(2000, 2250)
+      : tier === 'killer' ? randInt(1750, 2000)
+      : randInt(1430, 1760)
     roster.push({
       id: uid('elite'),
       alias,
@@ -325,8 +340,12 @@ export function generateEvoRoster(save, count = EVO_ROSTER_SIZE) {
 // character switch — but the same people show up, which keeps EVO believable.
 export function driftEvoRoster(save) {
   for (const e of save.evoRoster) {
-    e.skill = Math.max(48, Math.min(90, e.skill + randInt(-3, 3)))
-    e.elo = Math.max(1700, e.elo + randInt(-40, 50))
+    // The floors here have to sit BELOW the contender band or the yearly drift
+    // quietly compresses the tail of the world back out of a local player's
+    // reach — which is exactly what it was doing: a 1700 floor rebuilt the wall
+    // every New Year no matter how the roster was generated.
+    e.skill = Math.max(42, Math.min(90, e.skill + randInt(-3, 3)))
+    e.elo = Math.max(1400, e.elo + randInt(-40, 50))
     const pool = selectableChars(save.game)
     if (chance(0.08) && pool.length) {
       e.mainCharId = choice(pool).id

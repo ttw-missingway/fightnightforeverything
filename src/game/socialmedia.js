@@ -2,11 +2,12 @@
 // board threads. Nobody posts about an arcade the internet hasn't heard
 // of — the feed wakes up as the stream channel gets traction.
 
-import { uid, choice, chance, randInt, shuffle } from './util.js'
+import { uid, choice, chance, randInt, shuffle, clamp } from './util.js'
 import { CHAT_NAME_PARTS } from './names.js'
 import { upsetSeverityOf } from './match.js'
 import { formatDay } from './constants.js'
 import { observedPower } from './balance.js'
+import { worldRankings, rankedInTop } from './world.js'
 
 const BOARD_HANDLES = {
   a: ['Throwaway', 'Actual', 'Definitely_Not', 'Local', 'Former', 'Certified', 'Anonymous', 'Ex'],
@@ -29,11 +30,14 @@ function feedActive(save) {
   return save.socialFeed && (save.stream.hype >= 4 || save.stream.followers >= 40)
 }
 
-function post(save, { platform, text, title = null }) {
+function post(save, { platform, text, title = null, scope = 'arcade' }) {
   const buzz = save.stream.hype + save.stream.followers / 50
   save.socialFeed.unshift({
     id: uid('post'),
     platform, // 'chirper' | 'boards'
+    // 'arcade' = about YOUR scene. 'world' = about the wider competitive world,
+    // which the internet talks about whether or not it has heard of you.
+    scope,
     user: platform === 'chirper' ? chirpHandle() : boardHandle(),
     board: platform === 'boards' ? `arcade/${gameSlug(save)}` : null,
     title,
@@ -46,9 +50,100 @@ function post(save, { platform, text, title = null }) {
   if (save.socialFeed.length > 120) save.socialFeed.pop()
 }
 
+
+// ---------- The world feed ----------
+//
+// The internet does not go quiet because your arcade is small. Before this,
+// `feedActive` gated EVERY post on your own hype, so a new lineage opened the
+// Feed tab and found nothing at all — the one screen whose job is to make the
+// wider scene feel real was empty for exactly as long as you needed convincing
+// that a wider scene existed.
+//
+// World posts run on their own clock and are always available. What changes as
+// you grow is how often YOUR people are the subject: the feed starts as other
+// people's business and becomes yours, without a filter being touched.
+
+const WORLD_TAKES = [
+  (c) => `${c.top} is playing a different game to everyone else right now. it's not close`,
+  (c) => `hot take: ${c.rando} is the most underrated player in the world and it isn't close`,
+  (c) => `${c.rando} switching to ${c.char} mid-season is either genius or a cry for help`,
+  (c) => `every time i think i understand ${c.game} ${c.top} does something that resets me to zero`,
+  (c) => `${c.rando} [${c.region}] has quietly won three events this season and nobody is talking about it`,
+  (c) => `the ${c.char} matchup discourse is out of control. it's fine. it's FINE`,
+  (c) => `people forget ${c.top} has been top 5 for years. longevity is a skill`,
+  (c) => `${c.rando} vs ${c.top} is the set i'd pay actual money to see again`,
+  (c) => `${c.char} is either the best character in ${c.game} or i am bad. researching`,
+  (c) => `regional check: ${c.region} is stacked right now and everyone else is coping`,
+]
+
+const WORLD_ABOUT_YOU = [
+  (c) => `who is ${c.mine}?? just saw them ranked #${c.rank} and i've never heard the name`,
+  (c) => `${c.mine} is ranked #${c.rank} in the WORLD out of a local arcade. that's the story of the season`,
+  (c) => `been watching ${c.mine} tape all week. the neutral is legit. remember the name`,
+  (c) => `if ${c.mine} keeps this up we're going to have to start taking ${c.arcade} seriously`,
+  (c) => `${c.mine} at #${c.rank}. from a ROOM. not a team house, a room`,
+]
+
+/**
+ * One post a day-ish about the wider world, and — once your people are
+ * actually ranked — sometimes about them.
+ *
+ * The shift is driven by world RANK rather than by followers, which means the
+ * feed starts talking about you because your players got good, not because you
+ * bought advertising.
+ */
+export function worldFeedDaily(save) {
+  if (!save.socialFeed) return
+  if (!chance(0.42)) return
+  const rows = worldRankings(save)
+  if (!rows.length) return
+  const top = rows.slice(0, 8)
+  const chars = save.game.characters || []
+  const ctx = {
+    game: save.game.name,
+    arcade: save.arcade.name,
+    top: choice(top).name,
+    rando: choice(rows.slice(0, 40)).name,
+    region: choice(rows.slice(0, 24)).region,
+    char: chars.length ? choice(chars).name : 'the top tier',
+  }
+  // How often the world talks about YOU: nothing until one of yours cracks the
+  // top 64, then rising as they climb.
+  const mine = rankedInTop(save, 64)
+  const best = mine.length ? mine.reduce((a, b) => (a.rank <= b.rank ? a : b)) : null
+  const aboutYou = best && chance(clamp(0.15 + (64 - best.rank) / 64 * 0.5, 0, 0.65))
+  const line = aboutYou
+    ? choice(WORLD_ABOUT_YOU)({ ...ctx, mine: best.name, rank: best.rank })
+    : choice(WORLD_TAKES)(ctx)
+  post(save, { platform: 'chirper', text: line, scope: 'world' })
+}
+
+/**
+ * How loud your scene is on the wider internet, 0.2–1.
+ *
+ * This throttles the AMBIENT chatter about your arcade — the day-to-day upsets
+ * and drama — so that a new lineage's timeline is mostly other people's
+ * business and slowly becomes its own. Deliberate announcements (a patch, a
+ * tier list, a money match callout) are never throttled: those are you talking,
+ * not the internet noticing.
+ *
+ * Keyed off how many of your players are actually WORLD RANKED rather than off
+ * follower count, because the question the feed is answering is "does this
+ * scene matter yet", and a big local following does not make it matter.
+ */
+export function arcadeVoice(save) {
+  const ranked = rankedInTop(save, 64)
+  const best = ranked.length ? Math.min(...ranked.map((r) => r.rank)) : null
+  const depth = Math.min(1, ranked.length / 4)
+  const height = best ? Math.min(1, (64 - best) / 48) : 0
+  return clamp(0.2 + depth * 0.45 + height * 0.35, 0.2, 1)
+}
+
 // Scan a day's events for post-worthy moments. Called at endDay.
 export function updateFeedFromDay(save, events) {
   if (!feedActive(save)) return
+  // Most of what happens in an unknown arcade never leaves the room.
+  if (!chance(arcadeVoice(save))) return
   const candidates = []
 
   for (const ev of events) {

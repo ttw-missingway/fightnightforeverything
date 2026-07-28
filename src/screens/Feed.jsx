@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { hash01 } from '../game/util.js'
 import { communityGameOpinion, communityArcadeOpinion, opinionLabel } from '../game/social.js'
@@ -9,17 +10,41 @@ const AVATAR_COLORS = ['#ff2d78', '#2de2e6', '#ffce4f', '#4fe07d', '#b28dff', '#
 // traction; money matches, upsets, new tech and team drama drive posts.
 export default function Feed() {
   const { save } = useStore()
-  const posts = save.socialFeed || []
+  const [scope, setScope] = useState('all')
+  const all = save.socialFeed || []
+  // Posts written before scopes existed were all about the arcade.
+  const scoped = (p) => p.scope || 'arcade'
+  const posts = scope === 'all' ? all : all.filter((p) => scoped(p) === scope)
+  const mineCount = all.filter((p) => scoped(p) === 'arcade').length
+  const share = all.length ? Math.round((mineCount / all.length) * 100) : 0
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
       <h2 style={{ marginTop: 0 }}>📱 The Feed</h2>
       <CommunityPulse save={save} />
+
+      <div className="tabs">
+        <button className={scope === 'all' ? 'active' : ''} onClick={() => setScope('all')}>Everything</button>
+        <button className={scope === 'world' ? 'active' : ''} onClick={() => setScope('world')}>🌍 The world</button>
+        <button className={scope === 'arcade' ? 'active' : ''} onClick={() => setScope('arcade')}>🏠 {save.arcade.name}</button>
+      </div>
+      {/* The mix is the progress bar. Early on this reads "3% about you" and
+          the timeline is other people's business; it climbs as your players
+          get ranked and your scene gets loud. */}
+      {all.length > 0 && (
+        <p className="dim small" style={{ marginTop: -4 }}>
+          {share === 0
+            ? `Nothing on the timeline is about ${save.arcade.name} yet.`
+            : `${share}% of the timeline is about ${save.arcade.name}.`}
+        </p>
+      )}
+
       {posts.length === 0 && (
         <div className="card">
           <p className="dim">
-            Nobody online is talking about {save.arcade.name} yet. Stream good matches, run
-            tournaments, let the drama build — the internet will find you.
+            {scope === 'arcade'
+              ? `Nobody online is talking about ${save.arcade.name} yet. Stream good matches, run tournaments, get somebody ranked — the internet will find you.`
+              : 'Nothing here yet.'}
           </p>
         </div>
       )}
