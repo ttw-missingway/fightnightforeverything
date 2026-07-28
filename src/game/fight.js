@@ -162,7 +162,12 @@ const DEFAULT_STATS = { composure: 7, analysis: 6, xfactor: 6, mastery: 7, domin
 function kitOf(char, skill, game = null) {
   const mv = char?.moves || []
   const combos = (char?.combos || [])
-    .map((c) => ({ name: c.name, dmg: comboDamage(char, c), len: (c.moveIds || []).length }))
+    .map((c) => ({
+      name: c.name, dmg: comboDamage(char, c), len: (c.moveIds || []).length,
+      // The route itself, by move name — beat-for-beat playback reads these
+      // out one hit at a time.
+      moves: (c.moveIds || []).map((id) => (char?.moves || []).find((m) => m.id === id)?.name).filter(Boolean),
+    }))
     .filter((c) => c.dmg > 0)
   const normals = mv.filter((m) => m.slot === 'normal' || ['light', 'melee', 'heavy'].includes(m.type))
   const fastestMove = normals.reduce((best, m) => ((m.startup ?? 9) < (best?.startup ?? 9) ? m : best), null)
@@ -321,6 +326,12 @@ function simulateOnce({
       kind: m.kind || 'beat', actor: m.actor || null, move: m.move || null,
       ...(m.hits && m.hits > 1 ? { hits: m.hits, curve: m.curve || 'even' } : {}),
       ...(m.fx ? { fx: m.fx } : {}),
+      // Playback pacing: 'combo' lines land in rapid fire, faster than the
+      // reading-speed turn-taking around them.
+      ...(m.pace ? { pace: m.pace } : {}),
+      // Story flags the stream chat reacts to.
+      ...(m.comeback ? { comeback: true } : {}),
+      ...(m.blocked ? { blocked: true } : {}),
     })
     hud.push(snap())
   }
@@ -457,6 +468,7 @@ function simulateOnce({
       const sRider = sRiders ? ' ' + pick(sRiders).replaceAll('{o}', def.name) : ''
       return {
         raw: superMove.damage ?? 250, hits: irnd(7, 13), curve: 'accel', fx: 'super',
+        comeback,
         kind: 'beat', actor: att.name, move: superMove.name, cap: def.max * 0.46, dist: 0.2,
         fxForm: superMove.d?.form, fxGuard: superMove.d?.guard,
         text: (d) => `${pre}${att.name} ${pick(verbs).replaceAll('{m}', superMove.name).replaceAll('{o}', def.name)} ${d} damage.${sRider}`,
@@ -492,14 +504,87 @@ function simulateOnce({
           text: (d) => `${att.name} confirms into ${art(combo.name)}… and DROPS it${matchPoint ? ' under match point pressure' : ''} — only ${d} of it lands.`,
         }
       }
+      // How the route gets IN. Sometimes the touch is clean; sometimes the
+      // first hits bang into a solid guard and it's the mix-up — the overhead,
+      // the low, the throw — that finally breaks the door open. Both then play
+      // out BEAT FOR BEAT: one line per hit, rapid-fire (see `pace: 'combo'`).
+      const routeMoves = combo.moves || []
+      const mixups = [
+        ...(k.overheads || []).map((m) => ({ m, way: 'high' })),
+        ...(k.lows || []).map((m) => ({ m, way: 'low' })),
+        ...(k.grabs || []).map((m) => ({ m, way: 'throw' })),
+      ]
+      const blockedOpen = mixups.length > 0 && odds(0.38)
+      const opener = blockedOpen ? pick(mixups) : null
+      const preludes = blockedOpen ? [
+        {
+          blocked: true, move: routeMoves[0] || null,
+          text: pick([
+            `${att.name} starts the string and ${def.name} BLOCKS it — one hit, two, patient behind the guard…`,
+            `${def.name} has the first hits of ${art(combo.name)} scouted — blocked, blocked, still blocked…`,
+            `${att.name} presses in. ${def.name}'s guard takes the first two clean. Stalemate for half a second…`,
+          ]),
+        },
+        {
+          move: opener.m.name,
+          text: opener.way === 'high'
+            ? `— then ${att.name} goes OVER the top: ${opener.m.name}, and the guard cracks open —`
+            : opener.way === 'low'
+              ? `— then ${opener.m.name} slips in LOW under the block and it's open —`
+              : `— so ${att.name} just THROWS them out of block: ${opener.m.name} — wide open —`,
+        },
+      ] : null
+      const hitLine = (h, share, last, total) => {
+        const mv = routeMoves[h] || null
+        if (h === 0 && blockedOpen && !last) {
+          return mv
+            ? `— ${mv} lands clean: ${share} —`
+            : `— and now it's real: ${share} —`
+        }
+        if (h === 0 && !blockedOpen) {
+          return mv
+            ? pick([`${pre}${att.name} touches with ${mv} — it confirms. ${share}.`,
+              `${pre}The hit lands — ${mv}, ${share}, and ${att.name}'s hands are already moving.`])
+            : `${pre}${att.name} finds the touch — ${share}, and the route is on.`
+        }
+        if (last) {
+          return mv
+            ? pick([`— and ${mv} CLOSES it. ${share} to finish — ${total} off one touch.`,
+              `— ${mv} for the ender. ${share}, ${total} in all, and the room hears it.`])
+            : `— the ender lands. ${share}, ${total} for the full route.`
+        }
+        return mv
+          ? pick([`— into ${mv}. ${share} more.`, `— ${mv} keeps it rolling: ${share}.`, `— ${mv}! Another ${share}.`])
+          : pick([`— it keeps going. ${share}.`, `— another piece of it: ${share}.`])
+      }
       return {
         raw: combo.dmg, hits: Math.max(2, Math.min(combo.len, 6)), curve: 'decel',
         kind: 'beat', actor: att.name, move: combo.name, momentum: 0.3, dist: 0.16,
+        comeback,
+        perHit: { preludes, moves: routeMoves, hit: hitLine },
         text: (d) => `${pre}${att.name} ${pick([
           `confirms into ${art(combo.name)} — ${d} damage, the crowd counting every hit`,
           `lands the full ${combo.name}. ${d} off one touch`,
           `finds an opening and runs ${art(combo.name)} for ${d}`,
         ])}.`,
+      }
+    }
+
+    // --- the string that DOESN'T get in: a wall of block ------------------
+    // Blocking deserves screen time it never got: whole exchanges where the
+    // defender just holds it. No damage, real momentum, and the chat notices.
+    if (!finisher && !small && !closing && odds(0.16)) {
+      const stringMove = (k.plus && k.plus[0]) || (k.specials && k.specials[0]) || k.fastestMove
+      if (stringMove) {
+        return {
+          raw: 0, kind: 'struggle', actor: def.name, move: stringMove.name,
+          momentum: -0.4, fx: 'block', blocked: true, dist: 0.14,
+          text: () => pick([
+            `${att.name} runs the string — ${stringMove.name}, the follow-up, the reset — and ${def.name} blocks ALL of it.`,
+            `Three guesses from ${att.name}, three right answers from ${def.name}. The guard holds.`,
+            `${def.name} sits down behind the block and reads every layer of it. ${att.name} backs off to rethink.`,
+          ]),
+        }
       }
     }
 
@@ -877,6 +962,47 @@ function simulateOnce({
     let hits = prop.raw > 0 ? Math.max(1, Math.floor(prop.hits || 1)) : 1
     while (hits > 1 && Math.min(...tickWeights(hits, prop.curve)) * dmg < 12) hits--
 
+    // ---- BEAT-FOR-BEAT: the combo plays out one hit per line ----
+    // A route used to be one sentence and a bar animation. With `perHit` the
+    // proposal narrates every hit as its own rapid-fire line (see `pace` in
+    // the playback), the bar stepping down with each one — and the sequence
+    // can open with hits that got BLOCKED before the mix-up broke through.
+    if (prop.perHit && dmg > 0 && hits > 1) {
+      // The pricing block above already took the whole number off the bar;
+      // hand it back and re-apply it hit by hit so every snapshot is honest.
+      defSide.hp += dmg
+      for (const pre of prop.perHit.preludes || []) {
+        push(pre.text, {
+          kind: 'beat', actor: prop.actor, move: pre.move || null,
+          blocked: !!pre.blocked, comeback: !!prop.comeback,
+          fx: { t: pre.blocked ? 'block' : 'impact', side: defSide.side, mag: 0.16, word: null, ko: false },
+        })
+      }
+      const w = tickWeights(hits, prop.curve)
+      let dealt = 0
+      for (let h = 0; h < hits; h++) {
+        const last = h === hits - 1
+        const share = last ? dmg - dealt : Math.round(dmg * w[h])
+        dealt += share
+        defSide.hp -= share
+        const mag = clamp(share / (defSide.max * 0.42), 0, 1)
+        push(prop.perHit.hit(h, share, last, dmg), {
+          kind: 'beat', actor: prop.actor,
+          move: prop.perHit.moves?.[h] || prop.move,
+          pace: 'combo', comeback: !!prop.comeback,
+          fx: {
+            t: last ? (prop.fx || 'impact') : 'impact', side: defSide.side,
+            mag: last ? Math.max(mag, 0.3) : Math.max(mag, 0.12),
+            word: last ? fxWordFor(clamp(dmg / (defSide.max * 0.42), 0, 1), R()) : null,
+            ko: last && defSide.hp <= 0,
+            ...(last && prop.fxForm ? { form: prop.fxForm } : {}),
+            ...(last && prop.fxGuard && prop.fxGuard !== 'mid' ? { guard: prop.fxGuard } : {}),
+          },
+        })
+      }
+      return dmg
+    }
+
     // The visual. Magnitude is the share of a full bar this line took, so a
     // chip volley pops small and a super shakes the cabinet.
     const mag = clamp(dmg / (defSide.max * 0.42), 0, 1)
@@ -895,6 +1021,7 @@ function simulateOnce({
     push(prop.text(dmg), {
       kind: prop.kind, actor: prop.actor, move: prop.move,
       hits, curve: prop.curve, fx,
+      comeback: !!prop.comeback, blocked: !!prop.blocked,
     })
     return dmg
   }

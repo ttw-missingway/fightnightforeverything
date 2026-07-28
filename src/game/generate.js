@@ -1,16 +1,21 @@
 import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
 import { newPlayer, newCharacter } from './model.js'
 import { seedTakes } from './takes.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
   ELITE_ALIASES, FOODS, STARTER_GAMES, APPEARANCES, CATCHPHRASES,
   GAME_TITLE_PARTS, ARCADE_NAME_PARTS, STAGE_IDEAS, TOURNAMENT_NAME_PARTS,
+  NAME_POOLS, NAME_MIX,
 } from './names.js'
+import { rollCountry, countryCluster, migrateRegion } from './geo.js'
+import { PALETTE_KEYS } from './palettes.js'
+import { countryCode } from './flags.js'
 import { newStage } from './model.js'
 import { deriveVoice } from './dialogue.js'
 import { applyArchetypeKit, STAGE_VIBES } from './design.js'
 import { selectableChars } from './forms.js'
+import { charPower } from './patch.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
@@ -42,15 +47,64 @@ export function generateTournamentName() {
   return `${choice(TOURNAMENT_NAME_PARTS.a)} ${choice(TOURNAMENT_NAME_PARTS.b)}`
 }
 
+
+// ---------- Who people are: gender and names that make sense ----------
+
+/**
+ * Weighted, not uniform. `choice(GENDERS)` made a third of the world
+ * non-binary, which reads as generated the moment you meet three players.
+ */
+export function rollGender() {
+  // 60 / 30 / 10 — Dylan's call: not a mirror of reality's 99-to-1, but based
+  // in it. An arcade full of women reads generated; an arcade with none reads
+  // wrong in the other direction.
+  const r = rand()
+  return r < 0.6 ? 'man' : r < 0.9 ? 'woman' : 'non-binary'
+}
+
+/** Resolve a cluster-or-mix key to a concrete name pool key. */
+function resolveCluster(key) {
+  const mix = NAME_MIX[key]
+  if (!mix) return NAME_POOLS[key] ? key : 'EN'
+  let r = rand()
+  for (const [k, w] of Object.entries(mix)) {
+    r -= w
+    if (r <= 0) return k === 'ANY' ? choice(Object.keys(NAME_POOLS)) : k
+  }
+  return 'EN'
+}
+
+/**
+ * A first/last name appropriate to a COUNTRY and a gender. Both names come
+ * from the same cluster, so a Japanese elite is Japanese all the way through
+ * rather than half a coin flip.
+ */
+export function identityForCountry(code, gender = null) {
+  const g = gender || rollGender()
+  const cluster = resolveCluster(countryCluster(code))
+  const pool = NAME_POOLS[cluster]
+  const firsts = g === 'woman' ? pool.f : g === 'man' ? pool.m : (chance(0.5) ? pool.m : pool.f)
+  // `heritage` is the cluster the name came from, persisted so the FACE picks
+  // from the same well (see FACE_GUIDE in components/art.js). One roll decides
+  // both: a Kenji Tanaka in Los Angeles reads East Asian on the mugshot too,
+  // and an arcade in Osaka never hands its regulars mismatched faces.
+  return { gender: g, firstName: choice(firsts), lastName: choice(pool.last), heritage: cluster }
+}
+
+/** The name cluster an arcade's own walk-ins draw from: its country's. */
+export function arcadeCountryOf(save) {
+  return countryCode(save?.arcade?.country) || 'US'
+}
+
 // Fresh identity for the player form's 🎲 button.
 export function randomIdentity(save) {
   const taken = new Set(Object.values(save.players).map((p) => p.alias))
   const freeAliases = ALIASES.filter((a) => !taken.has(a))
+  const who = identityForCountry(arcadeCountryOf(save))
   return {
-    firstName: choice(FIRST_NAMES),
-    lastName: choice(LAST_NAMES),
+    ...who,
     alias: freeAliases.length ? choice(freeAliases) : `${choice(ALIASES)}${randInt(2, 99)}`,
-    gender: choice(GENDERS),
+    facePalette: choice(PALETTE_KEYS),
     description: choice(APPEARANCES),
     catchphrase: choice(CATCHPHRASES),
   }
@@ -117,12 +171,12 @@ function rollCeilingTier(isNpc) {
   return tiers[1]
 }
 
-export function generatePlayer(save, overrides = {}) {
-  // Sparse temperament build: pick rows, then spend the tier's budget — most
-  // of it leaning into the temperament, the rest scattered. Same economy the
-  // user builds in, so filler and cast are commensurable opponents.
-  const isNpc = !!overrides.npc
-  const tier = rollCeilingTier(isNpc)
+/**
+ * A sparse temperament build: pick rows, then spend a budget — most of it
+ * leaning into the temperament, the rest scattered. The one economy everyone
+ * is built in, so filler, cast and world elites are all commensurable.
+ */
+export function rollStatBuild(budget, cap = 5) {
   const trow = choice(TEMPERAMENTS)
   const srow = choice(SOCIAL_TEMPERAMENTS)
   const pu = {}, su = {}
@@ -130,10 +184,9 @@ export function generatePlayer(save, overrides = {}) {
   for (const k of SOCIAL_KEYS) su[k] = 0
   for (const k of trow.stats) pu[k] = 1 // the free temperament points
   for (const k of srow.stats) su[k] = 1
-  const cap = isNpc ? NPC_STAT_CAP : 5
-  let budget = randInt(tier.budget[0], tier.budget[1])
-  let guard = 200
-  while (budget > 0 && guard-- > 0) {
+  let left = budget
+  let guard = 400
+  while (left > 0 && guard-- > 0) {
     // Lean into who they are: most points chase the temperament rows.
     const roll = rand()
     let bag, key
@@ -141,16 +194,29 @@ export function generatePlayer(save, overrides = {}) {
     else if (roll < 0.65) { bag = su; key = choice(srow.stats) }
     else if (roll < 0.9) { bag = pu; key = choice(PERSONAL_KEYS) }
     else { bag = su; key = choice(SOCIAL_KEYS) }
-    if (bag[key] < cap) { bag[key]++; budget-- }
+    if (bag[key] < cap) { bag[key]++; left-- }
   }
   const personal = {}, social = {}
   for (const k of PERSONAL_KEYS) personal[k] = pu[k] * STAT_UNIT
   for (const k of SOCIAL_KEYS) social[k] = su[k] * STAT_UNIT
+  return { temperament: trow.key, socialTemperament: srow.key, personal, social }
+}
+
+export function generatePlayer(save, overrides = {}) {
+  const isNpc = !!overrides.npc
+  const tier = rollCeilingTier(isNpc)
+  const build = rollStatBuild(randInt(tier.budget[0], tier.budget[1]), isNpc ? NPC_STAT_CAP : 5)
+  const { personal, social } = build
+  const trow = TEMPERAMENTS.find((t) => t.key === build.temperament)
+  const srow = SOCIAL_TEMPERAMENTS.find((t) => t.key === build.socialTemperament)
+
   // The old hygiene joke lives here now: the rare passer-through who makes the
   // whole room edge toward the door. Warnable, fixable, never one of YOURS.
   const slob = isNpc ? chance(0.07) : false
-  const first = choice(FIRST_NAMES)
-  const last = choice(LAST_NAMES)
+  // Walk-ins are LOCAL: an arcade in Osaka fills with Japanese regulars, one
+  // in São Paulo with Brazilians. The diversity card lives in the country
+  // mixes themselves (see NAME_MIX), not in ignoring geography.
+  const who = identityForCountry(arcadeCountryOf(save))
   const taken = new Set(Object.values(save.players).map((p) => p.alias))
   const freeAliases = ALIASES.filter((a) => !taken.has(a))
   const alias = freeAliases.length ? choice(freeAliases) : `${choice(ALIASES)}${randInt(2, 99)}`
@@ -166,10 +232,15 @@ export function generatePlayer(save, overrides = {}) {
     ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1))
     : []
   const player = newPlayer({
-    firstName: first,
-    lastName: last,
+    firstName: who.firstName,
+    lastName: who.lastName,
     alias,
-    gender: choice(GENDERS),
+    gender: who.gender,
+    heritage: who.heritage,
+    // Everyone gets their OWN palette. A roster where all thirty portraits are
+    // Game Boy green reads as a themed set; thirty different palettes read as
+    // thirty people who each brought their own photo.
+    facePalette: choice(PALETTE_KEYS),
     description: choice(APPEARANCES),
     createdBy: 'cpu',
     temperament: trow.key,
@@ -291,65 +362,255 @@ export function topUpNpcs(save, absDay) {
  */
 // Sixty-four so the field is full even in a year your arcade sends nobody —
 // EVO is the world's tournament and it does not shrink to fit you.
-export const EVO_ROSTER_SIZE = 64
+export const EVO_ROSTER_SIZE = 80
+
+/**
+ * What each rung of the world is worth, in one table, because generation and
+ * the yearly drift have to agree about it. They did not: drift clamped skill
+ * to 90 while the top of the roster was generated above that, so every New
+ * Year quietly sanded the gods back down and the world got easier the longer a
+ * lineage went on.
+ *
+ * THE TOP OF THIS TABLE TRACKS WHAT A MAXED BUILD CAN REACH. These bands were
+ * set when a well-cultivated arcade player finished three years at ~60 skill,
+ * so gods at 76-86 were untouchable. Once banked creation points actually
+ * rebuilt the cast and the ceiling read the whole stat block, cultivated
+ * players started arriving at 77-86 — peers of the world number one — and a
+ * first-lineage local hero could win EVO. A god has to sit above a fully
+ * maxed, fully cultivated build, or the whole roguelike loop resolves in two
+ * runs.
+ *
+ * The `contender` band is the one that must stay REACHABLE: the bottom of the
+ * top 64 is somewhere a real local hero can get to, and everything above it
+ * still isn't.
+ */
+export const ELITE_TIERS = {
+  god: { skill: [89, 97], elo: [2350, 2600] },
+  legend: { skill: [79, 89], elo: [2100, 2350] },
+  killer: { skill: [65, 80], elo: [1800, 2100] },
+  contender: { skill: [48, 64], elo: [1430, 1780] },
+}
+
+/**
+ * How an elite carries themselves — it decides who they PLAY, not how well.
+ *
+ *   loyalist    — married to the character. Patches come and go; they stay.
+ *   meta-chaser — plays whatever the balance sheet says is best this month.
+ *   lab-monster — plays something weird and knows it deeper than anyone.
+ *   showman     — plays whatever makes the crowd loudest.
+ *   veteran     — settled years ago; moves only when truly forced.
+ *
+ * charLoyalty is the practical number: the chance per YEAR that they resist
+ * the pull toward the top of the tier list (see gravitateElites).
+ */
+export const ELITE_PERSONAS = [
+  { key: 'loyalist', loyalty: 0.95 },
+  { key: 'meta-chaser', loyalty: 0.15 },
+  { key: 'lab-monster', loyalty: 0.85 },
+  { key: 'showman', loyalty: 0.5 },
+  { key: 'veteran', loyalty: 0.8 },
+]
+
+/** One world-class player, made from scratch — a whole person, not a row. */
+export function makeElite(save, { tier, usedAliases = new Set() } = {}) {
+  let alias = choice(ELITE_ALIASES)
+  let guard = 40
+  while (usedAliases.has(alias) && guard-- > 0) alias = choice(ELITE_ALIASES)
+  if (usedAliases.has(alias)) alias = `${alias} ${randInt(2, 9)}`
+  usedAliases.add(alias)
+  const pool = selectableChars(save.game)
+  const char = pool.length ? choice(pool) : null
+  const band = ELITE_TIERS[tier] || ELITE_TIERS.contender
+  const region = rollCountry(rand)
+  const persona = choice(ELITE_PERSONAS)
+  const who = identityForCountry(region)
+  return {
+    id: uid('elite'),
+    alias,
+    ...who,
+    region,
+    tier,
+    persona: persona.key,
+    charLoyalty: persona.loyalty,
+    facePalette: choice(PALETTE_KEYS),
+    description: choice(APPEARANCES),
+    catchphrase: choice(CATCHPHRASES),
+    // The card. Elites are built in the SAME sparse economy as everyone else,
+    // sized to the tenet that a hundred-point pool is a god: these stats are
+    // what the dossier shows and what the narration reads (x-factor spikes,
+    // composure under pressure) — match RESOLUTION stays skill+elo, so the
+    // difficulty calibration doesn't move.
+    ...rollStatBuild(ELITE_BUILD_BUDGET[tier] ? randInt(...ELITE_BUILD_BUDGET[tier]) : 20),
+    mainCharId: char ? char.id : null,
+    skill: randInt(band.skill[0], band.skill[1]),
+    elo: randInt(band.elo[0], band.elo[1]),
+    titles: 0,
+  }
+}
+
+/** Creation-point pools by tier — gods read like the maxed builds they are. */
+const ELITE_BUILD_BUDGET = {
+  god: [62, 80],
+  legend: [46, 62],
+  killer: [32, 46],
+  contender: [18, 32],
+}
 
 export function generateEvoRoster(save, count = EVO_ROSTER_SIZE) {
   const roster = []
   const usedAliases = new Set()
   for (let i = 0; i < count; i++) {
-    let alias = ELITE_ALIASES[i % ELITE_ALIASES.length]
-    if (usedAliases.has(alias)) alias = `${alias} ${randInt(2, 9)}`
-    usedAliases.add(alias)
-    const pool = selectableChars(save.game)
-    const char = pool.length ? choice(pool) : null
-    // Elites are strong but tiered: a few gods, many killers.
-    // A WORLD, not a wall. When this list was twenty people it made sense for
-    // every one of them to be a monster; at sixty-four it has to have a tail,
-    // or the bottom of the world rankings sits permanently above the best
-    // player a local scene can produce and the ladder is decoration.
-    //
-    // Measured (Phase 7 harness): a well-cultivated arcade player reaches
-    // ~1600 elo and ~60 skill after three years. The `contender` band is set
-    // to overlap exactly that — the bottom of the top 64 is somewhere a real
-    // local hero can actually reach, and everything above it still isn't.
+    // Elites are strong but tiered: a few gods, many killers, and — now that
+    // the roster runs to eighty against a sixty-four-place ranking — a tail
+    // that has to fight its way ONTO the list at all.
     const tier = i < 3 ? 'god' : i < 12 ? 'legend' : i < 32 ? 'killer' : 'contender'
-    const skill = tier === 'god' ? randInt(76, 86)
-      : tier === 'legend' ? randInt(66, 78)
-      : tier === 'killer' ? randInt(56, 70)
-      : randInt(46, 60)
-    const elo = tier === 'god' ? randInt(2200, 2450)
-      : tier === 'legend' ? randInt(2000, 2250)
-      : tier === 'killer' ? randInt(1750, 2000)
-      : randInt(1430, 1760)
-    roster.push({
-      id: uid('elite'),
-      alias,
-      firstName: choice(FIRST_NAMES),
-      lastName: choice(LAST_NAMES),
-      region: choice(['JP', 'KR', 'US-East', 'US-West', 'EU', 'BR', 'MX', 'SG']),
-      tier,
-      mainCharId: char ? char.id : null,
-      skill,
-      elo,
-      titles: 0,
-    })
+    roster.push(makeElite(save, { tier, usedAliases }))
   }
   return roster
 }
 
+/**
+ * Old saves carry elites from before the atlas: bloc regions, no gender, no
+ * persona, sixty-four of them. Bring them into the new world without touching
+ * the parts a player would notice — alias, elo, skill and titles all stay.
+ */
+export function repairEvoRoster(save) {
+  if (!save.evoRoster) return
+  // Players from before heritage existed pick the face pool their arcade's
+  // country would have rolled them — names stay untouched.
+  for (const p of Object.values(save.players || {})) {
+    p.heritage ??= identityForCountry(arcadeCountryOf(save), p.gender).heritage
+    p.facePalette ??= choice(PALETTE_KEYS)
+  }
+  const usedAliases = new Set(save.evoRoster.map((e) => e.alias))
+  for (const e of save.evoRoster) {
+    const before = e.region
+    // Rows without a gender predate the atlas — for them AF/ME mean the old
+    // blocs, not Afghanistan and Montenegro. See migrateRegion.
+    e.region = migrateRegion(e.region, rand, { legacy: !e.gender })
+    if (!e.gender || before !== e.region) {
+      // A remapped region means the old name was rolled for the wrong place.
+      Object.assign(e, identityForCountry(e.region, e.gender))
+    }
+    if (!e.persona) {
+      const persona = choice(ELITE_PERSONAS)
+      e.persona = persona.key
+      e.charLoyalty = persona.loyalty
+    }
+    e.heritage ??= identityForCountry(e.region, e.gender).heritage
+    e.facePalette ??= choice(PALETTE_KEYS)
+    e.description ??= choice(APPEARANCES)
+    e.catchphrase ??= choice(CATCHPHRASES)
+    if (!e.personal) {
+      Object.assign(e, rollStatBuild(ELITE_BUILD_BUDGET[e.tier] ? randInt(...ELITE_BUILD_BUDGET[e.tier]) : 20))
+    }
+  }
+  while (save.evoRoster.length < EVO_ROSTER_SIZE) {
+    save.evoRoster.push(makeElite(save, { tier: 'contender', usedAliases }))
+  }
+}
+
 // Elites drift slightly between years: slumps, breakouts, the occasional
 // character switch — but the same people show up, which keeps EVO believable.
+
+/**
+ * The world plays without you. A handful of unwatchable background sets a day
+ * among the eighty — locals, money matches, invitationals nobody streams —
+ * so the ladder SHIFTS: the top 64 is under pressure from below all the time
+ * instead of holding still between EVOs. Standard elo at a small K keeps the
+ * churn honest (zero-sum) and the whiplash mild.
+ *
+ * Returns the day's genuine shocks so the caller can put them in the feed.
+ */
+export function worldMatchesDaily(save) {
+  const roster = save.evoRoster || []
+  if (roster.length < 2) return []
+  const sorted = [...roster].sort((a, b) => b.elo - a.elo)
+  const upsets = []
+  const sets = randInt(2, 4)
+  for (let n = 0; n < sets; n++) {
+    // Near-neighbours play: the scene sorts itself the way ladders actually
+    // do, by people fighting the people around them.
+    const i = randInt(0, sorted.length - 1)
+    const span = randInt(1, 8) * (chance(0.5) ? 1 : -1)
+    const j = clamp(i + span, 0, sorted.length - 1)
+    if (i === j) continue
+    const a = sorted[i], b = sorted[j]
+    const perf = (e) => e.skill * 0.75 + (e.elo - 1200) / 40 + rand() * 6
+    const pa = 1 / (1 + Math.pow(10, -(perf(a) - perf(b)) / 22))
+    const aWins = chance(pa)
+    const w = aWins ? a : b
+    const l = aWins ? b : a
+    const expected = 1 / (1 + Math.pow(10, (l.elo - w.elo) / 400))
+    const delta = Math.round(16 * (1 - expected))
+    w.elo += delta
+    l.elo -= delta
+    const winProb = aWins ? pa : 1 - pa
+    if (winProb < 0.25 && sorted.indexOf(l) < 12) upsets.push({ winner: w, loser: l })
+  }
+  return upsets
+}
+
 export function driftEvoRoster(save) {
   for (const e of save.evoRoster) {
-    // The floors here have to sit BELOW the contender band or the yearly drift
-    // quietly compresses the tail of the world back out of a local player's
-    // reach — which is exactly what it was doing: a 1700 floor rebuilt the wall
-    // every New Year no matter how the roster was generated.
-    e.skill = Math.max(42, Math.min(90, e.skill + randInt(-3, 3)))
-    e.elo = Math.max(1400, e.elo + randInt(-40, 50))
-    const pool = selectableChars(save.game)
-    if (chance(0.08) && pool.length) {
-      e.mainCharId = choice(pool).id
+    // The world REGRESSES TOWARD ITS TIER, it does not random-walk.
+    //
+    // A random walk with a hard clamp only ever loses: your scene beats elites
+    // at EVO and during invasions, that rating is written back, and nothing
+    // ever put it back. Measured across six runs of one lineage the top three
+    // of the world fell 2489 → 2372 and stayed there, so a late lineage was
+    // fighting a world its own earlier runs had worn down — a path to a
+    // champion that has nothing to do with how good your players got.
+    //
+    // Real scenes don't work that way. The people at the top keep playing each
+    // other, new talent arrives, and somebody who got knocked off goes back to
+    // the lab. So each year closes a quarter of the gap back to where that rung
+    // of the world belongs, and the noise rides on top of that.
+    const band = ELITE_TIERS[e.tier] || ELITE_TIERS.contender
+    const midSkill = (band.skill[0] + band.skill[1]) / 2
+    const midElo = (band.elo[0] + band.elo[1]) / 2
+    e.skill = clamp(Math.round(e.skill + (midSkill - e.skill) * 0.25 + randInt(-3, 3)), 40, 99)
+    e.elo = Math.max(1400, Math.round(e.elo + (midElo - e.elo) * 0.25 + randInt(-40, 50)))
+  }
+  gravitateElites(save)
+
+  // TURNOVER. Careers end and prospects arrive — two to four of the weakest
+  // hang it up every year and fresh names take their slots, so a long lineage
+  // keeps meeting new people instead of the same sixty-four forever. Retirees
+  // leave from the bottom: the gods do not quietly vanish.
+  const byElo = [...save.evoRoster].sort((a, b) => a.elo - b.elo)
+  const usedAliases = new Set(save.evoRoster.map((x) => x.alias))
+  const leaving = byElo.slice(0, randInt(2, 4))
+  for (const e of leaving) {
+    const i = save.evoRoster.indexOf(e)
+    if (i < 0) continue
+    const rookie = makeElite(save, { tier: 'contender', usedAliases })
+    save.evoRoster[i] = rookie
+  }
+}
+
+/**
+ * Top players gravitate toward top-tier characters — that is what being a
+ * pro means. Each persona resists the pull differently (see ELITE_PERSONAS):
+ * the meta-chaser re-mains within a season of a patch, the loyalist basically
+ * never, the lab-monster actively prefers the thing nobody else plays.
+ */
+export function gravitateElites(save) {
+  const pool = selectableChars(save.game)
+  if (!pool.length) return
+  const powered = pool
+    .map((c) => ({ id: c.id, power: charPower(save.game, c.id) }))
+    .sort((a, b) => b.power - a.power)
+  const top = powered.slice(0, Math.max(2, Math.ceil(powered.length / 3)))
+  const bottom = powered.slice(-Math.max(2, Math.ceil(powered.length / 4)))
+  for (const e of save.evoRoster) {
+    if (chance(e.charLoyalty ?? 0.7)) continue
+    if (e.persona === 'lab-monster') {
+      e.mainCharId = choice(bottom).id
+      continue
     }
+    // The better the player, the harder the pull toward the top of the sheet.
+    const pullTop = e.tier === 'god' || e.tier === 'legend' ? 0.8 : 0.55
+    e.mainCharId = chance(pullTop) ? choice(top).id : choice(powered).id
   }
 }

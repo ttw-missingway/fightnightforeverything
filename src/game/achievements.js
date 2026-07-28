@@ -1,4 +1,4 @@
-import { runAge, DAYS_PER_YEAR } from './constants.js'
+import { runAge, DAYS_PER_YEAR, STAT_MAX_POINTS, STAT_UNIT } from './constants.js'
 import { chronicle } from './model.js'
 
 /**
@@ -93,18 +93,27 @@ export const ACHIEVEMENTS = [
     check: (s) => (s.guides || []).some((g) => g.landed),
   },
   {
-    key: 'worth-watching', icon: '🌐', name: 'Worth watching',
+    key: 'worth-watching', icon: '🗓', name: 'A year of this room',
     unlock: 'studio', unlockLabel: 'The Game Studio — patch your own game', points: 2,
-    // National interest in the GAME — fed by streaming, guides that land, and
-    // players who perform. A run OPENS at 55, so the bar has to sit above that
-    // or it is just a survival timer: measured, a neglected scene sags to a
-    // ceiling of 57 while a streamed, staffed, well-advertised one reaches 69.
-    // 62 is the line between those two. It sat at 65 until Phase 7 measured
-    // the actual curve of a competent first year — which peaks at 63-66, so 65
-    // was a coin flip on noise, and the Studio is far too important to hand out
-    // by coin flip.
-    how: 'Push national interest in the game to 62 — on stream, guides, and results.',
-    check: (s) => (s.tally?.peakRelevance || 0) >= 62,
+    // THE STUDIO IS THE ANSWER TO A GAME GOING STALE, and the price of it is
+    // simply having been here a while.
+    //
+    // Two earlier versions were wrong in opposite directions. `peakRelevance
+    // >= 62` was a HIGH-WATER mark — the opposite of the problem the Studio
+    // solves — and relevance spikes around EVO, which lands seven days after
+    // opening, so a first EVO handed over the biggest tool in the game before
+    // the arcade had a second cabinet. Replacing it with a slump condition
+    // ("sixty days at interest <= 50") fixed the timing but priced the tool on
+    // suffering: measured, a competent scene never goes stale at all, so the
+    // owner running the place well was the one who never got it.
+    //
+    // A year. That is all. It cannot fire in the first fortnight, it does not
+    // require the run to be dying, and it lands well before the death march
+    // starts biting around year three — you get the tool before the war it is
+    // for. (The key stays `worth-watching` so lineages that already earned it
+    // keep it.)
+    how: 'Run the arcade for a full year.',
+    check: (s, absDay) => absDay >= DAYS_PER_YEAR,
   },
 
   // ---------- Food packs: the counter argues for itself ----------
@@ -300,6 +309,19 @@ export const ACHIEVEMENTS = [
     cosmetic: true,
     how: 'Five guides out of your scene catch on in a single run.',
     check: (s) => (s.guides || []).filter((g) => g.landed).length >= 5,
+  },
+  {
+    key: 'the-complete-player', icon: '💠', name: 'The complete player',
+    unlock: 'cosmetic-aura', unlockLabel: 'A gold aura on the player who has everything', points: 3,
+    cosmetic: true,
+    // Every stat at five on one person. That is 114 creation points, which is
+    // more than any single run can bank — it is the capstone of a whole
+    // lineage, and the ceiling formula now reads all of it (see skillCeiling).
+    how: 'Build one player with every single stat maxed out.',
+    check: (s) => Object.values(s.players).some((p) =>
+      !p.npc && !p.banished
+      && Object.values(p.personal || {}).every((v) => v >= STAT_MAX_POINTS * STAT_UNIT)
+      && Object.values(p.social || {}).every((v) => v >= STAT_MAX_POINTS * STAT_UNIT)),
   },
   {
     key: 'the-hard-way', icon: '🔥', name: 'The hard way',

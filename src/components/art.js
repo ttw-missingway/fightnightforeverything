@@ -6,9 +6,14 @@
 // feature — the game engine must stay runnable in plain node.
 
 import { preferredSkin } from '../game/skins.js'
+import { FACE_PALETTES as PALETTE_LIST, DEFAULT_PALETTE } from '../game/palettes.js'
 
 const charFiles = import.meta.glob('../assets/pixel/chars/*.png', { eager: true, import: 'default' })
 const faceFiles = import.meta.glob('../assets/pixel/faces/*.png', { eager: true, import: 'default' })
+// Photo-derived mugshots: 30 heads x 12 palettes, each a 26px three-value
+// image (see docs/FINAL-PUSH.md — sourced from StyleGAN faces, so no real
+// person's likeness ships with the game).
+const face2Files = import.meta.glob('../assets/pixel/faces2/*/*.png', { eager: true, import: 'default' })
 const stageFiles = import.meta.glob('../assets/pixel/stages/*.png', { eager: true, import: 'default' })
 // FIGHTER PACKS: drop a folder of PNGs in src/assets/packs/<pack-name>/ and it
 // shows up in the sprite picker as its own section. No registry to update —
@@ -23,9 +28,148 @@ const byName = (files) => {
   return map
 }
 const CHAR_SPRITES = byName(charFiles) // full-body sprites — the fighting game's cast
-const FACE_SPRITES = byName(faceFiles) // GB-camera-style mugshots — the arcade regulars
+const FACE_SPRITES = byName(faceFiles) // the old pixel-art mugshots — legacy spriteKeys only
 const ALL_CHAR_NAMES = Object.keys(CHAR_SPRITES).sort()
-const ALL_FACE_NAMES = Object.keys(FACE_SPRITES).sort()
+
+// ---------- The face pool: photo mugshots, palette-swappable ----------
+// FACES2[palette][name] -> url. Names are shared across palettes (p01..p30),
+// so switching palette re-skins every portrait in the arcade at once.
+const FACES2 = {}
+for (const [path, url] of Object.entries(face2Files)) {
+  const parts = path.split('/')
+  const pal = parts[parts.length - 2]
+  const name = parts[parts.length - 1].replace('.png', '')
+  FACES2[pal] ??= {}
+  FACES2[pal][name] = url
+}
+// The catalogue, minus anything that isn't actually on disk.
+export const FACE_PALETTES = PALETTE_LIST.filter((p) => FACES2[p.key])
+
+/**
+ * THE FORCED PALETTE. Null — the default — means every portrait uses its OWN
+ * palette, which is what makes a roster read as a room full of people rather
+ * than a themed set. Setting it to a specific key overrides everybody at once,
+ * for players who want the uniform look.
+ *
+ * Module-level because art.js can't reach the store (the store imports art
+ * consumers), and threading the save through every playerArt call site is
+ * fifty edits for a theme. App sets it from save.settings before first render.
+ */
+let forcedPalette = null
+export function setFacePalette(key) {
+  forcedPalette = FACES2[key] ? key : null
+}
+
+/**
+ * Which palette a given person's portrait is in: the global override if one is
+ * set, else the palette they carry, else one derived from their id — so a save
+ * written before palettes were per-person still opens as a varied room rather
+ * than a wall of Game Boy green.
+ */
+function paletteFor(player, key = null) {
+  if (forcedPalette) return forcedPalette
+  const own = typeof player === 'object' ? player?.facePalette : null
+  if (own && FACES2[own]) return own
+  const seed = (typeof player === 'object' ? player?.id : player) ?? key
+  const avail = FACE_PALETTES.length ? FACE_PALETTES : PALETTE_LIST
+  if (seed == null) return DEFAULT_PALETTE
+  return avail[hash(`pal:${seed}`) % avail.length].key
+}
+
+const faceSet = (pal) => FACES2[pal] || FACES2[DEFAULT_PALETTE] || {}
+const ALL_FACE_NAMES = Object.keys(FACES2[DEFAULT_PALETTE] || {}).sort()
+
+/**
+ * THE FACE GUIDE. Every head is tagged with a read gender and the broad
+ * ethnic looks it can pass for (many pass for several — tagging is generous
+ * on purpose, since a 26px three-value mugshot abstracts a lot).
+ *
+ * Selection follows the player's `heritage` — the name cluster their identity
+ * rolled from — so the ONE roll that named them also faces them: a Kenji
+ * Tanaka in Los Angeles reads East Asian on the card, an arcade in Osaka
+ * never hands its regulars mismatched mugshots, and a melting-pot country is
+ * exactly as mixed as its NAME_MIX says. Non-binary players draw from the
+ * whole gender range of their heritage.
+ */
+const FACE_GUIDE = {
+  p01: { g: 'f', eth: ['white'] },
+  p02: { g: 'f', eth: ['latin', 'white'] },
+  p03: { g: 'm', eth: ['white', 'latin'] },
+  p04: { g: 'm', eth: ['white'] },
+  p05: { g: 'f', eth: ['white'] },
+  p06: { g: 'm', eth: ['easia', 'latin'] },
+  p07: { g: 'm', eth: ['white'] },
+  p08: { g: 'f', eth: ['white'] },
+  p09: { g: 'm', eth: ['mena', 'white', 'latin'] },
+  p10: { g: 'f', eth: ['white', 'latin'] },
+  p11: { g: 'f', eth: ['white'] },
+  p12: { g: 'f', eth: ['sasia'] },
+  p13: { g: 'f', eth: ['latin', 'sasia'] },
+  p14: { g: 'f', eth: ['white'] },
+  p15: { g: 'f', eth: ['white'] },
+  p16: { g: 'm', eth: ['white', 'latin', 'mena'] },
+  p17: { g: 'f', eth: ['white'] },
+  p18: { g: 'm', eth: ['black', 'latin', 'mena'] },
+  p19: { g: 'm', eth: ['white'] },
+  p20: { g: 'f', eth: ['white', 'latin'] },
+  p21: { g: 'f', eth: ['white'] },
+  p22: { g: 'f', eth: ['white'] },
+  p23: { g: 'm', eth: ['white'] },
+  p24: { g: 'm', eth: ['white', 'latin', 'mena'] },
+  p25: { g: 'm', eth: ['white'] },
+  p26: { g: 'm', eth: ['black'] },
+  p27: { g: 'f', eth: ['white'] },
+  p28: { g: 'm', eth: ['white'] },
+  p29: { g: 'f', eth: ['white'] },
+  p30: { g: 'f', eth: ['latin', 'white', 'mena'] },
+  // The second batch, curated specifically to fill the pools the first one
+  // left thin — TPDN skews white, so East Asian, Black, MENA and South Asian
+  // heads had to be fished for.
+  p31: { g: 'm', eth: ['easia'] },
+  p32: { g: 'm', eth: ['easia'] },
+  p33: { g: 'm', eth: ['mena', 'white'] },
+  p34: { g: 'f', eth: ['easia'] },
+  p35: { g: 'f', eth: ['black'] },
+  p36: { g: 'm', eth: ['latin', 'white'] },
+  p37: { g: 'm', eth: ['mena', 'latin'] },
+  p38: { g: 'f', eth: ['black', 'sasia', 'latin'] },
+  p39: { g: 'm', eth: ['latin', 'sasia', 'easia'] },
+  p40: { g: 'f', eth: ['easia'] },
+  p41: { g: 'f', eth: ['easia'] },
+  p42: { g: 'm', eth: ['easia'] },
+  p43: { g: 'm', eth: ['sasia', 'black'] },
+  p44: { g: 'f', eth: ['easia', 'sasia'] },
+  p45: { g: 'f', eth: ['mena', 'latin'] },
+}
+
+/**
+ * What each NAME CLUSTER looks like, broadly. Homogeneous places list one
+ * look; genuinely mixed ones list several; null means anyone (the EN cluster
+ * covers the US, the UK, Jamaica and Fiji — there is no one look to have).
+ */
+const CLUSTER_ETH = {
+  JP: ['easia'], KR: ['easia'], CN: ['easia'], VN: ['easia'], TH: ['easia'],
+  IN: ['sasia'], ARB: ['mena'], AFR: ['black'],
+  CIS: ['white'], PL: ['white'], IT: ['white'], DE: ['white'], SE: ['white'],
+  FR: ['white'],
+  ES: ['latin'],
+  BR: ['latin', 'black', 'white'],
+  EN: null,
+}
+
+const FACE_NAMES_ALL = Object.keys(FACE_GUIDE)
+function facePool(gender, heritage) {
+  const want = heritage ? CLUSTER_ETH[heritage] ?? null : null
+  const gOk = (t) => (gender === 'man' ? t.g === 'm' : gender === 'woman' ? t.g === 'f' : true)
+  let names = FACE_NAMES_ALL.filter((n) => {
+    const t = FACE_GUIDE[n]
+    return gOk(t) && (!want || t.eth.some((e) => want.includes(e)))
+  })
+  // Never strand a pick: fall back to the gender pool, then to everyone.
+  if (!names.length) names = FACE_NAMES_ALL.filter((n) => gOk(FACE_GUIDE[n]))
+  if (!names.length) names = FACE_NAMES_ALL
+  return names
+}
 
 // ---------- Fighter packs ----------
 //
@@ -113,20 +257,25 @@ export function lookArt(char, playerId) {
 }
 
 /** Deterministic player mugshot from any stable key (EVO elites, old events). */
-export function playerArtFor(key) {
+export function playerArtFor(key, gender = null, heritage = null, palette = null) {
   if (key == null) return null
-  const name = ALL_FACE_NAMES[hash(key) % ALL_FACE_NAMES.length]
-  return FACE_SPRITES[name]
+  const pool = facePool(gender, heritage)
+  const name = pool.length ? pool[hash(key) % pool.length] : null
+  if (!name) return null
+  return faceSet(forcedPalette || (palette && FACES2[palette] ? palette : paletteFor(null, key)))[name]
 }
 
 /** Mugshot URL for a player. Accepts a player object (honors spriteKey) or a key. */
 export function playerArt(player) {
   if (player == null) return null
   if (typeof player === 'object') {
+    const pal = paletteFor(player)
+    // A hand-picked face from the new pool rides that person's palette.
+    if (player.spriteKey && faceSet(pal)[player.spriteKey]) return faceSet(pal)[player.spriteKey]
     if (player.spriteKey && FACE_SPRITES[player.spriteKey]) return FACE_SPRITES[player.spriteKey]
     // Back-compat: spriteKeys picked when players used the full-body catalog.
     if (player.spriteKey && CHAR_SPRITES[player.spriteKey]) return CHAR_SPRITES[player.spriteKey]
-    return playerArtFor(player.id)
+    return playerArtFor(player.id, player.gender, player.heritage, pal)
   }
   return playerArtFor(player)
 }
@@ -170,7 +319,11 @@ export const CHAR_SPRITE_CATALOG = [
   ...ALL_CHAR_NAMES.map((n) => ({ key: n, url: CHAR_SPRITES[n] })),
   ...Object.values(PACK_GROUPS).flatMap((g) => g.sprites),
 ]
-export const PLAYER_SPRITE_CATALOG = ALL_FACE_NAMES.map((n) => ({ key: n, url: FACE_SPRITES[n] }))
+// A FUNCTION, not a constant: the urls change when the palette does.
+export const playerSpriteCatalog = (palette = null) => {
+  const pal = forcedPalette || (palette && FACES2[palette] ? palette : DEFAULT_PALETTE)
+  return ALL_FACE_NAMES.map((n) => ({ key: n, url: faceSet(pal)[n] }))
+}
 
 /**
  * The same catalog, split into sections. The picker uses this so a pack reads

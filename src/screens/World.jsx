@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { worldRankings, rankedWorld, cutoffElo, bestRanked, theClimb, dossier, TIER_LABEL, WORLD_RANK_SIZE } from '../game/world.js'
 import { lookOf } from '../game/skins.js'
-import { Portrait } from '../components/ui.jsx'
-import { lookArt } from '../components/art.js'
+import { Portrait, PointDots, StatBar } from '../components/ui.jsx'
+import { lookArt, playerArt } from '../components/art.js'
+import { PERSONAL_STATS, SOCIAL_STATS, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from '../game/constants.js'
 
 /**
  * The world rankings — the one screen that is not about your arcade.
@@ -117,12 +118,12 @@ export default function World() {
                       const c = save.game.characters.find((x) => x.id === r.charId)
                       return c ? <Portrait url={lookArt(c, r.id)} size={20} alt={c.name} /> : null
                     })()}
-                    <span title={r.region === 'home' ? save.arcade.name : r.region}>{r.flag}</span>
+                    <span title={r.region === 'home' ? save.arcade.name : (r.regionName || r.region)}>{r.flag}</span>
                     <strong className={r.yours ? 'cyan' : ''}>{r.name}</strong>
                     {r.retired && <span className="dim small"> 🏁</span>}
                   </span>
                 </td>
-                <td className="dim small">{r.region === 'home' ? save.arcade.name : r.region}</td>
+                <td className="dim small">{r.region === 'home' ? save.arcade.name : (r.regionName || r.region)}</td>
                 <td className="small">{charName(r) || <span className="dim">—</span>}</td>
                 <td>{r.elo}</td>
                 <td className="cyan">{r.skill || <span className="dim">—</span>}</td>
@@ -135,6 +136,15 @@ export default function World() {
       </div>
     </div>
   )
+}
+
+
+const PERSONA_LABEL = {
+  loyalist: 'character loyalist',
+  'meta-chaser': 'meta chaser',
+  'lab-monster': 'lab monster',
+  showman: 'showman',
+  veteran: 'grizzled veteran',
 }
 
 /**
@@ -154,44 +164,99 @@ function Dossier({ save, id, back, nav }) {
   const { row, bouts, record, vsYou, majors } = d
   const char = save.game.characters.find((c) => c.id === row.charId)
   const elite = (save.evoRoster || []).find((e) => e.id === id)
+  // The card's subject: an elite from the world roster, or one of your own —
+  // both carry the same sparse stat build, so one card fits everyone.
+  const subject = elite || save.players?.[id] || null
 
   return (
     <div>
       <button onClick={back}>← Back to the rankings</button>
       <div className="card" style={{ borderColor: row.yours ? 'var(--cyan)' : 'var(--border)' }}>
-        <div className="row spread">
-          <div>
+        <div className="row" style={{ gap: 12, alignItems: 'center', flexWrap: 'nowrap' }}>
+          <Portrait url={playerArt(subject || row.id)} size={56} alt={row.name} className="hud-char" />
+          <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: 30, margin: '2px 0' }}>{row.flag} {row.name}</h1>
-            {elite && <div className="dim">{elite.firstName} {elite.lastName} · {elite.region}</div>}
-            <div className="small" style={{ marginTop: 4 }}>{TIER_LABEL[row.tier] || 'Ranked competitor'}</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div className="gold" style={{ fontSize: 30, fontWeight: 700 }}>#{row.rank}</div>
-            <div className="dim small">in the world</div>
+            {subject && (
+              <p className="dim" style={{ margin: '2px 0' }}>
+                {subject.firstName} "{row.name}" {subject.lastName}
+                {subject.gender && <> · {subject.gender}</>}
+                {' '}· {row.regionName || row.region}
+                {subject.description && <> · {subject.description}</>}
+              </p>
+            )}
+            <div className="small">
+              {TIER_LABEL[row.tier] || 'Ranked competitor'}
+              {elite?.persona && <span className="dim"> · {PERSONA_LABEL[elite.persona] || elite.persona}</span>}
+            </div>
+            {subject?.catchphrase && <p className="cyan" style={{ margin: '2px 0' }}>“{subject.catchphrase}”</p>}
+            <div className="row" style={{ marginTop: 6 }}>
+              <span className="pill gold">#{row.rank ?? '—'} in the world</span>
+              <span className="pill">Elo {row.elo}</span>
+              <span className="pill cyan">Skill {row.skill || '—'}</span>
+              {row.titles > 0 && <span className="pill gold">🏆 EVO ×{row.titles}</span>}
+              {char && <span className="pill on">Mains {char.name}</span>}
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="grid3">
-        <div className="card"><h4 className="dim" style={{ margin: 0 }}>Elo</h4>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{row.elo}</div></div>
-        <div className="card"><h4 className="dim" style={{ margin: 0 }}>Skill</h4>
-          <div className="cyan" style={{ fontSize: 24, fontWeight: 700 }}>{row.skill || '—'}</div></div>
-        <div className="card"><h4 className="dim" style={{ margin: 0 }}>EVO titles</h4>
-          <div className="gold" style={{ fontSize: 24, fontWeight: 700 }}>{row.titles || 0}</div></div>
       </div>
 
       <div className="grid2">
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Main</h3>
-          {char ? (
-            <div className="row" style={{ gap: 8 }}>
-              <Portrait url={lookArt(char, row.id)} size={34} alt={char.name} />
-              <span><strong>{char.name}</strong><br /><span className="dim small">{char.archetype}</span></span>
+          <h3 style={{ marginTop: 0 }}>Stats <span className="dim small">(0–{STAT_MAX_POINTS} points, by temperament)</span></h3>
+          {!subject?.personal && <p className="dim small">Nobody has scouted them properly.</p>}
+          {subject?.personal && TEMPERAMENTS.map((t) => (
+            <div key={t.key} style={{ marginBottom: 8 }}>
+              <h4 style={{ margin: '6px 0 2px', color: t.color }}>
+                {t.emoji} {t.label}
+                {subject.temperament === t.key && <span className="small"> · their temperament</span>}
+              </h4>
+              {t.stats.map((k) => (
+                <PointDots key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
+                  value={Math.round((subject.personal[k] || 0) / STAT_UNIT)}
+                  granted={subject.temperament === t.key ? 1 : 0}
+                  title={Object.fromEntries(PERSONAL_STATS)[k]} />
+              ))}
             </div>
-          ) : <p className="dim">Nobody has seen what they play.</p>}
+          ))}
+          {subject?.social && (
+            <>
+              <h3 style={{ marginTop: 12 }}>Social</h3>
+              {SOCIAL_TEMPERAMENTS.map((t) => (
+                <div key={t.key} style={{ marginBottom: 8 }}>
+                  <h4 style={{ margin: '6px 0 2px', color: t.color }}>
+                    {t.emoji} {t.label}
+                    {subject.socialTemperament === t.key && <span className="small"> · their temperament</span>}
+                  </h4>
+                  {t.stats.map((k) => (
+                    <PointDots key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
+                      value={Math.round((subject.social[k] || 0) / STAT_UNIT)}
+                      granted={subject.socialTemperament === t.key ? 1 : 0}
+                      title={Object.fromEntries(SOCIAL_STATS)[k]} />
+                  ))}
+                </div>
+              ))}
+            </>
+          )}
         </div>
-        <div className="card">
+
+        <div>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Main</h3>
+            {char ? (
+              <div>
+                <div className="row" style={{ gap: 8 }}>
+                  <Portrait url={lookArt(char, row.id)} size={34} alt={char.name} />
+                  <span><strong>{char.name}</strong><br /><span className="dim small">{char.archetype}</span></span>
+                </div>
+                {row.skill > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <StatBar label={char.name} value={row.skill} max={100} />
+                  </div>
+                )}
+              </div>
+            ) : <p className="dim">Nobody has seen what they play.</p>}
+          </div>
+          <div className="card">
           <h3 style={{ marginTop: 0 }}>Against your arcade</h3>
           {vsYou.w + vsYou.l === 0 ? (
             <p className="dim small">Never faced anyone of yours. That's the whole idea, isn't it.</p>
@@ -209,6 +274,7 @@ function Dossier({ save, id, back, nav }) {
               ))}
             </>
           )}
+        </div>
         </div>
       </div>
 

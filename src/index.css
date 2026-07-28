@@ -549,6 +549,17 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 }
 .sprite-cell:hover { border-color: var(--cyan); }
 .sprite-cell.on { border-color: var(--pink); box-shadow: 0 0 8px rgba(255, 45, 120, 0.45); }
+/* Palette swatches: the same portrait, twelve ways. */
+.sprite-swatch {
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  cursor: pointer;
+  line-height: 0;
+}
+.sprite-swatch:hover { border-color: var(--cyan); }
+.sprite-swatch.on { border-color: var(--pink); box-shadow: 0 0 8px rgba(255, 45, 120, 0.45); }
 .stage-thumb {
   background-size: cover;
   background-position: center bottom;

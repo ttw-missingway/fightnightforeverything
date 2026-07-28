@@ -32,6 +32,10 @@ const prefersReducedMotion = () =>
 // shouldn't outstay their welcome. A ticking line always gets long enough to
 // finish ticking first.
 function dwellFor(line, meta) {
+  // Combo beats land in RAPID FIRE — the whole point of playing a route out
+  // one hit per line is that it moves faster than the turn-taking around it,
+  // like the game suddenly shifted into real time.
+  if (meta?.pace === 'combo') return Math.min(900, 240 + (line?.length ?? 20) * 7)
   const base = Math.min(3200, Math.max(900, 700 + (line?.length ?? 40) * 22))
   const hits = meta?.hits ?? 1
   return Math.max(base, hits > 1 ? hits * TICK_MS + 480 : 0)

@@ -13,6 +13,119 @@ export const LAST_NAMES = [
   'Fischer', 'Vargas', 'Lindgren', 'Osei', 'Takahashi', 'Weiss', 'Delgado', 'Yamada', 'Brooks', 'Farah',
 ]
 
+
+/**
+ * Cluster-based, gendered name pools. A world roster stops feeling generated
+ * the moment a player named Hiroshi turns out to be from Brazil — so names
+ * come from CLUSTERS, every country in the atlas (geo.js) points at one, and
+ * gender picks the right list. Cluster keys are deliberately NOT ISO codes
+ * where they would collide (AFR not AF — Afghanistan; ARB not ME — Montenegro).
+ * The old flat FIRST_NAMES/LAST_NAMES stay as the anything-goes spice pool.
+ */
+export const NAME_POOLS = {
+  JP: {
+    m: ['Kenji', 'Hiroshi', 'Takeshi', 'Daichi', 'Ryo', 'Sota', 'Haruto', 'Yuto', 'Kazuki', 'Ren', 'Shinji', 'Takumi', 'Riku', 'Itsuki'],
+    f: ['Hana', 'Aoi', 'Sakura', 'Mei', 'Rin', 'Miyu', 'Akari', 'Kaede', 'Hinata', 'Saki', 'Nanami', 'Yui'],
+    last: ['Tanaka', 'Sato', 'Takahashi', 'Yamada', 'Suzuki', 'Watanabe', 'Ito', 'Nakamura', 'Kobayashi', 'Kato', 'Yoshida', 'Matsumoto', 'Ogawa', 'Fujita'],
+  },
+  KR: {
+    m: ['Minjun', 'Seojun', 'Dohyun', 'Jiho', 'Junseo', 'Hyunwoo', 'Jisung', 'Taeyang', 'Woojin', 'Seungmin'],
+    f: ['Seoyeon', 'Jiwoo', 'Minseo', 'Hayoon', 'Chaewon', 'Yuna', 'Eunji', 'Soomin', 'Dahye', 'Nayeon'],
+    last: ['Kim', 'Lee', 'Park', 'Choi', 'Jung', 'Kang', 'Cho', 'Yoon', 'Jang', 'Lim', 'Han', 'Oh', 'Shin', 'Kwon'],
+  },
+  CN: {
+    m: ['Wei', 'Jun', 'Hao', 'Ming', 'Lei', 'Feng', 'Yichen', 'Zihan', 'Bo', 'Cheng'],
+    f: ['Meiling', 'Lin', 'Xiu', 'Yan', 'Jing', 'Hui', 'Yuxi', 'Qian', 'Xinyi', 'Lan'],
+    last: ['Wang', 'Li', 'Zhang', 'Liu', 'Chen', 'Yang', 'Huang', 'Zhao', 'Wu', 'Zhou', 'Xu', 'Sun'],
+  },
+  VN: {
+    m: ['Minh', 'Duc', 'Huy', 'Khoa', 'Tuan', 'Long', 'Nam', 'Phuc', 'Quang', 'Bao'],
+    f: ['Linh', 'Trang', 'Huong', 'Mai', 'Ngoc', 'Thao', 'Anh', 'Vy', 'Chi', 'Nhi'],
+    last: ['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Vu', 'Dang', 'Bui', 'Do', 'Ngo'],
+  },
+  TH: {
+    m: ['Somchai', 'Krit', 'Anan', 'Tanawat', 'Nattapong', 'Chai', 'Prem', 'Kittisak', 'Arthit', 'Tee'],
+    f: ['Nok', 'Ploy', 'Fah', 'Mint', 'Kanya', 'Siriporn', 'Achara', 'Malee', 'Dao', 'Bua'],
+    last: ['Srisawat', 'Chaiyasit', 'Wongsa', 'Rattanakorn', 'Suksawat', 'Thongchai', 'Phromma', 'Kittikun', 'Saelim', 'Bunmee'],
+  },
+  IN: {
+    m: ['Arjun', 'Rahul', 'Vikram', 'Rohan', 'Aditya', 'Karan', 'Nikhil', 'Sanjay', 'Dev', 'Ishaan'],
+    f: ['Priya', 'Ananya', 'Divya', 'Kavya', 'Riya', 'Sneha', 'Pooja', 'Meera', 'Nisha', 'Tara'],
+    last: ['Sharma', 'Patel', 'Singh', 'Kumar', 'Gupta', 'Reddy', 'Nair', 'Iyer', 'Mehta', 'Chopra', 'Rao', 'Das'],
+  },
+  ARB: {
+    m: ['Omar', 'Hassan', 'Karim', 'Tariq', 'Youssef', 'Ali', 'Faisal', 'Rashid', 'Samir', 'Ziad', 'Arslan', 'Imran'],
+    f: ['Layla', 'Amira', 'Fatima', 'Noor', 'Yasmin', 'Rania', 'Dalia', 'Hala', 'Salma', 'Mariam'],
+    last: ['Haddad', 'Al-Farsi', 'Nasser', 'Khalil', 'Aziz', 'Mansour', 'Hamdan', 'Saleh', 'Amin', 'Barakat', 'Khan', 'Malik'],
+  },
+  AFR: {
+    m: ['Kofi', 'Kwame', 'Chinedu', 'Emeka', 'Sipho', 'Thabo', 'Ade', 'Femi', 'Juma', 'Baraka', 'Oumar', 'Sekou'],
+    f: ['Amara', 'Chiamaka', 'Ngozi', 'Zanele', 'Thandi', 'Adaeze', 'Abena', 'Fanta', 'Amina', 'Wanjiru'],
+    last: ['Okafor', 'Mbeki', 'Umeh', 'Osei', 'Adeyemi', 'Okonkwo', 'Nkosi', 'Dlamini', 'Mensah', 'Diallo', 'Kamau', 'Abara'],
+  },
+  CIS: {
+    m: ['Dmitri', 'Alexei', 'Sergei', 'Nikolai', 'Ivan', 'Mikhail', 'Andrei', 'Pavel', 'Viktor', 'Yuri', 'Artem', 'Denis'],
+    f: ['Anastasia', 'Natalia', 'Irina', 'Olga', 'Svetlana', 'Ekaterina', 'Daria', 'Alina', 'Vera', 'Polina'],
+    last: ['Petrov', 'Ivanov', 'Smirnov', 'Volkov', 'Kuznetsov', 'Sokolov', 'Popov', 'Lebedev', 'Kozlov', 'Morozov', 'Shevchenko', 'Bondarenko'],
+  },
+  PL: {
+    m: ['Jakub', 'Mateusz', 'Kacper', 'Piotr', 'Tomasz', 'Marcin', 'Krzysztof', 'Pawel', 'Adam', 'Bartek'],
+    f: ['Zuzanna', 'Julia', 'Maja', 'Aleksandra', 'Wiktoria', 'Karolina', 'Magdalena', 'Agata', 'Ewa', 'Kasia'],
+    last: ['Kowalski', 'Nowak', 'Wisniewski', 'Wojcik', 'Kaminski', 'Zielinski', 'Szymanski', 'Dabrowski', 'Mazur', 'Krawczyk'],
+  },
+  IT: {
+    m: ['Marco', 'Luca', 'Alessandro', 'Matteo', 'Davide', 'Francesco', 'Lorenzo', 'Simone', 'Andrea', 'Riccardo'],
+    f: ['Giulia', 'Martina', 'Chiara', 'Alessia', 'Francesca', 'Elisa', 'Valentina', 'Sara', 'Ilaria', 'Beatrice'],
+    last: ['Rossi', 'Ferrari', 'Romano', 'Colombo', 'Ricci', 'Marino', 'Greco', 'Gallo', 'Conti', 'Esposito'],
+  },
+  BR: {
+    m: ['João', 'Pedro', 'Lucas', 'Gabriel', 'Rafael', 'Thiago', 'Felipe', 'Bruno', 'Caio', 'Matheus', 'Vinicius'],
+    f: ['Ana', 'Beatriz', 'Camila', 'Juliana', 'Larissa', 'Mariana', 'Fernanda', 'Gabriela', 'Leticia', 'Isabela'],
+    last: ['Silva', 'Santos', 'Oliveira', 'Souza', 'Costa', 'Pereira', 'Almeida', 'Nascimento', 'Lima', 'Araujo', 'Ribeiro', 'Carvalho'],
+  },
+  ES: {
+    m: ['Carlos', 'Diego', 'Miguel', 'Javier', 'Alejandro', 'Luis', 'Fernando', 'Ricardo', 'Andrés', 'Pablo', 'Santiago', 'Emilio'],
+    f: ['Sofia', 'Lucia', 'Valeria', 'Elena', 'Isabella', 'Ximena', 'Daniela', 'Carmen', 'Rosa', 'Marisol'],
+    last: ['Reyes', 'Alvarez', 'Castillo', 'Vargas', 'Delgado', 'Hernandez', 'Garcia', 'Martinez', 'Lopez', 'Ramirez', 'Torres', 'Mendoza'],
+  },
+  FR: {
+    m: ['Antoine', 'Julien', 'Théo', 'Hugo', 'Louis', 'Maxime', 'Nicolas', 'Baptiste', 'Romain', 'Clément'],
+    f: ['Chloé', 'Camille', 'Manon', 'Léa', 'Juliette', 'Margaux', 'Elise', 'Amélie', 'Inès', 'Océane'],
+    last: ['Moreau', 'Dubois', 'Lefevre', 'Girard', 'Fontaine', 'Rousseau', 'Bernard', 'Lambert', 'Chevalier', 'Marchand'],
+  },
+  DE: {
+    m: ['Felix', 'Lukas', 'Maximilian', 'Jonas', 'Leon', 'Niklas', 'Tobias', 'Florian', 'Moritz', 'Jan'],
+    f: ['Lena', 'Hannah', 'Marie', 'Sophie', 'Anna', 'Johanna', 'Katrin', 'Nina', 'Clara', 'Franziska'],
+    last: ['Fischer', 'Weiss', 'Müller', 'Schmidt', 'Wagner', 'Becker', 'Hoffmann', 'Schulz', 'Keller', 'Braun'],
+  },
+  SE: {
+    m: ['Erik', 'Oskar', 'Axel', 'Elias', 'Emil', 'Anton', 'Nils', 'Gustav', 'Henrik', 'Viggo'],
+    f: ['Freya', 'Astrid', 'Elsa', 'Maja', 'Ingrid', 'Saga', 'Linnea', 'Ebba', 'Sigrid', 'Tove'],
+    last: ['Larsen', 'Lindgren', 'Johansson', 'Andersson', 'Nilsson', 'Eriksson', 'Berg', 'Lund', 'Dahl', 'Holm'],
+  },
+  EN: {
+    m: ['Marcus', 'Leo', 'Sam', 'Theo', 'Jake', 'Tyler', 'Brandon', 'Chris', 'Austin', 'Cole', 'Ethan', 'Mason', 'Logan', 'Owen', 'Blake', 'Danny'],
+    f: ['Jade', 'Chloe', 'Erin', 'Zoe', 'Iris', 'Naomi', 'Renee', 'Ashley', 'Megan', 'Paige', 'Brooke', 'Hailey', 'Sarah', 'Katie'],
+    last: ['Brooks', 'Carter', 'Hayes', 'Bennett', 'Parker', 'Morgan', 'Reed', 'Cooper', 'Bailey', 'Foster', 'Murphy', 'Sullivan', 'Walker', 'Turner', 'Hughes', 'Mitchell'],
+  },
+}
+
+/**
+ * Melting-pot countries draw from several clusters. `ANY` is the diversity
+ * card — any cluster at all — and it is deliberately biggest in America.
+ * A country whose atlas cluster is a plain pool key just uses that pool.
+ */
+export const NAME_MIX = {
+  US: { EN: 0.62, ANY: 0.38 },
+  GB: { EN: 0.78, ANY: 0.22 },
+  CA: { EN: 0.72, FR: 0.18, ANY: 0.1 },
+  AU: { EN: 0.85, ANY: 0.15 },
+  SG: { CN: 0.6, IN: 0.2, EN: 0.2 },
+  MY: { ARB: 0.5, CN: 0.3, IN: 0.2 },
+  ID: { ARB: 0.75, CN: 0.25 },
+  PH: { ES: 0.6, EN: 0.4 },
+}
+
 /**
  * Gamer tags. There need to be MORE of these than the arcade can ever hold —
  * a roster now runs to seventy-odd people, and when this list ran dry the
@@ -73,6 +186,15 @@ export const ELITE_ALIASES = [
   'The Hourglass', 'Tundra', 'Sable Knight', 'The Auditor', 'Kestrel', 'Monolith', 'The Prospect',
   'Afterimage', 'Tessellate', 'The Closer', 'Vandal', 'Perihelion', 'The Understatement',
   'Crown', 'Bellwether', 'The Last Word', 'Ozone', 'Grandmaster', 'The Quiet One',
+  // The roster is eighty now and it TURNS OVER — retirements pull fresh names
+  // in every year, so the pool has to run well past the roster size or a long
+  // lineage starts meeting Miracle 4 again.
+  'The Anthem', 'Whiteout', 'Catalyst', 'The Curator', 'Foxglove', 'Ironclad', 'The Sentence',
+  'Downpour', 'Vesper', 'The Aqueduct', 'Snakebite', 'Polaris', 'The Fine Print', 'Rook',
+  'Avalanche', 'The Chandelier', 'Sirocco', 'Judgement', 'The Locksmith', 'Ember Queen',
+  'Palisade', 'The Encore', 'Nightjar', 'Crescendo', 'The Abacus', 'Stormglass', 'Vantage',
+  'The Petition', 'Karakuri', 'Longitude', 'The Furnace', 'Silvertongue', 'Undertow',
+  'The Appraiser', 'Comet', 'Thornfield', 'The Interval', 'Magnitude', 'Wolfsbane', 'The Debut',
 ]
 
 /**
@@ -459,11 +581,36 @@ export const CHAT_NAME_PARTS = {
 }
 
 export const CHAT_LINES = {
+  // `hype` is venue-neutral on purpose: it plays under EVO too, where "this
+  // arcade always delivers" would be chat congratulating the wrong building.
+  // The channel-flavored lines live in `hypeArcade` and only air on YOUR
+  // streams.
   hype: [
-    'LETS GOOOO', 'CLIP IT. CLIP IT NOW', 'no way lol', 'this arcade always delivers',
-    'chat is this real', 'W stream', 'I was here', '🔥🔥🔥',
-    'the FOOTSIES', 'my popoff radar is going crazy', 'this is why I follow this channel',
+    'LETS GOOOO', 'CLIP IT. CLIP IT NOW', 'no way lol',
+    'chat is this real', 'I was here', '🔥🔥🔥',
+    'the FOOTSIES', 'my popoff radar is going crazy',
     'good pace this set', 'both playing smart honestly',
+  ],
+  hypeArcade: [
+    'this arcade always delivers', 'W stream', 'this is why I follow this channel',
+    'best channel on the platform and it is not close', 'the cabinet cam is so cozy',
+  ],
+  // The comeback arc: somebody was one hit from dead and started COOKING.
+  // These get spammed in a burst, because that is what chat actually does.
+  comeback: [
+    'oh my god', 'no way', 'is this really happening?', 'IS THIS REAL',
+    'THEY HAVE NO HEALTH AND THEY DONT CARE', 'do not go to the fridge. do NOT go to the fridge',
+    'im shaking', 'HOW', 'one pixel and cooking', 'the comeback is ON',
+    'nobody breathe', 'WE ARE SO BACK', 'I called it (I did not call it)',
+  ],
+  // A super or a huge conversion just landed.
+  bigHit: [
+    'THE DAMAGE', 'HALF THE BAR???', 'that was disrespectful', 'they just DELETED them',
+    'ok that one hurt ME', 'the whole cabinet shook', 'somebody clip that RIGHT NOW',
+  ],
+  blockedOut: [
+    'the DEFENSE', 'blocking everything like it owes them money', 'that guard is a wall',
+    'how do you block all that', 'patience of a monk',
   ],
   close: [
     'either one of them takes this, seriously', 'my HEART', 'I cannot watch',

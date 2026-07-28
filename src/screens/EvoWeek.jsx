@@ -18,11 +18,11 @@ const STEPS = ['intro', 'pools', 'seeded', 'chatter', 'expo', 'expoTalk', 'brack
 
 export default function EvoWeek({ record, onFinish }) {
   const { save, mutate } = useStore()
-  const state = save.evoWeek || { step: 'intro', poolRound: 0, openPool: null }
+  const state = save.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }
   const step = STEPS.includes(state.step) ? state.step : 'intro'
 
   const set = (patch) => mutate((s) => {
-    s.evoWeek = { ...(s.evoWeek || { step: 'intro', poolRound: 0, openPool: null }), ...patch }
+    s.evoWeek = { ...(s.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }), ...patch }
   })
   const go = (next) => set({ step: next, openPool: null })
   const idx = STEPS.indexOf(step)
@@ -76,9 +76,15 @@ function EvoIntro({ onDone }) {
 
 // ---------- 2. Pools ----------
 
+/**
+ * `poolRound` counts rounds you have finished WATCHING, 0-3 — not the round you
+ * are looking at. The difference is the whole spoiler problem: while you are on
+ * round two, round two has not been revealed to you yet, even though it has
+ * been on the record since the moment EVO was simulated.
+ */
 function Pools({ record, byId, state, set, onDone }) {
   const pools = record.pools || []
-  const round = Math.min(state.poolRound || 0, 2)
+  const round = Math.min(state.poolRound || 0, 3)
   const openPool = state.openPool
 
   if (!pools.length) {
@@ -88,17 +94,20 @@ function Pools({ record, byId, state, set, onDone }) {
 
   if (openPool != null) {
     const pool = pools[openPool]
-    return <PoolDetail pool={pool} round={round} byId={byId} back={() => set({ openPool: null })} />
+    return <PoolDetail pool={pool} round={round} byId={byId} state={state} set={set}
+      back={() => set({ openPool: null })} />
   }
 
   return (
     <div>
       <div className="row spread">
-        <h2 style={{ margin: 0 }}>Pools · Round {round + 1} of 3</h2>
+        <h2 style={{ margin: 0 }}>
+          {round >= 3 ? 'Pools · all three rounds played' : `Pools · Round ${round + 1} of 3`}
+        </h2>
         <div className="row">
-          {round < 2 && (
+          {round < 3 && (
             <button className="primary" onClick={() => set({ poolRound: round + 1 })}>
-              ▶ Next round
+              ▶ {round === 2 ? 'Play the final round' : 'Next round'}
             </button>
           )}
           <button onClick={onDone}>Skip pools →</button>
@@ -110,7 +119,7 @@ function Pools({ record, byId, state, set, onDone }) {
       </p>
       <div className="pool-grid">
         {pools.map((p, i) => {
-          const done = round >= 2
+          const done = round >= 3
           const leader = p.standings[0]
           return (
             <button className="pool-card" key={p.letter} onClick={() => set({ openPool: i })}>
@@ -135,7 +144,7 @@ function Pools({ record, byId, state, set, onDone }) {
           )
         })}
       </div>
-      {round >= 2 && (
+      {round >= 3 && (
         <div className="row" style={{ marginTop: 12 }}>
           <button className="primary" onClick={onDone}>The seeds are in →</button>
         </div>
@@ -149,10 +158,19 @@ function Pools({ record, byId, state, set, onDone }) {
  * so reading them before round three is genuinely uncertain — which is the
  * point of walking through it rather than being handed the result.
  */
-function PoolDetail({ pool, round, byId, back }) {
+function PoolDetail({ pool, round, byId, state, set, back }) {
   const [watching, setWatching] = useState(null)
-  const played = pool.rounds.slice(0, round + 1).flatMap((r) => r.matchIds)
-  const playedSet = new Set(round >= 2 ? pool.rounds.flatMap((r) => r.matchIds) : played)
+  // A match is REVEALED if its round is finished, or if you sat and watched it.
+  // Watching one set of the round you are on shows you that set and nothing
+  // else — which is what "click a pool to watch its matches" promised.
+  const watched = new Set(state?.watched || [])
+  const revealedAt = (ri, id) => ri < round || watched.has(id)
+  const playedSet = new Set(
+    pool.rounds.flatMap((r, ri) => r.matchIds.filter((id) => revealedAt(ri, id))))
+  const watch = (id) => {
+    if (!watched.has(id)) set({ watched: [...(state?.watched || []), id] })
+    setWatching(id)
+  }
 
   // Recompute the table from only the matches that have "aired".
   const base = pool.entrants || pool.standings
@@ -233,10 +251,11 @@ function PoolDetail({ pool, round, byId, back }) {
           {r.matchIds.map((id) => {
             const m = byId[id]
             if (!m) return null
-            const aired = ri <= round
+            const playable = ri <= round
+            const aired = revealedAt(ri, id)
             return (
-              <div key={id} className={`row spread pool-match${aired ? ' clickable' : ''}`}
-                onClick={aired ? () => setWatching(id) : undefined}>
+              <div key={id} className={`row spread pool-match${playable ? ' clickable' : ''}`}
+                onClick={playable ? () => watch(id) : undefined}>
                 <span>
                   <span className={m.winnerId === m.aId && aired ? 'gold' : ''}>{m.aName}</span>
                   <span className="dim"> vs </span>
@@ -244,7 +263,7 @@ function PoolDetail({ pool, round, byId, back }) {
                 </span>
                 <span className="small">
                   {aired ? <span className="gold">{m.setScore}</span> : <span className="dim">—</span>}
-                  {aired && <span className="dim"> · watch ▸</span>}
+                  {playable && <span className="dim"> · {aired ? 'rewatch' : 'watch'} ▸</span>}
                 </span>
               </div>
             )

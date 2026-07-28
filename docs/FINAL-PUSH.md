@@ -768,8 +768,295 @@ names the Players tab → the banner reads "47 banked points to spend" → the
 editor opens with "+47 legacy" in the budget and spending visibly draws it down
 → close one day and it locks, banner gone, edit button gone.
 
-### Still to decide
+## The champion rate, and four bugs under it
 
-1. Whether points should buy anything past 40 (currently dead weight — the
-   skill ceiling stops reading them).
-2. Whether one champion per ~16 lineages is the rate you want.
+Both of the questions above turned out to be the same question, and answering
+it properly meant finding four separate places where the game was not the game
+we had been measuring.
+
+**The harness was throwing away most of the budget.** `makeRun` spent creation
+points by cycling a ten-key pool and capping each key at five, so any budget
+over ~50 was silently discarded. Every lineage measurement past run 2 was a
+re-measurement of the same build — which is why banked points looked inert. Any
+conclusion drawn from those runs was worthless, including "points go dead past
+40". Fixed: the spender fills the chosen rows first and then spills into every
+other stat, which is what a competent player does with a hundred banked points.
+
+**Half of `match.js` was reading stats raw.** Under the sparse point-buy an
+unspent stat is `0`, not `undefined`, so the `?? 5` fallbacks written for the
+old always-5 stats never fired once:
+
+- `skillGainMultiplier` — an uninvested player learned at rate 0.5 instead of
+  the 1.29 the formula was written for. Two and a half times slower than
+  designed, forever.
+- `performance` — `xfactor` is the ONLY randomness in a match, so two players
+  with no x-factor points resolved **deterministically**: higher performance
+  won 100% of the time. The only upsets in the game came from whoever happened
+  to have bought the stat, and it was a flat buff (`rand() * xfactor`, never
+  negative) rather than variance.
+- `resolveEntrantMatch` in `tournament.js` — same, on `dominance`/`determination`.
+
+All now go through `statLevel`, the same adapter everything else uses. Absence
+is average, not crippled.
+
+**EVO weighted your inflated elo above the world's real one.** Elite entrants
+scored `skill * 0.72 + elo / 70` while your own players scored `skill * 0.75 +
+elo / 40` — a world number one's rating was worth a bit over half of your local
+hero's. Your arcade is a CLOSED elo pool: your cast farms rating off your own
+regulars, who sink to pay for it, so somebody who has never played outside the
+building arrives at 2000. That asymmetry was the single reason a **skill-65**
+player could win EVO against a field of 76–83. The two formulas now mirror each
+other exactly, and champions come in at skill 82–86.
+
+**Cultivation was erased by the level cap.** An active rival, earned belief and
+character tech added a flat **+38** against a hard ceiling of 100 — so a
+forty-point build and a fully maxed one both landed on exactly 100. Points went
+dead at the top of the curve for the same reason they went dead at 40. It is
+now a share of the REMAINING HEADROOM (half the gap to perfect, at most), which
+cannot erase the difference between builds no matter how cultivated they are.
+
+### The real problem: the grind wasn't a grind
+
+With those fixed, the champion rate was still ~3 runs on every difficulty, and
+the shape was wrong in a way the rate alone doesn't show:
+
+| banked points | 20 | 40 | 60 | 80 | 114 |
+|---|---|---|---|---|---|
+| lineages producing a champion | 0/10 | 0/10 | 9/10 | 9/10 | 10/10 |
+
+A cliff, not a curve. Below ~50 points, never; above it, almost always; and
+114 bought nothing that 60 didn't. The cause: **skill saturated to its ceiling
+inside year one** and then flatlined — years two and three added a single point.
+So skill *equalled* ceiling, ceiling is arithmetic on creation points, and the
+whole lineage was a step function with a bracket's sequential elimination
+sharpening it into a cliff.
+
+The asymptote exponent in `skillGainMultiplier` went 1.15 → 2.4. The first half
+of the climb is barely slower; the last quarter costs years. Measured, a cast
+now reaches ~72% of its ceiling in year one and ~90% by year three, and the
+points→skill curve is monotone the whole way: 61 / 66 / 74 / 76 / 86.
+
+That is also what promotes `lessonFactor` and invasions from flavour to
+necessity — finishing the climb inside a career requires reps against people
+better than you, which a local scene cannot provide.
+
+### Pacing: one number, not fifteen
+
+Milestones live on the save, so they reset with the run — a competent player
+collected the same flat ~29-point stipend every single time, whether the
+lineage was climbing or treading water. Two changes:
+
+- `prestige.milestonesEver` carries across resets, and a milestone this lineage
+  has already banked pays a third. Reaching somewhere new pays full. This is
+  also what makes ADDING sources safe: a new milestone raises how high a
+  lineage can reach, not how much the treadmill pays.
+- `LEGACY_PACE` sets the schedule in one place. Every `points` value passed to
+  `awardMilestone` expresses what a milestone is worth RELATIVE to the others;
+  this constant turns those relative worths into a calendar. Tuning fifteen
+  individual awards to fix a pacing problem destroys an ordering somebody sat
+  down and thought about.
+
+It is set from the far end: a build cannot absorb more than **114** points (24
+stats x 5, less the six free row points), so a fully maxed cast is the end of
+the ladder and how long it takes to get there is the length of the game.
+
+New sources, so there is more than one road up: the five world-ranking rungs
+(top 64 / 32 / 16 / 8 / #1), skill 85 and skill 95, and a ladder for taking
+sets off visiting elites (1st, 5th, 20th — a ladder rather than one award per
+elite, because there are sixty-four of them).
+
+### The maxed build
+
+`the-complete-player` — every stat at five on one person. That is 114 points,
+more than any single run can bank, so it is the capstone of a whole lineage
+rather than a run. Verified it fires at exactly 114 and not at 100.
+
+## Three bugs from playtest
+
+**Pools spoiled the round you were on.** `aired = ri <= round` treated the
+current round as already broadcast, so its winners were in gold with the set
+score printed before you clicked anything — and the grid flipped to final
+standings and "→ X advances" the moment you reached round three. `poolRound`
+now counts rounds you have finished WATCHING (0-3), not the round you are
+looking at; a match reveals when its round is behind you or when you actually
+sat and watched it, tracked in `evoWeek.watched`.
+
+**EVO's broadcast was being credited to your channel.** Every EVO set ran the
+full `buildStream` crediting path: follower growth, `3 + quality/50` hype apiece
+across ~100 sets (enough to pin a channel at the hype cap in one week), a
+peak-viewer record in the thousands, and ad revenue into your register. Its
+viewer count also read `followers * 0.15 + hype * 8`, making the world
+championship's audience a function of how big YOUR channel was. `viewersFor`
+already carried the comment "EVO is the one exception: it's the world's
+broadcast, not yours" — the code just never acted on it. EVO now builds a full
+production (crowd, chat, narration) that touches nothing of yours, which also
+means you can watch it without owning a rig. Verified: followers, hype,
+peakViewers, totalStreams and money are all identical either side of `runEvo`.
+
+**The Studio arrived in week one.** `peakRelevance >= 62` is a HIGH-WATER mark —
+the opposite of the problem the Studio solves — and relevance spikes around EVO,
+which lands seven days after opening, so a first EVO handed over the biggest
+tool in the game before the arcade had a second cabinet.
+
+An intermediate version priced it on the NEED (sixty days at interest ≤ 50, or
+a year), which fixed the timing but priced the tool on suffering — measured, a
+competent scene never goes stale at all, so the owner running the place well
+was the one who never got it. The gate is now simply A FULL YEAR OPEN. It can't
+fire in the first fortnight, it doesn't require the run to be dying, and it
+lands well before the death march starts biting around year three: you get the
+tool before the war it's for. The `worth-watching` key is unchanged so lineages
+that already earned it keep it.
+
+Worth recording from that pass — a competent scene never goes stale at all.
+Interest climbs to ~100 by the end of year one and stays, and across five
+two-year runs not one spent a single day twelve points below its own peak.
+
+## Where the champion rate landed
+
+6 lineages x up to 16 runs x 3 years, banked points rebuilding the cast:
+
+| difficulty | runs to an EVO champion |
+|---|---|
+| easy | 5.8 |
+| normal | 6.7 |
+| difficult | 6.5 |
+| master | 15 (4 of 6 lineages got there at all) |
+
+Ordering is right — easy first, master last, which is what started this. The
+last piece was the world itself: `driftEvoRoster` clamped elite skill to 90
+while the top of the roster generates above that, so every New Year sanded the
+gods down and nothing ever put them back. A lineage was fighting a world its own
+earlier runs had worn out. The world now regresses a quarter of the way toward
+its tier each year, so it recovers from a beating in three or four — measured,
+the top three hold 90-96 across twenty years, and bounce back from a 12-point
+hit in four.
+
+## The death march
+
+The measurement above — a competent scene never goes stale — was not a
+curiosity, it was a missing third act. The design is three threats in order:
+the economy (early), the community (mid), and relevance (late), and the third
+one is supposed to be INEVITABLE. The Studio doesn't beat it; it buys time.
+
+The architecture was already there — patch stakes scale with age, franchise
+fatigue, headroom-scaled dividends — but the daily equation had no
+inevitability: max sustain (~0.30/day out of a beloved, full, streamed room)
+beats `timeDecay` until age six, and a competent scene holds opinion high
+forever. So the fix is one term: SUSTAIN FADES WITH GAME AGE. The world's
+willingness to keep listening is the thing that runs out — full strength
+through year one and a half, 2/3 by 2.5, half by 3.5, a third by 5.5.
+
+Nothing restores it. Patches reset the staleness clock, a champion is a
++45%-of-headroom event, a golden age halves decay — every tool buys time
+against the same slope, and everything you do decides WHEN, not WHETHER.
+
+Measured (competent normal runs, six years, 9-14 patches shipped): relevance
+climbs through year one, peaks at 100 in years two-three, declines visibly
+from three and a half, and every run dies between day 1174 and 1673. The
+champion window (years two-three, relevance still 90+) is untouched — the
+lineage sweep re-ran with the fade in place: easy 5.5, normal 6.0, difficult
+6.8, master 13.4 runs to a champion. Within noise of the pre-fade numbers,
+ordering intact.
+
+## The world got real
+
+One batch, all landed together:
+
+**Every country is a region.** `src/game/geo.js` is the atlas: 199 countries
+with FGC-realistic weights — US/JP/KR/FR/BR/GB/CA carry the top, and the tail
+holds everyone, so a Malawian or Palauan contender is possible and an event.
+Legacy bloc regions (US-East/West, EU, CIS, AF, ME) migrate to real countries;
+the AF/ME keys collide with Afghanistan/Montenegro's ISO codes, so migration
+reads the row's era (old rows lack `gender`) to tell bloc from country.
+
+**Names make sense now.** Seventeen gendered name pools by cluster; every
+country resolves to a pool or a mix (America is EN-heavy plus a diversity
+card; Singapore mixes CN/IN/EN; Canada carries French). Non-binary fell from a
+uniform third to ~3%. Arcade walk-ins are LOCAL — the pool follows the
+arcade's country setting.
+
+**Elites are people.** Eighty of them (rankings still cut at 64, so the bottom
+sixteen fight to get ON the list), each with a gendered, region-true name, an
+appearance, a catchphrase, and a persona — loyalist / meta-chaser /
+lab-monster / showman / veteran — that decides who they play: gravitateElites
+pulls top players toward top-tier characters on every patch and New Year,
+with loyalty as the resistance. Two to four retire every year and rookies
+take their slots, so a lineage keeps meeting new names.
+
+**The world plays without you.** worldMatchesDaily runs a few unwatchable
+background sets a day among the eighty (near-neighbour pairing, zero-sum elo,
+K=16), so the top 64 shifts continuously instead of holding still between
+EVOs. Genuine shocks (sub-25% upsets over top-12 players) hit the feed.
+
+**The room talks about the world.** Concession-stand exchanges about the top
+eight and the hot newcomer, and in the fortnight before EVO the chance
+quadruples and the material is all EVO.
+
+**Combos play out beat for beat.** A landed route is no longer one sentence:
+one line per hit at rapid-fire pace (`pace: 'combo'`, ~250-700ms vs the
+900-3200ms turn-taking), route move names read out, the bar stepping with
+each line. Some routes open ON BLOCK — two hits into a solid guard, then the
+overhead/low/throw cracks it and the rest cashes out. Blocking got its own
+screen time besides: whole strings that just get held, at real momentum cost.
+
+**Chat matches the energy.** The narration marks its own biggest moments
+(comeback, blocked-out, super) and chat reacts to those first — a one-pixel
+comeback triggers a SPAM BURST (3-9 near-duplicate "oh my god" / "no way" /
+"is this really happening?" messages piled on the line where the arc starts;
+the dedupe is deliberately off, duplicates are the point). Channel-flavored
+lines ("this arcade always delivers") air only on your streams, never under
+EVO.
+
+**"Run it back"** replaced "Start a new run" everywhere.
+
+Verified: migration repairs a 64-man bloc-region roster in place (aliases,
+elo, titles untouched; 0 stale regions), EVO fields 64 of the 80 with atlas
+flags, champion spot-check unchanged (6, 8, 6 runs on normal), economy
+harness steady, build green.
+
+## Faces
+
+The player mugshots are photo-derived now (characters untouched). Thirty
+headshots, ages ~15-30, pulled from thispersondoesnotexist.com — StyleGAN
+faces, so they are free to use and, more importantly, NO REAL PERSON'S
+LIKENESS ships with the game. Each is cropped to the head, pixelated to 26px,
+and reduced to exactly three values (dark / medium / light) with per-image
+percentile thresholds — the Game Boy Camera look.
+
+Twelve palettes recolor those three values: Game Boy, Black & White, Sepia,
+Red & Blue, Virtual Boy, Amber CRT, Green Terminal, Synthwave, Ice, Blossom,
+Sunset, Grape. The choice lives at Manage → Settings → Portrait palette
+(per-save, cosmetic, never locked) and re-skins every portrait at once —
+art.js holds the current palette as module state set by App, because the
+Portrait call sites don't carry the save.
+
+Auto-picked faces are GENDER-MATCHED — men draw from the 13 male heads, women
+from the 17 female, non-binary from the whole pool — and the hand-pick catalog
+in the player form shows the new pool in the current palette. Old saves keep
+working: legacy spriteKeys still resolve against the old pixel-art faces.
+
+Gender ratio itself went from 55/42/3 to Dylan's 60/30/10.
+
+The pipeline (scratchpad/process.py) is source-agnostic: swap the raw folder,
+re-run, and the whole set regenerates. Masters are 26x26 three-value indexed.
+
+### The heritage guide
+
+Faces follow HERITAGE — the name cluster an identity rolled from, persisted as
+`player.heritage` / `elite.heritage`. One roll decides both name and face, so
+a Kenji Tanaka in Los Angeles reads East Asian on the card, an arcade in Osaka
+never hands its regulars mismatched mugshots, and a melting-pot country is
+exactly as mixed as its NAME_MIX says. FACE_GUIDE (components/art.js) tags all
+45 heads with gender + the looks they can pass for (generous on purpose — a
+26px three-value mugshot abstracts a lot); CLUSTER_ETH maps each name cluster
+to its looks (JP/KR/CN/VN/TH → East Asian, IN → South Asian, ARB → MENA, AFR →
+Black, the European clusters → white, ES → Latin, BR → mixed, EN → anyone).
+Selection filters by both and falls back to gender-only, then to the whole
+pool, so nothing ever strands.
+
+The first 30 heads skewed white (the generator's bias), so a second batch of
+72 was fetched and 15 gap-fillers curated in: every cluster x gender pool now
+holds at least two heads. Old saves backfill heritage on load — elites from
+their own region, players from the arcade's country. Verified in-app: the
+world number one rolled as Nanami "Basilisk" Takahashi of Japan, East Asian
+face, Japanese name, one roll.

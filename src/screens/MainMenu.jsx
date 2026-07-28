@@ -60,13 +60,13 @@ export default function MainMenu() {
                       }}>📤 Export</button>
                       <button className="small" title="start a new run: keep the game design and roster, wipe all progress, archive this run's history" onClick={(e) => {
                         e.stopPropagation()
-                        if (!confirm(`Start a new run of "${s.saveName}"? The game design and player roster stay (progress wiped); patches, teams, money, and the arcade's stock reset. This run's chronicle, hall of fame, and VODs move to the archives, and its fame becomes prestige points. This cannot be undone.`)) return
+                        if (!confirm(`Run it back at "${s.saveName}"? The game design and player roster stay (progress wiped); patches, teams, money, and the arcade's stock reset. This run's chronicle, hall of fame, and VODs move to the archives, and its fame becomes prestige points. This cannot be undone.`)) return
                         const res = resetSaveById(s.id)
                         setSaves(loadIndex())
                         setNotice(res.ok
-                          ? { kind: 'ok', text: `New run started for "${s.saveName}" — +${res.prestigeGain} prestige earned (${res.points} total to spend on player creation).` }
+                          ? { kind: 'ok', text: `Running it back at "${s.saveName}" — +${res.prestigeGain} prestige earned (${res.points} total to spend on player creation).` }
                           : { kind: 'err', text: res.error })
-                      }}>♻ New run</button>
+                      }}>♻ Run it back</button>
                       <button className="small danger" onClick={(e) => {
                         e.stopPropagation()
                         if (confirm(`Delete save "${s.saveName}"? This cannot be undone.`)) {

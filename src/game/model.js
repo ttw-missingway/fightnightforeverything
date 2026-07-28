@@ -64,6 +64,8 @@ export function newPlayer(partial = {}) {
     lastName: 'Player',
     alias: '',
     gender: 'non-binary',
+    heritage: null, // name cluster the identity rolled from — the face follows it
+    facePalette: null, // their portrait's palette (null = derived from their id)
     description: '',
     catchphrase: '',
     spriteKey: null, // pixel-art sprite name (null = auto-pick from id)
@@ -149,6 +151,8 @@ export function resetPlayerForNewRun(p) {
     lastName: p.lastName,
     alias: p.alias,
     gender: p.gender,
+    heritage: p.heritage || null,
+    facePalette: p.facePalette || null,
     description: p.description,
     catchphrase: p.catchphrase,
     spriteKey: p.spriteKey || null,
@@ -324,12 +328,61 @@ export function bumpPeak(save, key, value) {
   if (value > (save.tally[key] || 0)) save.tally[key] = value
 }
 
+/**
+ * How much a milestone pays the SECOND time a lineage reaches it.
+ *
+ * Milestones live on the save, so they reset with the run — which meant a
+ * competent player collected the same flat stipend every single time, forever:
+ * survive to year three, produce a star, win a bracket, make EVO top eight.
+ * Measured, that was ~29 points a run whether the lineage was climbing or
+ * treading water, and it put a fully maxed 114-point cast in your hands by the
+ * fourth run with a world champion right behind it.
+ *
+ * Legacy points are supposed to pay for reaching somewhere NEW. So the first
+ * lineage to take a player to skill 70 banks the full four; the fifth one to
+ * do it banks one, because that is no longer the story of this lineage. The
+ * ledger of what a lineage has ever done rides on `prestige.milestonesEver`,
+ * which survives the reset the same way unlocks do.
+ *
+ * This is also what makes ADDING sources safe: a new milestone raises how high
+ * a lineage can reach, not how much the treadmill pays.
+ */
+const REPEAT_SHARE = 1 / 3
+
+/**
+ * The pace of the whole legacy economy, in one number.
+ *
+ * Every `points` value passed to this function expresses what a milestone is
+ * worth RELATIVE to the others — a bracket win against a world top 8 against
+ * surviving to year three. This constant is what turns those relative worths
+ * into a schedule, and it is the only thing that should move when the schedule
+ * is wrong. Tuning fifteen individual awards to fix a pacing problem destroys
+ * the relative ordering somebody sat down and thought about.
+ *
+ * It is set from the far end of the curve. A build cannot absorb more than 114
+ * points (24 stats x STAT_MAX_POINTS, less the six free row points), so a
+ * fully maxed cast IS the end of the legacy ladder, and how long it takes to
+ * get there is the length of the whole game. At full price a competent lineage
+ * banked ~30 a run and finished in four; at half it banks ~15 and finishes in
+ * eight, which is where an EVO champion should live — rare, and the reward for
+ * a lineage rather than a run.
+ */
+const LEGACY_PACE = 0.5
+
 export function awardMilestone(save, key, points, text) {
   save.milestones ??= {}
   if (save.milestones[key]) return false
   save.milestones[key] = true
-  save.prestigePending = (save.prestigePending || 0) + points
-  chronicle(save, '🏅', `${text} (+${points} legacy point${points === 1 ? '' : 's'})`)
+  save.prestige ??= {}
+  save.prestige.milestonesEver ??= {}
+  const repeat = !!save.prestige.milestonesEver[key]
+  save.prestige.milestonesEver[key] = true
+  const full = Math.max(1, Math.round(points * LEGACY_PACE))
+  const paid = repeat ? Math.max(1, Math.round(full * REPEAT_SHARE)) : full
+  save.prestigePending = (save.prestigePending || 0) + paid
+  chronicle(save, '🏅', repeat
+    ? `${text} (+${paid} legacy point${paid === 1 ? '' : 's'} — this lineage has been here before)`
+    : `${text} (+${paid} legacy point${paid === 1 ? '' : 's'})`)
   return true
 }
 
@@ -557,7 +610,7 @@ export function newSave(partial = {}) {
     // Everything on this object outlives the run. `achievements` and `unlocks`
     // are the lineage's permanent record — see achievements.js — and
     // resetSaveById carries the whole thing forward.
-    prestige: { points: 0, runs: 0, achievements: {}, unlocks: {} },
+    prestige: { points: 0, runs: 0, achievements: {}, unlocks: {}, milestonesEver: {} },
     milestones: {}, // milestone keys already earned this run (each awards once)
     prestigePending: 0, // legacy points earned THIS run — banked when the run ends
     tally: newTally(), // per-run counters the achievement checks read (reset with the run)

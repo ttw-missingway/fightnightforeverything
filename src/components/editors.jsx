@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Field, NumField, StringListEditor, PillPicker } from './ui.jsx'
+import { Field, NumField, StringListEditor, PillPicker, Portrait } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
 import { canStageExhibition, runExhibition, EXHIBITION_COST } from '../game/tournament.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
@@ -50,7 +50,8 @@ import {
   playerStaffAppeal,
 } from '../game/economy.js'
 import { SpritePicker, StagePicker } from './SpritePicker.jsx'
-import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArt, charArtFor, stageArt } from './art.js'
+import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArt, charArtFor, stageArt, FACE_PALETTES, playerArtFor } from './art.js'
+import { MIXED_PALETTE } from '../game/palettes.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
@@ -107,6 +108,20 @@ export function SettingsEditor({ save, update }) {
             <option value="alias">Alias / gamer tag</option>
             <option value="fullname">First + last name</option>
           </select>
+        </Field>
+        <Field label="Portrait palette">
+          {/* Purely cosmetic, so never locked — even a consequential run can
+              redecorate. The default lets everybody keep the palette they came
+              with; picking one overrides the whole roster at once. */}
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <select value={save.settings.facePalette || MIXED_PALETTE}
+              onChange={(e) => update((s) => { s.settings.facePalette = e.target.value })}>
+              <option value={MIXED_PALETTE}>Mixed — everyone their own</option>
+              {FACE_PALETTES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+            <Portrait url={playerArtFor('palette-preview')} size={30} alt="preview" />
+            <Portrait url={playerArtFor('palette-preview-2', 'woman')} size={30} alt="preview" />
+          </div>
         </Field>
         <Field label="Stream channel name">
           <div className="row">

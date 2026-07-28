@@ -1,6 +1,6 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, runAge, seasonOf, seasonFactor, statusOf, difficultyOf, statLevel } from './constants.js'
-import { driftEvoRoster, topUpNpcs } from './generate.js'
+import { driftEvoRoster, topUpNpcs, worldMatchesDaily, gravitateElites } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup, bumpPeak } from './model.js'
 import { checkAchievements } from './achievements.js'
 import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
@@ -17,10 +17,11 @@ import {
   landlordDaily, tokenDeterrence, arcadeClosed, isStaffed,
   adAwarenessBoost, adHypePerDay, playerStaffAppeal,
 } from './economy.js'
-import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand, worldFeedDaily } from './socialmedia.js'
+import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand, worldFeedDaily, postWorldUpset } from './socialmedia.js'
 import { speak, isFirstMeeting, noteMeeting } from './dialogue.js'
 import { noteMatchOutcome, reconcileTakes, loudestTake, isConviction, takeKind, takeSubjectLabel, findTake, pushTake, disputeKind } from './takes.js'
 import { generateTierList } from './balance.js'
+import { rankedInTop, worldTalkExchange } from './world.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
@@ -841,6 +842,9 @@ function makeBeats(save, group, where, results) {
   // the whole point of an invasion week is that the arcade feels different.
   const exchange = where === 'at the concession stand'
     ? visitorExchange(save, group, (p) => pName(save, p))
+      // No visitors in the huddle? Sometimes the room talks about the people
+      // it watches instead — the world top eight, and EVO when it's close.
+      || worldTalkExchange(save, group, (p) => pName(save, p))
     : null
   if (exchange) beats.push(...exchange)
 
@@ -1932,6 +1936,12 @@ export function advanceDay(save) {
   }
   // The world keeps talking whether or not it has heard of you.
   worldFeedDaily(save)
+  // The world's own results, and the shocks that make the feed.
+  for (const upset of worldMatchesDaily(save)) {
+    if (chance(0.5)) postWorldUpset(save, upset)
+  }
+  // A fresh patch re-shuffles who the pros play — the meta-chasers first.
+  if (daysSincePatch(save) === 0) gravitateElites(save)
   // A visiting crew arrives, or goes home.
   invasionDaily(save)
   // Legacy milestones: making it matters, growing matters — existing doesn't.
@@ -1995,6 +2005,21 @@ export function advanceDay(save) {
     driftEvoRoster(save)
     if (save.settings.mode !== 'sandbox' && save.year >= 2 && save.year <= 6) {
       awardMilestone(save, `year-${save.year}`, save.year, `${save.arcade.name} made it to Year ${save.year}`)
+    }
+    // The climb up the world list is the clearest "somewhere new" a lineage can
+    // reach, so it is the backbone of the legacy economy: five rungs, each one
+    // worth more than the last, and every one of them a headline.
+    if (save.settings.mode !== 'sandbox') {
+      const ranked = rankedInTop(save, 64)
+      if (ranked.length) {
+        const top = ranked.reduce((a, r) => (r.rank < a.rank ? r : a))
+        const who = top.name || 'somebody here'
+        if (top.rank <= 64) awardMilestone(save, 'world-64', 3, `${who} is ranked in the world top 64`)
+        if (top.rank <= 32) awardMilestone(save, 'world-32', 4, `${who} cracked the world top 32`)
+        if (top.rank <= 16) awardMilestone(save, 'world-16', 6, `${who} is one of the sixteen best players alive`)
+        if (top.rank <= 8) awardMilestone(save, 'world-8', 8, `${who} made the world top 8`)
+        if (top.rank === 1) awardMilestone(save, 'world-1', 12, `${who} is the number one ranked player in the world`)
+      }
     }
   }
 }

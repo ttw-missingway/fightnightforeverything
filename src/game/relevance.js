@@ -83,7 +83,27 @@ export function relevanceDaily(save) {
   // sustains far less than a smaller, beloved one, so this rewards running the
   // place well over merely running it big. Hype can't carry it alone (everyone
   // auto-streams), so it deliberately isn't the lever.
-  const sustain = hype * 0.001 + Math.min(1, activeRegulars / 40) * 0.03 + (opinion - 5) * 0.055
+  let sustain = hype * 0.001 + Math.min(1, activeRegulars / 40) * 0.03 + (opinion - 5) * 0.055
+  // THE WORLD MOVES ON — the inevitability term. Sustain is the scene arguing
+  // that the game still matters, and the older the game, the fewer people are
+  // still listening to the argument. Without this fade a well-run scene simply
+  // won the arithmetic forever: max sustain (~0.30/day from a beloved, full,
+  // streamed room) beats timeDecay until age six, and measured, competent
+  // two-year runs pinned relevance at 100 with ZERO days spent even twelve
+  // points below their own peak. There was no late game — nothing for the
+  // Studio to fight, no death march, no reason the run ever ends.
+  //
+  // Nothing restores this. Patches reset the STALENESS clock (the build is
+  // fresh), a champion is a +45%-of-headroom event (the game is a story
+  // again), a golden age halves the decay — every tool in the game buys time
+  // against the same slope. That is the design: decline is inevitable, and
+  // everything you do decides WHEN, not WHETHER.
+  //
+  // The shape: full strength through year one and a half, then the audience
+  // thins — 2/3 by age 2.5, half by 3.5, a third by 5.5. Crossed with the
+  // growing timeDecay, a perfectly run scene plateaus around year three,
+  // visibly declines through year four, and is fighting for its life by six.
+  sustain *= 1 / (1 + Math.max(0, age - 1.5) * 0.5)
 
   // The wider world's attention wanders on its own schedule: some months the
   // algorithm loves you, some months a new release eats every headline. Rolled

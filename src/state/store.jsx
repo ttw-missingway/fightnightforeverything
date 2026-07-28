@@ -4,7 +4,7 @@ import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyO
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
-import { generateEvoRoster, populateRoster, EVO_ROSTER_SIZE } from '../game/generate.js'
+import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
 import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
@@ -89,27 +89,26 @@ export function persistSave(save) {
 export function loadSaveById(id) {
   try {
     const save = JSON.parse(localStorage.getItem(saveKey(id)))
-    return save ? topUpEvoRoster(migrateSave(save)) : null
+    return save ? repairWorld(migrateSave(save)) : null
   } catch {
     return null
   }
 }
 
 /**
- * EVO grew from a 24-entrant bracket to a 64-player major, so a save made
- * before that carries a 20-strong world field. Top it up rather than
- * regenerate — these people have titles and history attached to them.
+ * The world roster has grown twice — 24 → 64 → 80-with-full-profiles — and a
+ * save can date from any era of it. repairEvoRoster does the whole job:
+ * remaps bloc regions onto the country atlas, backfills gender / persona /
+ * catchphrase, and tops the count up to EVO_ROSTER_SIZE. It never touches
+ * alias, elo, skill or titles — these people have history attached.
  *
  * Lives here rather than in migrateSave because model.js and generate.js
  * already import each other, and adding a third edge to that cycle is asking
  * for a module-init bug nobody will enjoy finding.
  */
-function topUpEvoRoster(save) {
+function repairWorld(save) {
   if (!save) return save
-  const have = (save.evoRoster || []).length
-  if (have && have < EVO_ROSTER_SIZE) {
-    save.evoRoster.push(...generateEvoRoster(save, EVO_ROSTER_SIZE - have))
-  }
+  if ((save.evoRoster || []).length) repairEvoRoster(save)
   return save
 }
 
@@ -168,6 +167,9 @@ export function resetSaveById(id) {
       // earn the ones it hasn't got all over again.)
       achievements: structuredClone(save.prestige?.achievements || {}),
       unlocks: structuredClone(save.prestige?.unlocks || {}),
+      // Everything this lineage has ever reached, so a milestone it has already
+      // banked pays a fraction the next time. See awardMilestone.
+      milestonesEver: structuredClone(save.prestige?.milestonesEver || {}),
     },
     archives: [...(save.archives || []), archive].slice(-5),
   })

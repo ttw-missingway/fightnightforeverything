@@ -38,24 +38,64 @@ export function skillCeiling(save, player, charId) {
   // also the reason the Stoic row measured as free to delete: of its four
   // stats only `composure` reached this line, while all four Killer stats
   // reach it through competitiveIntensity.
-  let ceiling = 28 + apt * 1.9 + intensity * 2.0 + mastery * 0.8
-    + (s.composure ?? 5) * 1.1 + (s.stamina ?? 0) * 1.0
+  // EVERY point has to buy something, all the way to a maxed build.
+  //
+  // This used to read only five things — aptitude, intensity, mastery,
+  // composure, stamina — which is eight stats, or forty creation points. A
+  // build hit ceiling 96 at forty points and then every further point was
+  // literally dead: measured, 40 / 60 / 80 / 114 points all produced 96. A
+  // lineage banking 130 points was buying nothing after its third run.
+  //
+  // So the ceiling reads the WHOLE person now, and the weights are set so that
+  // forty focused points reach ~72 — good, not world-class — and a fully
+  // maxed personal build reaches ~92, deliberately short of the 100 cap so
+  // that cultivation (an active rival, earned belief, the character's tech)
+  // still has somewhere to go. Points and cultivation both have to matter. The rest of the roster is unaffected:
+  // an empty build still lands around 30, because every term is zero.
+  //
+  // The secondary stats are there because they are all, genuinely, part of how
+  // far someone goes: reading the game, stealing other people's tech, sticking
+  // with a character, keeping their head, turning up.
+  const secondary = (s.analysis ?? 0) + (s.innovation ?? 0) + (s.learning ?? 0)
+    + (s.loyalty ?? 0) + (s.adaptation ?? 0) + (s.presence ?? 0)
+    + (s.spark ?? 0) + (s.temperance ?? 0)
+  let ceiling = 28 + apt * 1.0 + intensity * 1.5 + mastery * 0.7
+    + (s.composure ?? 5) * 0.6 + (s.stamina ?? 0) * 0.6
+    + secondary * 0.25
   // Iron sharpens iron: an active rival is the main way past the plateau.
   //
   // This was +10 and it was not paying. Removing the archetype that GENERATES
   // rivalries (Dramatic) made measured skill go UP 19% — the feud cost the
   // scene more in mood and attendance than the rivalry returned in growth. A
   // rival has to be worth having.
-  if (hasActiveRival(save, player)) ceiling += 18
+  //
+  // Cultivation is a share of the REMAINING HEADROOM, not a flat bonus.
+  //
+  // These three used to add a flat +38 between them, against a hard cap of 100
+  // — so a forty-point build and a fully maxed one both landed on exactly 100
+  // the moment they had a rival and some belief. That is the "points go dead"
+  // problem again at the other end of the curve, and it is worse there,
+  // because it erases the whole reward for a lineage that banked a hundred
+  // points. As a fraction of headroom it can never do that: it closes some of
+  // the gap to perfect, and how far that gets you still depends on where your
+  // creation points put you. Half the gap is the most anybody gets.
+  let cult = 0
+  // Iron sharpens iron: an active rival is the main way past the plateau.
+  //
+  // This was +10 flat and it was not paying. Removing the archetype that
+  // GENERATES rivalries (Dramatic) made measured skill go UP 19% — the feud
+  // cost the scene more in mood and attendance than the rivalry returned in
+  // growth. A rival has to be worth having.
+  if (hasActiveRival(save, player)) cult += 0.30
   // Earned stage belief: battle-tested players realize more of their potential.
   // This is the single biggest thing separating a cultivated player from a
-  // talented one who was left alone. The rate is calibrated to what belief can
-  // actually REACH: since it became a wager rather than an accrual, a genuinely
-  // battle-tested player lands in the 60s, not the 90s, so each point is worth
-  // proportionally more.
-  ceiling += (player.belief ?? 0) * 0.24
+  // talented one who was left alone. Calibrated to what belief can actually
+  // REACH: since it became a wager rather than an accrual, a genuinely
+  // battle-tested player lands in the 60s, not the 90s.
+  cult += Math.min(0.28, (player.belief ?? 0) * 0.0045)
   // Knowing the character's discovered tech lifts the very top a little.
-  ceiling += Math.min(6, techniqueBonus(save, player, charId) * 0.6)
+  cult += Math.min(0.10, techniqueBonus(save, player, charId) * 0.012)
+  ceiling += (100 - ceiling) * clamp(cult, 0, 0.5)
   // Filler stays filler: a passer-through can be genuinely good — a real rival,
   // a real weekly threat — but the story of this arcade belongs to the players
   // the user MADE, so nobody who wandered in ever grows past a step behind the
@@ -78,14 +118,33 @@ export function skillGainMultiplier(save, player, charId) {
   const ceiling = skillCeiling(save, player, charId)
   const skill = player.charSkill[charId] || 0
   if (skill >= ceiling) return 0
-  const apt = player.personal.aptitude ?? 5
-  const mastery = player.personal.mastery ?? 5
+  // THROUGH statLevel, not raw. Under the sparse point-buy an unspent stat is
+  // 0, not undefined, so the old `?? 5` fallback never fired once and every
+  // uninvested player learned at 0.5 instead of the 1.29 the formula was
+  // written for — two and a half times slower than designed, forever. Absence
+  // is not supposed to be a penalty; it is supposed to be average.
+  const apt = statLevel(player.personal.aptitude)
+  const mastery = statLevel(player.personal.mastery)
   // Volume is its own teacher: the thousand-hour grinder (stamina) keeps
   // improving on reps alone — the Stoic's slow-but-inevitable engine.
-  const rate = 0.5 + apt * 0.09 + mastery * 0.045 + (player.personal.stamina ?? 5) * 0.022
+  const rate = 0.5 + apt * 0.09 + mastery * 0.045 + statLevel(player.personal.stamina) * 0.022
   // Asymptote: shrinks to nothing as skill nears the ceiling.
+  //
+  // The exponent is what makes the last stretch a GRIND, and at 1.15 it wasn't
+  // one. Measured: a cast reached ~93% of its ceiling inside year one and then
+  // flatlined — years two and three added a single point of skill. That made
+  // the whole lineage a step function on banked creation points, because skill
+  // simply equalled ceiling and ceiling is arithmetic. It showed up at the top
+  // as a cliff: forty points never produced an EVO champion in thirty
+  // attempts, sixty points produced one in nine lineages out of ten, and a
+  // hundred and fourteen was no better than sixty.
+  //
+  // At 2.4 the first half of the climb is barely slower and the last quarter
+  // costs years — which is where cultivation, a rival, and above all playing
+  // people better than you (see lessonFactor, and invasions) stop being flavour
+  // and become the only way to finish the climb inside a career.
   const prox = (ceiling - skill) / Math.max(30, ceiling)
-  return diffFactor * rate * Math.pow(prox, 1.15)
+  return diffFactor * rate * Math.pow(prox, 2.4)
 }
 
 /**
@@ -117,6 +176,11 @@ export function gainSkill(save, player, charId, baseAmount) {
   if (!player.npc && save.settings?.mode !== 'sandbox') {
     if (cur < 50 && next >= 50) awardMilestone(save, 'skill-50', 2, `${displayName(player, save)} broke skill 50 — a genuinely strong player now`)
     if (cur < 70 && next >= 70) awardMilestone(save, 'skill-70', 4, `${displayName(player, save)} broke skill 70 — among the best this scene has produced`)
+    // Above 70 is where the world lives, and where a local scene can no longer
+    // teach you anything — these two only happen to a cultivated player who
+    // has been getting reps against people better than them.
+    if (cur < 85 && next >= 85) awardMilestone(save, 'skill-85', 6, `${displayName(player, save)} broke skill 85 — genuinely world class`)
+    if (cur < 95 && next >= 95) awardMilestone(save, 'skill-95', 10, `${displayName(player, save)} broke skill 95 — there are maybe three people alive at this level`)
   }
   if (save.charMilestones) {
     const char = save.game.characters.find((c) => c.id === charId)
@@ -165,10 +229,13 @@ export function performance(save, player, charId) {
     perf += (10 - char.difficulty) * lowSkillFactor * 0.7
   }
   // Mojo: bonus in a good mood, mild penalty in a foul one.
-  if (player.mood >= 7) perf += player.personal.mojo * 0.8
+  if (player.mood >= 7) perf += statLevel(player.personal.mojo) * 0.8
   else if (player.mood <= 2) perf -= (10 - statLevel(player.personal.temperance)) * 0.4
-  // X-factor: random spike potential.
-  perf += rand() * player.personal.xfactor * 1.2
+  // X-factor: random spike potential. This is the ONLY randomness in a match,
+  // so reading it raw meant two players with no x-factor points resolved
+  // DETERMINISTICALLY — the higher performance won 100% of the time, and the
+  // only upsets in the game came from whoever happened to have the stat.
+  perf += rand() * statLevel(player.personal.xfactor) * 1.2
   perf += techniqueBonus(save, player, charId)
   return perf
 }
@@ -287,6 +354,18 @@ export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mai
   const winnerChar = aWins ? aCharId : bCharId
   const loserChar = aWins ? bCharId : aCharId
   const eloDelta = updateElo(winner, loser)
+  // Taking a set off a visiting world-class player. A ladder rather than one
+  // award per elite: there are sixty-four of them, and paying for each would
+  // make an invasion worth more than everything else in the game combined.
+  if (!winner.npc && loser.visitor) {
+    save.tally ??= {}
+    save.tally.visitorsBeaten = (save.tally.visitorsBeaten || 0) + 1
+    const n = save.tally.visitorsBeaten
+    const who = displayName(winner, save)
+    if (n === 1) awardMilestone(save, 'visitor-beaten', 3, `${who} beat a visiting world-ranked player`)
+    if (n === 5) awardMilestone(save, 'visitor-beaten-5', 4, `Five sets taken off visiting elites — this room travels well`)
+    if (n === 20) awardMilestone(save, 'visitor-beaten-20', 6, `Twenty sets off visiting elites. Crews come here knowing it's a hard week.`)
+  }
   winner.wins += 1
   loser.losses += 1
   recordCharResult(winner, winnerChar, true)
@@ -308,8 +387,8 @@ export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mai
   const lSkill = loser.charSkill[loserChar] || 0
   const wLesson = lessonFactor(wSkill, lSkill)
   const lLesson = lessonFactor(lSkill, wSkill)
-  let wGain = gainSkill(save, winner, winnerChar, (0.1 + winner.personal.dominance * 0.03) * wLesson)
-  let lGain = gainSkill(save, loser, loserChar, (0.1 + loser.personal.determination * 0.035) * lLesson)
+  let wGain = gainSkill(save, winner, winnerChar, (0.1 + statLevel(winner.personal.dominance) * 0.03) * wLesson)
+  let lGain = gainSkill(save, loser, loserChar, (0.1 + statLevel(loser.personal.determination) * 0.035) * lLesson)
   // Iron sharpens iron: a real rivalry pushes both to another level. Losing to
   // your rival especially lights a fire under you.
   if (areRivals(save, winner, loser)) {

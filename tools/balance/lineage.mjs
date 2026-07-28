@@ -41,6 +41,7 @@ function resetLineage(save, { spendPoints }) {
     rungPoints: (save.prestige?.rungPoints || 0) + rungPointsThisRun(save),
     achievements: structuredClone(save.prestige?.achievements || {}),
     unlocks: structuredClone(save.prestige?.unlocks || {}),
+    milestonesEver: structuredClone(save.prestige?.milestonesEver || {}),
   }
 
   const world = newSave({

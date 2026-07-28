@@ -21,7 +21,11 @@ export function flagOf(code) {
  */
 const REGION_CODE = {
   'US-East': 'US', 'US-West': 'US', EU: 'EU', JP: 'JP', KR: 'KR',
-  BR: 'BR', MX: 'MX', SG: 'SG',
+  BR: 'BR', MX: 'MX', SG: 'SG', CA: 'CA', AU: 'AU', CN: 'CN', IN: 'IN',
+  // Blocs get a representative flag, because emoji has no flag for a bloc:
+  // the CIS scene flies Russian colors, Africa flies South Africa's (its
+  // biggest FGC hub), the Middle East flies Saudi's (the region's majors).
+  CIS: 'RU', AF: 'ZA', ME: 'SA',
 }
 
 export const regionFlag = (region) => flagOf(REGION_CODE[region] || region)
@@ -67,3 +71,36 @@ export function countryFlag(country) {
 
 /** Your arcade's flag — the one your whole cast competes under. */
 export const arcadeFlag = (save) => countryFlag(save?.arcade?.location?.country)
+
+/** The two-letter code a typed country resolves to, or null. Exported for the
+ * name generator: an arcade in Japan should produce Japanese walk-ins. */
+export function countryCode(country) {
+  const raw = String(country || '').trim()
+  if (!raw) return null
+  const hit = COUNTRY_CODE[raw.toLowerCase()]
+  if (hit) return hit
+  return /^[A-Za-z]{2}$/.test(raw) ? raw.toUpperCase() : null
+}
+
+/**
+ * Which NAME CLUSTER a country's walk-ins draw from (see names.js). Countries
+ * without a dedicated pool borrow the nearest one; unknown countries get the
+ * diverse-America treatment rather than a single ethnicity guessed wrong.
+ */
+const CODE_CLUSTER = {
+  JP: 'JP', KR: 'KR', CN: 'CN', TW: 'CN', HK: 'CN', SG: 'SG',
+  IN: 'IN', SA: 'ME', AE: 'ME', IL: 'ME', TR: 'ME', EG: 'ME', MA: 'ME',
+  ZA: 'AF', NG: 'AF', KE: 'AF', RU: 'CIS', UA: 'CIS',
+  BR: 'BR', PT: 'BR', MX: 'ES', ES: 'ES', CL: 'ES', AR: 'ES', CO: 'ES', PE: 'ES',
+  FR: 'FR', BE: 'FR', DE: 'DE', AT: 'DE', CH: 'DE',
+  SE: 'SE', NO: 'SE', DK: 'SE', FI: 'SE', IS: 'SE',
+  GB: 'EN', IE: 'EN', US: 'EN', CA: 'CA', AU: 'AU', NZ: 'AU',
+  IT: 'EU', NL: 'EU', PL: 'EU', CZ: 'EU', HU: 'EU', RO: 'EU', GR: 'EU',
+}
+export function countryNameRegion(country) {
+  const code = countryCode(country)
+  const cluster = code && CODE_CLUSTER[code]
+  // Clusters that are themselves regions (CA/AU/SG/EU…) pass through to the
+  // REGION_NAME_MIX table; raw pools (JP/EN/…) are handled there too.
+  return cluster || 'US-East'
+}

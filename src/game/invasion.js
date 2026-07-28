@@ -24,6 +24,7 @@ import { absDayOf } from './constants.js'
 import { newPlayer, chronicle } from './model.js'
 import { rankedInTop } from './world.js'
 import { regionFlag } from './flags.js'
+import { countryName, countryCluster } from './geo.js'
 
 /** How long a visit lasts, by how much of a destination you have become. */
 export const INVASION_MIN_DAYS = 1
@@ -31,23 +32,38 @@ export const INVASION_MAX_DAYS = 7
 const INVASION_COOLDOWN = 40 // days after one ends before another can start
 
 /**
- * Regions send crews. The language line is what a visitor says when they
- * forget, or don't care, that they are a long way from home.
+ * What a visitor blurts out in their own language, by name CLUSTER (geo.js) —
+ * every country resolves to one, so a crew from anywhere has a voice. The
+ * line is what they say when they forget, or don't care, that they are a long
+ * way from home; clusters without an entry just speak English-adjacent
+ * arcade-ese and skip the language-barrier gag.
  */
-export const REGIONS = {
-  JP: { name: 'Japan', hello: 'このゲームセンターが大好きです', tongue: 'Japanese' },
-  KR: { name: 'Korea', hello: '이 오락실 분위기 진짜 좋네요', tongue: 'Korean' },
-  BR: { name: 'Brazil', hello: 'esse fliperama é muito melhor ao vivo', tongue: 'Portuguese' },
-  MX: { name: 'Mexico', hello: 'oigan, este lugar está increíble', tongue: 'Spanish' },
-  SG: { name: 'Singapore', hello: 'wah, the setups here damn solid ah', tongue: null },
-  EU: { name: 'Europe', hello: 'right, who do I have to beat around here', tongue: null },
-  'US-East': { name: 'the East Coast', hello: 'yo this place is way bigger than it looks on stream', tongue: null },
-  'US-West': { name: 'the West Coast', hello: 'okay okay okay. I like this room.', tongue: null },
+const CLUSTER_VOICE = {
+  JP: { hello: 'このゲームセンターが大好きです', tongue: 'Japanese' },
+  KR: { hello: '이 오락실 분위기 진짜 좋네요', tongue: 'Korean' },
+  CN: { hello: '这家机厅太棒了', tongue: 'Mandarin' },
+  VN: { hello: 'chỗ này chơi vui thật sự', tongue: 'Vietnamese' },
+  TH: { hello: 'ที่นี่สนุกมากเลย', tongue: 'Thai' },
+  ARB: { hello: 'هذه الصالة أسطورية', tongue: 'Arabic' },
+  CIS: { hello: 'этот зал — просто пушка', tongue: 'Russian' },
+  PL: { hello: 'ta salka jest niesamowita', tongue: 'Polish' },
+  IT: { hello: 'questa sala è fantastica', tongue: 'Italian' },
+  BR: { hello: 'esse fliperama é muito melhor ao vivo', tongue: 'Portuguese' },
+  ES: { hello: 'oigan, este lugar está increíble', tongue: 'Spanish' },
+  FR: { hello: 'cette salle est incroyable, franchement', tongue: 'French' },
+  DE: { hello: 'diese Halle ist der Wahnsinn', tongue: 'German' },
+  SE: { hello: 'det här stället är helt otroligt', tongue: 'Swedish' },
+  IN: { hello: 'yaar, this arcade is unreal', tongue: null },
+  SG: { hello: 'wah, the setups here damn solid ah', tongue: null },
+  MY: { hello: 'the setups here are too good lah', tongue: null },
+  ID: { hello: 'tempat ini keren banget', tongue: 'Indonesian' },
+  PH: { hello: 'grabe, ang ganda ng lugar na to', tongue: 'Tagalog' },
 }
+export const voiceOf = (code) => CLUSTER_VOICE[countryCluster(code)] || null
 
-export const regionName = (key) => REGIONS[key]?.name || key
-// "the West Coast" needs to become "The West Coast crew", not "The the West
-// Coast crew" — some regions carry their own article.
+export const regionName = (key) => countryName(key)
+// "the United States" needs to become "The United States crew", not
+// "The the United States crew" — many country names carry their own article.
 const crewName = (key) => {
   const n = regionName(key)
   return `The ${n.replace(/^the /, '')} crew`
@@ -99,9 +115,21 @@ function visitorFrom(save, elite, untilAbs) {
   p.mainCharId = elite.mainCharId
   p.settledMain = true
   p.charSkill = { [elite.mainCharId]: elite.skill }
-  // They came to play. High spark so they're in the room every day they're here.
-  p.personal = { ...p.personal, spark: 10, composure: 8, mastery: 8, aptitude: 8 }
-  p.social = { ...p.social, charisma: 6, politeness: 6 }
+  // The elite's own build walks through the door — the dossier, the narration
+  // and the concession stand all meet the same person. Spark is pinned high
+  // regardless: they flew here to play, so they're in the room every day.
+  if (elite.personal) p.personal = { ...elite.personal }
+  if (elite.social) p.social = { ...elite.social }
+  if (elite.temperament) p.temperament = elite.temperament
+  if (elite.socialTemperament) p.socialTemperament = elite.socialTemperament
+  if (elite.gender) p.gender = elite.gender
+  if (elite.heritage) p.heritage = elite.heritage
+  if (elite.facePalette) p.facePalette = elite.facePalette
+  if (elite.firstName) { p.firstName = elite.firstName; p.lastName = elite.lastName }
+  if (elite.catchphrase) p.catchphrase = elite.catchphrase
+  if (elite.description) p.description = elite.description
+  p.personal = { ...p.personal, spark: 10, composure: Math.max(8, p.personal.composure || 0) }
+  p.social = { ...p.social, charisma: Math.max(6, p.social.charisma || 0) }
   p.passion = 100
   p.mood = 7
   return p
@@ -122,10 +150,11 @@ export function maybeInvasion(save) {
   // when the arcade is a genuine destination.
   if (!chance(0.006 + score * 0.028)) return null
 
-  // A crew travels together, so they all come from one place.
+  // A crew travels together, so they all come from one place. Any country
+  // with at least two elites can field one — which means the big scenes visit
+  // often and a two-person crew from somewhere tiny is a genuine event.
   const byRegion = {}
   for (const e of save.evoRoster || []) {
-    if (!REGIONS[e.region]) continue
     byRegion[e.region] ??= []
     byRegion[e.region].push(e)
   }
@@ -236,13 +265,19 @@ export function visitorExchange(save, group, nameOf) {
   if (!visitor) return null
   const local = group.find((p) => p !== visitor && !isVisiting(p))
   if (!local) return null
-  const region = REGIONS[visitor.visitor.region]
+  const voice = voiceOf(visitor.visitor.region)
 
   // Sometimes they forget where they are, and the room has to cope.
-  if (region?.tongue && chance(0.35)) {
+  if (voice?.tongue && chance(0.35)) {
     return [
-      { speaker: nameOf(visitor), text: region.hello },
-      { speaker: nameOf(local), text: choice(LOST_IN_TRANSLATION)(region.tongue) },
+      { speaker: nameOf(visitor), text: voice.hello },
+      { speaker: nameOf(local), text: choice(LOST_IN_TRANSLATION)(voice.tongue) },
+    ]
+  }
+  if (voice?.hello && !voice.tongue && chance(0.2)) {
+    return [
+      { speaker: nameOf(visitor), text: voice.hello },
+      { speaker: nameOf(local), text: choice(HOST_REPLIES) },
     ]
   }
   return [

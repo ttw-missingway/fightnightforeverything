@@ -66,7 +66,18 @@ function entrantPerformance(save, e, context = 'tournament') {
   }
   // The elite field is genuinely elite — the best players on the planet. Beating
   // them takes a fully cultivated champion, not just the best kid in your arcade.
-  return e.ref.skill * 0.72 + (e.ref.elo - 1200) / 70 + rand() * 6
+  //
+  // These weights MIRROR performance() exactly, and they have to. They used to
+  // read `skill * 0.72 + elo / 70`, which quietly discounted an elite's rating
+  // to a bit over half of what your own player's was worth — and your arcade is
+  // a CLOSED elo pool. Your cast farms rating off your own regulars, who sink
+  // to pay for it, so a local hero can show up at 2000 having never played
+  // anybody outside the building. Weighting that inflated number MORE than a
+  // world number one's was the single reason a skill-65 kid could win EVO.
+  //
+  // The rand() term stands in for the x-factor an elite has no stat block for,
+  // scaled to the same average person performance() assumes: 0..6.
+  return e.ref.skill * 0.75 + (e.ref.elo - 1200) / 40 + rand() * 6
 }
 
 function entrantCharName(save, e) {
@@ -100,13 +111,13 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
   if (winner.kind === 'arcade') {
     winner.ref.wins += 1
     winner.ref.mood = clamp(winner.ref.mood + 0.6, 0, 10)
-    gainSkill(save, winner.ref, winner.ref.mainCharId, 0.15 + winner.ref.personal.dominance * 0.05)
+    gainSkill(save, winner.ref, winner.ref.mainCharId, 0.15 + statLevel(winner.ref.personal.dominance) * 0.05)
     recordCharResult(winner.ref, winner.charId, true)
   }
   if (loser.kind === 'arcade') {
     loser.ref.losses += 1
     loser.ref.mood = clamp(loser.ref.mood - (10 - statLevel(loser.ref.personal.temperance)) * 0.2, 0, 10)
-    gainSkill(save, loser.ref, loser.ref.mainCharId, 0.15 + loser.ref.personal.determination * 0.06)
+    gainSkill(save, loser.ref, loser.ref.mainCharId, 0.15 + statLevel(loser.ref.personal.determination) * 0.06)
     recordCharResult(loser.ref, loser.charId, false)
   }
   const bothArcade = winner.kind === 'arcade' && loser.kind === 'arcade'
@@ -124,8 +135,10 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
   const nar = narrateSet({
     aName: a.name, bName: b.name, charA, charB, probA, winnerIsA: aWins, long,
     skillA: entrantSkill(a), skillB: entrantSkill(b),
-    statsA: a.kind === 'arcade' ? a.ref.personal : null,
-    statsB: b.kind === 'arcade' ? b.ref.personal : null,
+    // Elites carry real stat blocks now — their x-factor spikes and composure
+    // reads are THEIRS, not the seasoned-pro default.
+    statsA: a.ref.personal || null,
+    statsB: b.ref.personal || null,
     stageName: stage?.name,
     winnerPhrase: winner.kind === 'arcade' ? winner.ref.catchphrase : '',
     seriesNote: bothArcade ? seriesNoteFor(a.ref, b.ref, a.name, b.name) : null,
@@ -1128,7 +1141,7 @@ export function runEvo(save) {
   applyTournamentMess(save, { type: 'singles', format: 'doubleelim', size: 16 })
   // Roll the broadcast. The whole tournament is already decided; this is the
   // cursor the EVO screen walks through it with.
-  save.evoWeek = { step: 'intro', poolRound: 0, openPool: null }
+  save.evoWeek = { step: 'intro', poolRound: 0, openPool: null, watched: [] }
   // The year you send nobody is the year the goal gets set. Say so, plainly.
   if (!qualified.length) {
     chronicle(save, '📺', `EVO ${save.year} came and went and nobody from ${save.arcade.name} was in it. ${champion.name} took the title.`)

@@ -1,4 +1,4 @@
-import { Field, NumField, PillPicker, PointDots } from './ui.jsx'
+import { Field, NumField, PillPicker, PointDots, Portrait } from './ui.jsx'
 import {
   PERSONAL_STATS, SOCIAL_STATS, GENDERS, difficultyOf,
   TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS,
@@ -8,7 +8,8 @@ import { FOODS, OTHER_GAMES } from '../game/names.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
 import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHES, VOICE_QUIRKS } from '../game/dialogue.js'
 import { SpritePicker } from './SpritePicker.jsx'
-import { PLAYER_SPRITE_CATALOG, playerArtFor } from './art.js'
+import { playerSpriteCatalog, playerArtFor, FACE_PALETTES } from './art.js'
+import { DEFAULT_PALETTE } from '../game/palettes.js'
 import { selectableChars } from '../game/forms.js'
 import { isUnlocked, CHAMPION_POINTS } from '../game/achievements.js'
 
@@ -75,11 +76,32 @@ export default function PlayerForm({ save, player, patch }) {
               </select>
             </Field>
           </div>
+          <Field label="Portrait palette">
+            {/* Everyone in the world carries their own palette; this is where
+                you choose YOURS. The sprite grid below repaints as you pick. */}
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              {FACE_PALETTES.map((pal) => {
+                const on = (player.facePalette || DEFAULT_PALETTE) === pal.key
+                return (
+                  <button key={pal.key} type="button" title={pal.label}
+                    className={`sprite-swatch${on ? ' on' : ''}`}
+                    onClick={() => patch((p) => { p.facePalette = pal.key })}>
+                    <Portrait size={30}
+                      url={playerArtFor(player.id, player.gender, player.heritage, pal.key)}
+                      alt={pal.label} />
+                  </button>
+                )
+              })}
+            </div>
+            <div className="dim small" style={{ marginTop: 2 }}>
+              {FACE_PALETTES.find((p) => p.key === (player.facePalette || DEFAULT_PALETTE))?.label}
+            </div>
+          </Field>
           <Field label="Sprite">
             <SpritePicker
-              catalog={PLAYER_SPRITE_CATALOG}
+              catalog={playerSpriteCatalog(player.facePalette)}
               value={player.spriteKey || null}
-              autoUrl={playerArtFor(player.id)}
+              autoUrl={playerArtFor(player.id, player.gender, player.heritage, player.facePalette)}
               onChange={(k) => patch((p) => { p.spriteKey = k })}
             />
           </Field>

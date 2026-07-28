@@ -18,10 +18,14 @@ import DangerBanner from './components/dangers.jsx'
 import EvoWeek from './screens/EvoWeek.jsx'
 import World from './screens/World.jsx'
 import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
+import { setFacePalette } from './components/art.js'
 
 export default function App() {
   const { save, screen, nav, closeSave } = useStore()
   useIdleLoop() // drives idle mode when it's running (no-op otherwise)
+  // The portrait palette is a per-save cosmetic; art.js holds it as module
+  // state (it can't reach the store). Set before anything renders a Portrait.
+  setFacePalette(save?.settings?.facePalette)
 
   if (!save) {
     return screen.name === 'setup' ? <Setup /> : <MainMenu />
@@ -187,7 +191,7 @@ function ForeclosureModal() {
           player creation{prestige > 0 ? ` (${prestige} banked so far)` : ''}.
         </p>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="primary" onClick={resetCurrentRun}>♻ Start a new run</button>
+          <button className="primary" onClick={resetCurrentRun}>♻ Run it back</button>
           <button onClick={closeSave}>Back to the main menu</button>
         </div>
       </div>
@@ -214,7 +218,7 @@ function GameOverModal() {
           chronicle, hall of fame, and VODs, and converts your arcade's fame into prestige points.
         </p>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="primary" onClick={resetCurrentRun}>♻ Start a new run</button>
+          <button className="primary" onClick={resetCurrentRun}>♻ Run it back</button>
           <button onClick={closeSave}>Back to the main menu</button>
         </div>
       </div>

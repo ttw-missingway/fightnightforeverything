@@ -10,8 +10,10 @@
 // you just created lands somewhere around 70th and stays there until you do
 // something about it.
 
-import { statusOf } from './constants.js'
+import { choice, chance } from './util.js'
+import { statusOf, absDayOf, DAYS_PER_YEAR, EVO_DAY } from './constants.js'
 import { regionFlag, arcadeFlag } from './flags.js'
+import { countryName } from './geo.js'
 
 const bestSkillOf = (p) => Math.max(0, ...Object.values(p.charSkill || {}), 0)
 
@@ -55,8 +57,10 @@ export function worldRankings(save) {
     kind: 'elite',
     name: e.alias,
     region: e.region,
+    regionName: countryName(e.region),
     flag: regionFlag(e.region),
     tier: e.tier,
+    persona: e.persona || null,
     elo: Math.round(e.elo || 0),
     skill: Math.round(e.skill || 0),
     titles: e.titles || 0,
@@ -70,6 +74,7 @@ export function worldRankings(save) {
       kind: 'yours',
       name: p.alias || `${p.firstName} ${p.lastName}`,
       region: 'home',
+      regionName: save.arcade?.country || 'home',
       flag: arcadeFlag(save), // your cast fly the arcade's colours
       tier: statusOf(p)?.key || 'newbie',
       elo: Math.round(p.elo || 0),
@@ -197,4 +202,75 @@ export const TIER_LABEL = {
   legend: 'A name everybody knows',
   killer: 'A genuine threat in any bracket',
   contender: 'Ranked, and dangerous on the day',
+}
+
+// ---------- The room talks about the world ----------
+
+const WORLD_TALK = [
+  (c) => [
+    `Did you see ${c.top} at that invitational? Nobody is touching them right now.`,
+    choice(['I refuse to believe a human being plays like that.', 'One day somebody from here beats them. Calling it.', 'They drop one set a year and it makes the news.']),
+  ],
+  (c) => [
+    `${c.riser} keeps winning. Like, keeps winning winning.`,
+    choice([`Ranked players are ducking them already.`, `I watched three of their sets and learned nothing. Too fast.`, `Give it a year and they're top eight, watch.`]),
+  ],
+  (c) => [
+    `Hot take: ${c.top} is overrated.`,
+    choice([`You are describing the best player alive.`, `Say that louder so everyone can hear you be wrong.`, `Okay but have you SEEN their ${c.char}? Actually unfair.`]),
+  ],
+  (c) => [
+    `If you could take one set off anyone in the top eight, who?`,
+    choice([`${c.top}. Straight to the final boss.`, `${c.riser}, purely so they'd remember my name.`, `None of them. I'd like to keep my dignity.`]),
+  ],
+]
+
+const EVO_TALK = [
+  (c) => [
+    `${c.days} days to EVO. I have opinions and nobody asked.`,
+    choice([`${c.top} three-peats. Ask me nothing further.`, `Somebody out of pools nobody's heard of makes top eight. Happens every year.`, `I'm calling an upset in the finals. I can feel it.`]),
+  ],
+  (c) => [
+    `EVO pools drop soon. ${c.top} versus literally anyone, I'm watching.`,
+    choice([`I'd sell an organ to be there live.`, `The whole planet watches one weekend a year and it's this one.`, `Imagine one of ours on that stage. Just imagine it for a second.`]),
+  ],
+  (c) => [
+    `Who wins EVO this year — ${c.top} or ${c.riser}?`,
+    choice([`${c.top}. Boring answer, correct answer.`, `${c.riser}. The torch gets passed this year.`, `Neither. Chaos wins. Chaos always wins eventually.`]),
+  ],
+]
+
+/**
+ * Two regulars at the counter, talking about people they have never met and
+ * know everything about — the world top eight, the hot newcomer, and above
+ * all EVO when it is close. Pure flavor: nobody's stats move. Returns null
+ * most days so it stays a treat rather than a tic.
+ */
+export function worldTalkExchange(save, group, nameOf) {
+  const locals = group.filter((p) => !p.visitor)
+  if (locals.length < 2) return null
+  const rows = rankedWorld(save)
+  if (rows.length < 8) return null
+  const abs = absDayOf(save.day, save.year)
+  const doy = ((abs - 1) % DAYS_PER_YEAR) + 1
+  const toEvo = EVO_DAY - doy
+  const nearEvo = toEvo > 0 && toEvo <= 14
+  // Most of the year this is an occasional aside; in EVO fortnight it is what
+  // the whole room talks about.
+  if (!chance(nearEvo ? 0.5 : 0.12)) return null
+  const elites = rows.filter((r) => r.kind === 'elite')
+  if (elites.length < 2) return null
+  const ctx = {
+    top: choice(elites.slice(0, 5)).name,
+    riser: choice(elites.slice(5, 20)).name,
+    char: (save.game.characters || [])[0]?.name || 'their character',
+    days: toEvo,
+  }
+  const pair = choice(nearEvo ? EVO_TALK : WORLD_TALK)(ctx)
+  const a = choice(locals)
+  const b = choice(locals.filter((p) => p !== a))
+  return [
+    { speaker: nameOf(a), text: pair[0] },
+    { speaker: nameOf(b), text: pair[1] },
+  ]
 }

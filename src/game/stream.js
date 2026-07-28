@@ -140,7 +140,11 @@ export function applyStageReps(save, players, stream, context = 'daily', weight 
 }
 
 export function elitePersonality(elite) {
-  return elite.tier === 'god' ? 1 : elite.tier === 'legend' ? 0.85 : 0.7
+  const base = elite.tier === 'god' ? 1 : elite.tier === 'legend' ? 0.85 : 0.7
+  // Personas read on the broadcast: a showman is a bigger draw than the
+  // stone-faced lab monster at the same rank.
+  const shade = elite.persona === 'showman' ? 0.12 : elite.persona === 'lab-monster' ? -0.08 : 0
+  return Math.max(0.4, Math.min(1.1, base + shade))
 }
 
 /**
@@ -255,7 +259,12 @@ export function viewersFor(save, quality, context) {
   }
   let v
   if (context === 'evo') {
-    v = 500 + followers * 0.15 + hype * 8 + rand() * 150
+    // EVO's audience is EVO's. This used to read `followers * 0.15 + hype * 8`,
+    // which made the world championship's viewer count a function of how big
+    // YOUR channel was — backwards for a broadcast you have nothing to do with,
+    // and the visible half of a bug where the whole EVO broadcast was being
+    // credited to your numbers (see buildStream).
+    v = 1400 + quality * 12 + rand() * 900
   } else if (context === 'tournament') {
     v = (2 + followers * 0.035 + hype * 0.8) * qmult + rand() * 2
   } else {
@@ -285,8 +294,20 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
   const comments = []
   const seenTexts = new Set()
 
+  // The channel-flavored lines only air on YOUR streams: under EVO, "this
+  // arcade always delivers" is chat congratulating the wrong building.
+  const hypePool = context === 'evo'
+    ? [...CHAT_LINES.hype, ...CHAT_LINES.evo]
+    : [...CHAT_LINES.hype, ...CHAT_LINES.hypeArcade]
+
   const reactTo = (at, onFinish) => {
     const m = meta[at] || {}
+    // MATCH THE ENERGY. The narration marks its own biggest moments — a
+    // one-pixel comeback, a wall of block, a super — and chat reacts to those
+    // before anything generic gets a word in.
+    if (m.comeback && chance(0.8)) return choice(CHAT_LINES.comeback)
+    if (m.blocked && chance(0.45)) return choice(CHAT_LINES.blockedOut)
+    if ((m.fx?.t === 'super' || (m.fx?.mag ?? 0) > 0.6) && chance(0.5)) return choice(CHAT_LINES.bigHit)
     // React to the specific thing that just happened on this line.
     if ((m.kind === 'game' || m.kind === 'beat') && m.move && chance(0.5)) {
       return choice(CHAT_LINES.moveReact).replaceAll('{m}', m.move)
@@ -306,7 +327,7 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
     if (smallStream && chance(0.25)) return choice(CHAT_LINES.newViewer)
     if (close && chance(0.35)) return choice(CHAT_LINES.close)
     if (chance(0.3)) return choice(CHAT_LINES.playerRef).replace('{p}', chance(0.5) ? aName : bName)
-    return choice(CHAT_LINES.hype)
+    return choice(hypePool)
   }
 
   for (let i = 0; i < total; i++) {
@@ -321,6 +342,23 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
     seenTexts.add(text)
     comments.push({ at, user: choice(users), text })
   }
+
+  // THE SPAM BURST. When somebody one hit from death starts turning it around,
+  // chat does not compose considered reactions — it floods. Find the comeback
+  // arcs the narration marked and pile a burst of near-identical hysteria onto
+  // the line where each one starts. Duplicates are the POINT here, so the
+  // burst deliberately ignores the dedupe the ordinary comments go through.
+  const arcs = []
+  for (let i = 0; i < meta.length; i++) {
+    if (meta[i]?.comeback && !(meta[i - 1]?.comeback)) arcs.push(i)
+  }
+  for (const at of arcs.slice(0, 2)) {
+    const size = clamp(Math.round(viewers / 6), 3, 9)
+    for (let n = 0; n < size; n++) {
+      comments.push({ at, user: chatName(), text: choice(CHAT_LINES.comeback) })
+    }
+  }
+
   comments.sort((x, y) => x.at - y.at)
   return comments
 }
@@ -346,9 +384,22 @@ export function buildStream(save, {
   level, personality, probA, aWins, narration, meta = [], aName, bName, winnerName, context,
   mirror = false, staleness = 0,
 }) {
+  // EVO IS THE WORLD'S BROADCAST, NOT YOURS.
+  //
+  // It still builds a stream — there is a production, a crowd and a chat, and
+  // the EVO screens render all of it — but none of it touches your channel.
+  // Every EVO match used to run the full crediting path below: ~100 sets each
+  // adding followers, `3 + quality/50` hype apiece, a peak-viewer record in the
+  // thousands, and ad revenue into your register. One EVO could rewrite a
+  // channel's entire history, and it did it whether or not you even owned a
+  // camera.
+  //
+  // It also means EVO is watchable without a rig, which is right: you do not
+  // need to be broadcasting to watch the world championship.
+  const external = context === 'evo'
   // No rig, no broadcast — every consumer of a stream already null-checks it,
   // so this is the whole gate.
-  if (!canStream(save)) return null
+  if (!external && !canStream(save)) return null
   const upsetSeverity = upsetSeverityOf(probA, aWins)
   // Hidden variance: some sets just deliver, some just don't. The pre-match
   // read is never a guarantee — that's the risk in picking.
@@ -360,6 +411,9 @@ export function buildStream(save, {
   const comments = generateComments({ viewers, narration, meta, aName, bName, winnerName, probA, upsetSeverity, context })
 
   const st = save.stream
+  if (external) {
+    return buildStreamResult({ quality, viewers, comments })
+  }
   st.totalStreams += 1
   // Viewer-count firsts go in the collective memory.
   if (save.chronicle) {
@@ -412,6 +466,12 @@ export function buildStream(save, {
     else save.economy.money = Math.round((save.economy.money + revenue) * 100) / 100
   }
 
+  return buildStreamResult({ quality, viewers, comments, gain })
+}
+
+// The shape every consumer expects. An external broadcast has no `gain`
+// because there is no channel of yours for it to have grown.
+function buildStreamResult({ quality, viewers, comments, gain = 0 }) {
   return { viewers, comments, quality, gain: Math.round(gain * 10) / 10 }
 }
 

@@ -14,7 +14,7 @@
 const SRC = new URL('../../src/game', import.meta.url).pathname
 const { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild } = await import(`${SRC}/model.js`)
 const { generateCharacter, populateRoster, generateEvoRoster, randomIdentity, randomPreferences } = await import(`${SRC}/generate.js`)
-const { TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } = await import(`${SRC}/constants.js`)
+const { TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS } = await import(`${SRC}/constants.js`)
 const { computeMatchups } = await import(`${SRC}/balance.js`)
 const { startDay, simHour, endDay, advanceDay, whatHappensToday } = await import(`${SRC}/sim.js`)
 const { runSinglesTournament, runTeamTournament, runEvo } = await import(`${SRC}/tournament.js`)
@@ -79,12 +79,31 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
     p.socialTemperament = sr.key
     for (const k of t.stats) p.personal[k] = STAT_UNIT
     for (const k of sr.stats) p.social[k] = STAT_UNIT
-    // Spend the allowance inside the chosen rows — a focused, legal build.
-    const pool = [...t.stats, ...t.stats, ...sr.stats]
-    for (let n = 0; n < budget; n++) {
-      const key = pool[n % pool.length]
-      const bag = t.stats.includes(key) ? p.personal : p.social
-      bag[key] = Math.min(5 * STAT_UNIT, (bag[key] || 0) + STAT_UNIT)
+    // Spend the allowance. Chosen rows first — that's the focused build a
+    // first-run player makes — and then out into everything else, because a
+    // late lineage banks well over a hundred points and a competent player
+    // does not throw them away.
+    //
+    // This USED to cycle a ten-key pool and cap each key at five, which
+    // silently discarded every point past ~50. It made all the lineage
+    // measurements past run 2 re-measurements of the same build, and it is
+    // why banked points looked like they did nothing.
+    const order = [
+      ...t.stats, ...sr.stats,
+      ...PERSONAL_KEYS.filter((k) => !t.stats.includes(k)),
+      ...SOCIAL_KEYS.filter((k) => !sr.stats.includes(k)),
+    ]
+    let left = budget
+    while (left > 0) {
+      const before = left
+      for (const key of order) {
+        if (left <= 0) break
+        const bag = PERSONAL_KEYS.includes(key) ? p.personal : p.social
+        if ((bag[key] || 0) >= 5 * STAT_UNIT) continue
+        bag[key] = (bag[key] || 0) + STAT_UNIT
+        left -= 1
+      }
+      if (left === before) break // everything is maxed
     }
     legalizeBuild(p, budget)
     save.players[p.id] = p

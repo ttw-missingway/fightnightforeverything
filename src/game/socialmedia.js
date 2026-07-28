@@ -8,6 +8,8 @@ import { upsetSeverityOf } from './match.js'
 import { formatDay, absDayOf, dateOfAbs, EVO_DAY, DAYS_PER_YEAR } from './constants.js'
 import { observedPower } from './balance.js'
 import { worldRankings, rankedInTop } from './world.js'
+import { regionFlag } from './flags.js'
+import { countryName } from './geo.js'
 
 const BOARD_HANDLES = {
   a: ['Throwaway', 'Actual', 'Definitely_Not', 'Local', 'Former', 'Certified', 'Anonymous', 'Ex'],
@@ -187,6 +189,31 @@ export function seedWorldFeed(save, count = 9) {
     (b.year - a.year) || (b.day - a.day))
 }
 
+
+/**
+ * A background result big enough that the feed notices: somebody near the top
+ * of the world dropped a set they had no business dropping, at some local
+ * nobody was streaming. This is most of how the rankings feel ALIVE — the
+ * list moves between your tournaments, not just at them.
+ */
+const WORLD_UPSET_TAKES = [
+  (c) => `${c.wFlag} ${c.w} just took a set off ${c.lFlag} ${c.l} at a local. No footage. I am BEGGING someone to have filmed it`,
+  (c) => `hearing ${c.lFlag} ${c.l} dropped a money match to ${c.wFlag} ${c.w} last night. the ladder is going to feel that one`,
+  (c) => `${c.wFlag} ${c.w} over ${c.lFlag} ${c.l} at some invitational?? results page or it didn't happen`,
+  (c) => `don't look now but ${c.wFlag} ${c.w} is beating ranked players offline. ${c.l} today. who tomorrow`,
+]
+export function postWorldUpset(save, { winner, loser }) {
+  if (!save.socialFeed) return
+  post(save, {
+    platform: 'chirper',
+    scope: 'world',
+    text: choice(WORLD_UPSET_TAKES)({
+      w: winner.alias, l: loser.alias,
+      wFlag: regionFlag(winner.region), lFlag: regionFlag(loser.region),
+    }),
+  })
+}
+
 /**
  * One post a day-ish about the wider world, and — once your people are
  * actually ranked — sometimes about them.
@@ -207,7 +234,7 @@ export function worldFeedDaily(save, { force = false, agoDays = 0 } = {}) {
     arcade: save.arcade.name,
     top: choice(top).name,
     rando: choice(rows.slice(0, 40)).name,
-    region: choice(rows.slice(0, 24)).region,
+    region: countryName(choice(rows.slice(0, 24)).region),
     char: chars.length ? choice(chars).name : 'the top tier',
   }
   // How often the world talks about YOU: nothing until one of yours cracks the
