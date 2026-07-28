@@ -13,11 +13,27 @@ export const LAST_NAMES = [
   'Fischer', 'Vargas', 'Lindgren', 'Osei', 'Takahashi', 'Weiss', 'Delgado', 'Yamada', 'Brooks', 'Farah',
 ]
 
+/**
+ * Gamer tags. There need to be MORE of these than the arcade can ever hold —
+ * a roster now runs to seventy-odd people, and when this list ran dry the
+ * generator fell back to sticking a random number on the end, so a scene ended
+ * up full of PixelPunisher87 and TiltProof63 and ResetRat59.
+ */
 export const ALIASES = [
   'PixelPunisher', 'WaveDash', 'SaltMine', 'FrameTrap', 'OkiMaster', 'TechChase', 'LowTierHero',
   'GodFist', 'ComboQueen', 'ClutchGene', 'PopOff', 'DownBack', 'MashPro', 'NeutralKing', 'ResetRat',
   'HitConfirm', 'CrossUp', 'MeterBurn', 'TiltProof', 'LabMonster', 'PocketPick', 'RoundStart',
   'AntiAirForce', 'FuzzyGuard', 'PlinkGod', 'SafeJump', 'WhiffPunish', 'HypeTrain', 'LastStock', 'RageQuit',
+  'ThrowLoop', 'BurstBait', 'ParryKing', 'DashBack', 'KaraThrow', 'InstantAir', 'DragonPunch',
+  'Footsies', 'Spacing', 'BlockString', 'MixupCity', 'HardRead', 'OptionSelect', 'ChipDamage',
+  'CornerCarry', 'FrameOne', 'PerfectRun', 'NoContest', 'PixelHealth', 'ClutchTime', 'RunItBack',
+  'FirstToFive', 'JohnnySalt', 'TheReads', 'CounterHit', 'PunishGod', 'ZonerLife', 'GrappleFan',
+  'ShotoStan', 'PuppetMain', 'CharacterLoyal', 'TierWhore', 'PatchNotes', 'LabRat', 'MatchupChart',
+  'NeutralSkip', 'DelayTech', 'BufferKing', 'PianoInput', 'NegativeEdge', 'PlinkDaddy', 'MicroDash',
+  'EmptyJump', 'StaggerP', 'ShimmyKing', 'WalkSpeed', 'TheSetplay', 'VortexMain', 'MeterMiser',
+  'BurstSafe', 'RawSuper', 'ArcadeStick', 'Hitboxer', 'PadWarrior', 'ButtonCheck', 'TrainingMode',
+  'CasualsOnly', 'BracketDemon', 'PoolsExit', 'TopEight', 'GrandFinal', 'LosersRun', 'WinnersSide',
+  'SaltyRunback', 'MoneyMatch', 'SideBet', 'TheHotSeat', 'FreeWins', 'NotFree', 'HonestPlayer',
 ]
 
 export const CHARACTER_NAMES = [
@@ -40,10 +56,23 @@ export const TEAM_WORDS = [
   ['Dwellers', 'Kings', 'Circuit', 'Syndicate', 'Society', 'Legion', 'Lab', 'Mafia', 'Order', 'Crew'],
 ]
 
+/**
+ * The world's ranked competitors. There must be comfortably more of these than
+ * EVO_ROSTER_SIZE (64) or the roster fills with "Miracle 4" and "Eclipse 7",
+ * which is what a twenty-name list did to a sixty-four-player world.
+ */
 export const ELITE_ALIASES = [
   'The Emperor', 'Cold Steel', 'Miracle', 'Prodigy', 'The Wall', 'Executioner', 'Daigo Jr',
   'Machine', 'The Professor', 'Untouchable', 'Zero Suit', 'The Oracle', 'Final Boss',
   'Heartbreaker', 'The Standard', 'Apex', 'Nightmare', 'The Gatekeeper', 'Sovereign', 'Eclipse',
+  'Tempest', 'The Surgeon', 'Ghost', 'Verdict', 'Iron Lotus', 'Nova', 'The Alchemist',
+  'Blackout', 'Kingmaker', 'The Archivist', 'Meridian', 'Halcyon', 'The Undertaker', 'Vertigo',
+  'Sandstorm', 'The Cartographer', 'Onyx', 'Requiem', 'The Diplomat', 'Zenith', 'Riptide',
+  'The Watchmaker', 'Cinder', 'Paragon', 'The Understudy', 'Solstice', 'Warden', 'The Deadline',
+  'Quicksilver', 'The Metronome', 'Basilisk', 'Overture', 'The Rival', 'Lodestar', 'Fracture',
+  'The Hourglass', 'Tundra', 'Sable Knight', 'The Auditor', 'Kestrel', 'Monolith', 'The Prospect',
+  'Afterimage', 'Tessellate', 'The Closer', 'Vandal', 'Perihelion', 'The Understatement',
+  'Crown', 'Bellwether', 'The Last Word', 'Ozone', 'Grandmaster', 'The Quiet One',
 ]
 
 /**

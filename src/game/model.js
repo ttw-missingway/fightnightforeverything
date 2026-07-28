@@ -153,6 +153,10 @@ export function resetPlayerForNewRun(p) {
     catchphrase: p.catchphrase,
     spriteKey: p.spriteKey || null,
     createdBy: p.createdBy,
+    // Carry the filler flag. Without it newPlayer's `npc: false` default turned
+    // every passer-through into a member of your cast on reset, and a roster
+    // that should have been six people came back as seventy.
+    npc: !!p.npc,
     personal: structuredClone(p.personal),
     social: structuredClone(p.social), // includes income
     voice: p.voice ? structuredClone(p.voice) : null,
@@ -833,6 +837,18 @@ export function migrateSave(save) {
   save.peakAttendance ??= 0
   save.quietDays ??= 0
   save.fadedDays ??= 0
+  // REPAIR: `resetPlayerForNewRun` used to drop the `npc` flag, so every run
+  // after a reset promoted the entire filler pool into the user's cast — a
+  // six-person roster coming back as seventy. Filler is still identifiable
+  // after the fact because `createdBy` DID survive, so put them back.
+  //
+  // Gated on having actually reset, because a pre-NPC save legitimately carries
+  // a seeded CPU cast that is part of that run's history and must stay put.
+  if ((save.prestige?.runs || 0) > 0) {
+    for (const p of Object.values(save.players)) {
+      if (p.createdBy === 'cpu' && p.npc === false) p.npc = true
+    }
+  }
   // Pre-NPC saves carry a full seeded CPU cast. Those people stay exactly as
   // they are — they're already part of that run's history — but from here on
   // filler is generated on demand instead.

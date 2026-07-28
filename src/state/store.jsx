@@ -174,7 +174,11 @@ export function resetSaveById(id) {
   if (world.settings.mode !== 'sandbox') {
     world.economy.money = difficultyOf(world).startingMoney
   }
+  // Only YOUR cast crosses into the new run. Filler is generated on demand
+  // (topUpNpcs) and a fresh scene should fill up with fresh faces rather than
+  // inheriting sixty strangers from a run that already ended.
   for (const p of Object.values(save.players)) {
+    if (p.npc) continue
     world.players[p.id] = resetPlayerForNewRun(p)
   }
   seedFamilyCrew(world)
