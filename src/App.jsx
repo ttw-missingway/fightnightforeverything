@@ -60,7 +60,10 @@ export default function App() {
     ['halloffame', '🏛 Hall of Fame', null],
     ['codex', '📖 Codex', null],
     ['tiers', '📊 Tiers', 'tiers'],
-    ['feed', '📱 Feed', 'feed'],
+    // NOT gated. The feed is mostly about the wider world, and watching the
+    // top players from the outside is precisely what builds the appetite to
+    // get your own arcade into that conversation. Locking it hides the goal.
+    ['feed', '📱 Feed', null],
     ['studio', '🛠 Studio', 'studio'],
     ['manage', '🏪 Manage', null],
   ]
@@ -106,7 +109,7 @@ export default function App() {
       {screen.name === 'vods' && isUnlocked(save, 'vods') && <Vods />}
       {screen.name === 'halloffame' && <HallOfFame />}
       {screen.name === 'codex' && <Codex />}
-      {screen.name === 'feed' && isUnlocked(save, 'feed') && <Feed />}
+      {screen.name === 'feed' && <Feed />}
       {screen.name === 'tiers' && isUnlocked(save, 'tiers') && <TierList />}
       {screen.name === 'studio' && isUnlocked(save, 'studio') && <GameStudio />}
       {screen.name === 'manage' && <Manage />}

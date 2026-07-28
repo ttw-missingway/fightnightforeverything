@@ -99,12 +99,6 @@ export const ACHIEVEMENTS = [
     check: (s) => (s.guides || []).some((g) => g.landed),
   },
   {
-    key: 'word-of-mouth', icon: '📱', name: 'Word of mouth',
-    unlock: 'feed', unlockLabel: 'The Feed — what the internet is saying', points: 1,
-    how: 'Reach 400 followers.',
-    check: (s) => (s.stream?.followers || 0) >= 400,
-  },
-  {
     key: 'worth-watching', icon: '🌐', name: 'Worth watching',
     unlock: 'studio', unlockLabel: 'The Game Studio — patch your own game', points: 2,
     // National interest in the GAME — fed by streaming, guides that land, and
@@ -373,7 +367,7 @@ export const achievementForUnlock = (unlockKey) =>
  */
 export const UNLOCK_GROUPS = [
   { key: 'speed', label: '⏩ Speed', blurb: 'How fast the arcade may run without you.', match: (a) => a.unlock.startsWith('idle-') },
-  { key: 'screens', label: '🖥 Screens', blurb: 'Information you have proved you can read.', match: (a) => ['vods', 'tiers', 'feed', 'studio'].includes(a.unlock) },
+  { key: 'screens', label: '🖥 Screens', blurb: 'Information you have proved you can read.', match: (a) => ['vods', 'tiers', 'studio'].includes(a.unlock) },
   { key: 'counter', label: '🍟 The Counter', blurb: 'What the concession stand is allowed to carry.', match: (a) => a.unlock.startsWith('food-') },
   { key: 'floor', label: '🎳 The Floor', blurb: 'Rooms that draw a crowd of their own.', match: (a) => a.unlock.startsWith('attr-') },
   { key: 'reach', label: '📣 Reach', blurb: 'Ways of telling people you exist.', match: (a) => a.unlock.startsWith('ads-') },
