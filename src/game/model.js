@@ -183,6 +183,31 @@ export function resetPlayerForNewRun(p) {
  * stats until the spend fits the budget. Used for imported casts, generated
  * players, and anything else that didn't come through the creation form.
  */
+/**
+ * Can the cast still be edited?
+ *
+ * The rule was always "players lock in once the run has STARTED" — but it was
+ * implemented as `mode === 'sandbox'`, which never checks whether a run has
+ * started. That was fine while the only way into a consequential world was
+ * through the creation wizard. Then resets arrived, and a reset produces
+ * exactly the state the rule never anticipated: a brand-new run that has not
+ * begun, whose cast is carried over, on a screen that is not the wizard.
+ *
+ * The result was that banked creation points became unspendable forever —
+ * the game announced "N points to spend on player creation stats" and then
+ * offered nowhere to spend them. The entire legacy economy was inert.
+ *
+ * So: the doors opening is what locks the roster. Until the first day has been
+ * closed you can still set your crew up, which is true on day one of a fresh
+ * world and true again the morning after a reset.
+ */
+export function rosterOpen(save) {
+  if (!save) return false
+  if (save.settings?.mode === 'sandbox') return true
+  if (save.dayInProgress) return false
+  return (save.economy?.history || []).length === 0
+}
+
 export function legalizeBuild(player, budgetUi) {
   const toUi = (v) => clamp(Math.round((v || 0) / STAT_UNIT), 0, STAT_MAX_POINTS)
   const pu = {}, su = {}

@@ -748,9 +748,28 @@ ceiling on world rank — best rank 28 instead of the old 31–38 — and still
 produce no champions. The roster re-spend is the load-bearing fix; invasions
 are what makes it pay off.
 
+### Fixed: the roster re-spend
+
+The rule was always "players lock in once the run has STARTED" — but it was
+written as `mode === 'sandbox'`, which never checks whether a run has started.
+Fine while the only way into a consequential world was the creation wizard;
+then resets arrived and produced the state the rule never anticipated — a new
+run that has not begun, on a screen that is not the wizard. So the lock, meant
+to stop mid-run editing, silently became permanent, and the game announced
+"N points to spend on player creation stats" with nowhere to spend them.
+
+`rosterOpen(save)` now says what the comment always said: the roster is yours
+until the doors open for the first day. True on day one of a fresh world, true
+again the morning after a reset, false the moment a day has been closed. The
+Players tab carries a banner in that window, and the reset notice points at it.
+
+Verified in-app end to end: reset a lineage with 28 banked points → the notice
+names the Players tab → the banner reads "47 banked points to spend" → the
+editor opens with "+47 legacy" in the budget and spending visibly draws it down
+→ close one day and it locks, banner gone, edit button gone.
+
 ### Still to decide
 
-1. **How the roster gets re-spent between runs.** Nothing else on this list
-   matters until this exists.
-2. Whether points should buy anything past 40 (currently dead weight).
-3. Whether one champion per ~16 lineages is the rate you want.
+1. Whether points should buy anything past 40 (currently dead weight — the
+   skill ceiling stops reading them).
+2. Whether one champion per ~16 lineages is the rate you want.

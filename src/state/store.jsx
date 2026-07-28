@@ -593,7 +593,11 @@ export function StoreProvider({ children }) {
     setSave(reloaded)
     setScreen({
       name: 'arcade',
-      notice: `♻ New run started. +${res.prestigeGain} prestige earned — ${res.points} point${res.points === 1 ? '' : 's'} to spend on player creation stats.`,
+      // Say WHERE. This notice promised points to spend for a long time
+      // without mentioning that the window closes when the doors open.
+      notice: res.points > 0
+        ? `♻ New run started. +${res.prestigeGain} prestige earned — ${res.points} point${res.points === 1 ? '' : 's'} to spend. Rebuild your crew on the Players tab before you open the arcade.`
+        : `♻ New run started. +${res.prestigeGain} prestige earned.`,
     })
   }, [setSave])
 

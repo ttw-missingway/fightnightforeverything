@@ -12,6 +12,7 @@ import { displayName } from '../game/util.js'
 import { skillCeiling } from '../game/match.js'
 import { voiceSummary } from '../game/dialogue.js'
 import { warnPlayer, banish, separate, unseparate, separationOf, warnableBehaviors, toxicityBlame } from '../game/discipline.js'
+import { rosterOpen } from '../game/model.js'
 import { isUnlocked } from '../game/achievements.js'
 
 const bestSkill = (p) => Math.round(Math.max(0, ...Object.values(p.charSkill || {}), 0))
@@ -29,6 +30,40 @@ const SORTS = {
 }
 
 const PASSION_COLOR = (v) => (v >= 55 ? 'var(--green)' : v >= 30 ? 'var(--gold)' : 'var(--red)')
+
+
+/**
+ * The window between runs, made visible.
+ *
+ * Banked creation points were unspendable for a long time partly because
+ * nothing ever told you where to spend them: the reset notice said "N points
+ * to spend on player creation stats" and then dropped you on the arcade
+ * screen. This says it on the screen where it is actually true, and closes
+ * with the doors.
+ */
+function RosterWindow({ save, nav }) {
+  if (!rosterOpen(save) || save.settings?.mode === 'sandbox') return null
+  const points = save.prestige?.points || 0
+  return (
+    <div className="dangers">
+      <div className="danger unlock">
+        <span className="d-icon">🛠</span>
+        <div>
+          <div className="d-title">
+            {points > 0
+              ? `Your crew is still yours to change — ${points} banked point${points === 1 ? '' : 's'} to spend`
+              : 'Your crew is still yours to change'}
+          </div>
+          <div className="d-detail">
+            Nothing has happened yet. Open any player to rebuild them
+            {points > 0 ? ' with everything this lineage has earned' : ''}.
+          </div>
+          <div className="d-fix">This closes the moment you open the arcade for the first day.</div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Stage belief — earned nerve under the lights. Untested players choke at EVO.
 const beliefLabel = (v) => (
@@ -80,6 +115,7 @@ export default function Players() {
 
   return (
     <div>
+      <RosterWindow save={save} nav={nav} />
       <SceneHealthBanner scene={save.scene} />
       <div className="card">
       <div className="row spread">
@@ -236,9 +272,9 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
   const knownInnovs = save.innovations.filter((i) => p.knownInnovations.includes(i.id))
   const createdInnovs = save.innovations.filter((i) => i.creatorId === p.id)
 
-  // Consequential worlds lock players in once the run has started — no
-  // mid-game stat editing. Sandbox stays freely editable.
-  const canEdit = save.settings.mode === 'sandbox'
+  // Locked once the doors open — but a run that hasn't started yet is still
+  // yours to set up, which is the window a reset lands you in. See rosterOpen.
+  const canEdit = rosterOpen(save)
 
   const patch = (fn) => mutate((s) => {
     const live = s.players[p.id]
