@@ -5,7 +5,7 @@
 import { uid, choice, chance, randInt, shuffle, clamp } from './util.js'
 import { CHAT_NAME_PARTS } from './names.js'
 import { upsetSeverityOf } from './match.js'
-import { formatDay } from './constants.js'
+import { formatDay, absDayOf, dateOfAbs, EVO_DAY, DAYS_PER_YEAR } from './constants.js'
 import { observedPower } from './balance.js'
 import { worldRankings, rankedInTop } from './world.js'
 
@@ -30,7 +30,7 @@ function feedActive(save) {
   return save.socialFeed && (save.stream.hype >= 4 || save.stream.followers >= 40)
 }
 
-function post(save, { platform, text, title = null, scope = 'arcade' }) {
+function post(save, { platform, text, title = null, scope = 'arcade', agoDays = 0 }) {
   const buzz = save.stream.hype + save.stream.followers / 50
   save.socialFeed.unshift({
     id: uid('post'),
@@ -43,9 +43,12 @@ function post(save, { platform, text, title = null, scope = 'arcade' }) {
     title,
     text,
     likes: Math.max(1, randInt(1, 4) + Math.round(buzz * (0.3 + Math.random() * 1.2))),
-    day: save.day,
-    year: save.year,
-    dateLabel: formatDay(save.day, save.year),
+    ...(() => {
+      const when = agoDays > 0
+        ? dateOfAbs(Math.max(1, absDayOf(save.day, save.year) - agoDays))
+        : { day: save.day, year: save.year }
+      return { day: when.day, year: when.year, dateLabel: formatDay(when.day, when.year) }
+    })(),
   })
   if (save.socialFeed.length > 120) save.socialFeed.pop()
 }
@@ -84,6 +87,106 @@ const WORLD_ABOUT_YOU = [
   (c) => `${c.mine} at #${c.rank}. from a ROOM. not a team house, a room`,
 ]
 
+
+// ---------- EVO buzz ----------
+//
+// A run opens seven days before EVO, so the countdown is the very first thing
+// the world is talking about when you walk in. That is deliberate: the goal of
+// the entire game is on the calendar before you have done anything at all, and
+// the timeline should be shouting about it.
+
+const EVO_COUNTDOWN = [
+  { at: 30, lines: [
+    (c) => `a month out from EVO. time to decide if you're actually going or just saying you are`,
+    (c) => `EVO seeding discourse season is officially open. everybody log off`,
+  ] },
+  { at: 14, lines: [
+    (c) => `two weeks to EVO. ${c.fav} looks unbeatable and i hate it`,
+    (c) => `every year i tell myself i'll practice before EVO and every year it is now two weeks out`,
+  ] },
+  { at: 7, lines: [
+    (c) => `ONE WEEK. ${c.game} at EVO. i'm not going to sleep properly until it's over`,
+    (c) => `a week out and the pools aren't even up yet. classic`,
+    (c) => `who are we watching at EVO? i've got ${c.fav} and whoever comes out of the bottom half`,
+  ] },
+  { at: 3, lines: [
+    (c) => `three days. if you haven't picked your ${c.game} horse yet you're out of time`,
+    (c) => `EVO in three days and i genuinely could not tell you who wins it`,
+  ] },
+  { at: 1, lines: [
+    (c) => `EVO. TOMORROW.`,
+    (c) => `last night of sleep before EVO, allegedly`,
+  ] },
+  { at: 0, lines: [
+    (c) => `IT'S EVO DAY`,
+    (c) => `pools start today. ${c.game} on the big stage. let's go`,
+  ] },
+]
+
+const EVO_AFTERMATH = [
+  (c) => `still thinking about ${c.champ} winning EVO. what a run`,
+  (c) => `${c.champ} is the EVO champion and the whole meta just moved`,
+  (c) => `post-EVO ${c.game} is going to look completely different. mark it`,
+  (c) => `whatever you thought about ${c.game} before EVO, throw it out`,
+]
+
+/** How many days until EVO fires, 0 on the day itself. */
+export const daysToEvo = (save, agoDays = 0) => {
+  const abs = Math.max(1, absDayOf(save.day, save.year) - agoDays)
+  return (EVO_DAY - dateOfAbs(abs).day + DAYS_PER_YEAR) % DAYS_PER_YEAR
+}
+
+/**
+ * The tournament everyone is pointed at. Fires alongside the ordinary world
+ * chatter and takes priority over it near the date.
+ *
+ * `agoDays` matters: a backdated post has to count down from the day it was
+ * written, or a seeded fortnight of buildup reads "ONE WEEK" nine times.
+ */
+function evoBuzz(save, ctx, agoDays = 0) {
+  const left = daysToEvo(save, agoDays)
+  const beat = EVO_COUNTDOWN.find((b) => b.at === left)
+  if (beat) return choice(beat.lines)(ctx)
+  // The week after: everyone is still chewing on it.
+  const since = (DAYS_PER_YEAR - left) % DAYS_PER_YEAR
+  if (since >= 1 && since <= 6 && agoDays === 0) {
+    const last = [...(save.hallOfFame || [])].reverse().find((r) => r.type === 'evo')
+    if (last) return choice(EVO_AFTERMATH)({ ...ctx, champ: last.champion })
+  }
+  return null
+}
+
+/**
+ * A timeline that already exists when you open the game for the first time.
+ *
+ * An arcade opens into a world that has been running for years, and a Feed
+ * whose first post arrives on day three reads like the world started when you
+ * did. These are backdated across the fortnight before opening night.
+ */
+export function seedWorldFeed(save, count = 9) {
+  if (!save.socialFeed) save.socialFeed = []
+  // Spread across the month before opening night so the countdown beats
+  // (a month out, two weeks, one week, three days...) actually land, and drop
+  // anything that repeats a line already on the timeline.
+  const seen = new Set()
+  for (let i = count; i > 0; i--) {
+    const before = save.socialFeed.length
+    worldFeedDaily(save, { force: true, agoDays: Math.round(i * 3.5) + randInt(0, 2) })
+    const added = save.socialFeed.length > before ? save.socialFeed[0] : null
+    if (!added) continue
+    if (seen.has(added.text)) save.socialFeed.shift()
+    else seen.add(added.text)
+  }
+  // Opening night is EXACTLY the one-week mark (OPENING_DAY 155, EVO_DAY 162),
+  // so guarantee that beat rather than leaving it to the daily roll. The first
+  // thing a new owner reads should be the countdown to the thing they will
+  // spend the next year trying to reach.
+  worldFeedDaily(save, { force: true })
+  // Newest first, like every other feed.
+  save.socialFeed.sort((a, b) =>
+    (b.year - a.year) || (b.day - a.day))
+}
+
 /**
  * One post a day-ish about the wider world, and — once your people are
  * actually ranked — sometimes about them.
@@ -92,9 +195,9 @@ const WORLD_ABOUT_YOU = [
  * feed starts talking about you because your players got good, not because you
  * bought advertising.
  */
-export function worldFeedDaily(save) {
+export function worldFeedDaily(save, { force = false, agoDays = 0 } = {}) {
   if (!save.socialFeed) return
-  if (!chance(0.42)) return
+  if (!force && !chance(0.42)) return
   const rows = worldRankings(save)
   if (!rows.length) return
   const top = rows.slice(0, 8)
@@ -112,10 +215,15 @@ export function worldFeedDaily(save) {
   const mine = rankedInTop(save, 64)
   const best = mine.length ? mine.reduce((a, b) => (a.rank <= b.rank ? a : b)) : null
   const aboutYou = best && chance(clamp(0.15 + (64 - best.rank) / 64 * 0.5, 0, 0.65))
-  const line = aboutYou
-    ? choice(WORLD_ABOUT_YOU)({ ...ctx, mine: best.name, rank: best.rank })
-    : choice(WORLD_TAKES)(ctx)
-  post(save, { platform: 'chirper', text: line, scope: 'world' })
+  // EVO owns the conversation when it is close. Everything else is filler
+  // next to the one date the whole year points at.
+  const evo = evoBuzz(save, { ...ctx, fav: ctx.top }, agoDays)
+  const line = evo && (force || chance(0.75))
+    ? evo
+    : aboutYou
+      ? choice(WORLD_ABOUT_YOU)({ ...ctx, mine: best.name, rank: best.rank })
+      : choice(WORLD_TAKES)(ctx)
+  post(save, { platform: 'chirper', text: line, scope: 'world', agoDays })
 }
 
 /**

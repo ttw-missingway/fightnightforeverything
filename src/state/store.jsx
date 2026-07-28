@@ -3,6 +3,7 @@ import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game
 import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyOf } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
+import { seedWorldFeed } from '../game/socialmedia.js'
 import { generateEvoRoster, populateRoster, EVO_ROSTER_SIZE } from '../game/generate.js'
 import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
@@ -486,6 +487,8 @@ export function StoreProvider({ children }) {
       next.economy.money = Math.max(0, startingBudget(next) - arcadeBuildCost(next))
     }
     seedFamilyCrew(next) // a lineage that earned it opens with two free hands
+    // The world has been running for years before you unlocked the door.
+    seedWorldFeed(next)
     persistSave(next)
     setSave(next)
     setScreen({ name: 'arcade' })
