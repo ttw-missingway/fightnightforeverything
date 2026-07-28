@@ -40,6 +40,7 @@ import {
   switchTargetsOf, revertMoveOf,
 } from '../game/forms.js'
 import { newSkin, skinsOf } from '../game/skins.js'
+import { PRESET_ROSTERS, buildPresetRoster, presetRoster, presetSize } from '../game/rosters.js'
 import { CHARACTER_NAMES, TAG_SUGGESTIONS, PLAYER_TAG_SUGGESTIONS } from '../game/names.js'
 import { choice, sample, displayName } from '../game/util.js'
 import {
@@ -709,6 +710,8 @@ export function CharactersEditor({ save, update }) {
   }
 
   return (
+    <>
+    <PresetRosters save={save} update={update} setSelId={setSelId} />
     <div className="grid2">
       <div className="card">
         <div className="row spread">
@@ -898,8 +901,89 @@ export function CharactersEditor({ save, update }) {
         </div>
       )}
     </div>
+    </>
   )
 }
+
+/**
+ * Premade casts, for the world that doesn't want to design twelve fighters
+ * before it has played a night. Each one lands as ordinary characters — same
+ * archetype kits, same frame data, fully editable afterwards — so a preset is
+ * a starting point rather than a locked-in choice.
+ */
+function PresetRosters({ save, update, setSelId }) {
+  const [key, setKey] = useState(PRESET_ROSTERS[0].key)
+  const [open, setOpen] = useState(false)
+  const preset = presetRoster(key)
+  const chars = save.game.characters
+
+  const load = (replace) => {
+    if (replace && chars.length && !confirm(
+      `Replace the current cast (${chars.length} character${chars.length === 1 ? '' : 's'}) `
+      + `with ${preset.name} — ${presetSize(preset)} fighters?`)) return
+    // Built OUTSIDE `update`: in the setup wizard an update runs inside a React
+    // state updater, and this mints ids that other ids point at (a form's
+    // `formOf`, a form change move's target). Minting them in there is how you
+    // get a cast whose transformations are severed on arrival.
+    const built = buildPresetRoster(key)
+    if (!built) return
+    setSelId(null)
+    update((s) => {
+      for (const t of built.preset.tags) if (!s.game.tags.includes(t)) s.game.tags.push(t)
+      if (replace) s.game.characters = []
+      s.game.characters.push(...structuredClone(built.characters))
+      // Only when the world hasn't been named yet — a preset suggests a title,
+      // it doesn't overwrite one somebody typed.
+      if (replace && s.game.name === 'Untitled Fighter') s.game.name = built.preset.gameName
+      pruneForms(s.game)
+      computeMatchups(s.game)
+    })
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <div className="row spread">
+        <h3>Premade rosters</h3>
+        <button className="small" onClick={() => setOpen(!open)}>{open ? 'Hide cast' : `Preview the ${presetSize(preset)}`}</button>
+      </div>
+      <p className="dim small" style={{ margin: '0 0 8px' }}>
+        A full cast lifted from a game everyone already knows, movelists and all. They arrive as
+        ordinary characters: rename them, retune them, delete half of them.
+      </p>
+      <div className="row">
+        <select value={key} onChange={(e) => setKey(e.target.value)}>
+          {PRESET_ROSTERS.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+        </select>
+        <button className="small primary" onClick={() => load(true)}>Use this cast</button>
+        <button className="small" title="keep what's here and append the preset" onClick={() => load(false)}>+ Add to roster</button>
+      </div>
+      <p className="dim small" style={{ margin: '6px 0 0' }}>{preset.blurb}</p>
+      {open && (
+        <div className="table-scroll" style={{ marginTop: 8 }}><table>
+          <tbody>
+            {preset.characters.map((c) => {
+              const forms = c.forms || (c.form ? [c.form] : [])
+              return (
+              <tr key={c.name}>
+                <td>{c.name}{!!forms.length && (
+                  <span className="dim" title={`turns into ${forms.map((f) => f.name).join(', ')}`}> ⟳</span>
+                )}</td>
+                <td className="dim">{c.archetype}</td>
+                <td className="dim small">{c.description}</td>
+              </tr>
+              )
+            })}
+          </tbody>
+        </table></div>
+      )}
+    </div>
+  )
+}
+
+// Above this many selectable characters the matchup report stops listing every
+// pair and focuses one character at a time. Twelve is a normal fighting-game
+// roster (66 pairs); the crossover presets are four times that.
+const MATCHUP_FOCUS_ABOVE = 16
 
 // The chart is COMPUTED from the movesets now — the game tells you what
 // you built. In the wizard it's pure design theory; in a live save it's
@@ -909,9 +993,21 @@ export function MatchupReport({ save, observe = null, confidence = 1, games = 0,
   // Forms have no row here. Nobody picks one, so "Origin vs Form" is not a
   // matchup — the form's power is already inside its origin's numbers.
   const chars = selectableChars(save.game)
+  // ONE CHARACTER AT A TIME once the cast is big. The chart is quadratic: a
+  // twelve-strong roster is 66 readable rows, but a crossover cast of 48 is
+  // 1128 and sixty thousand pixels of scroll — a screen nobody can find a
+  // matchup in. Past the threshold the report becomes "who am I looking at",
+  // which is the question anyone with a roster that size is actually asking.
+  const [focusId, setFocusId] = useState(null)
+  const focused = chars.length > MATCHUP_FOCUS_ABOVE
+  const focus = (focused && (chars.find((c) => c.id === focusId) || chars[0])) || null
   const pairs = []
-  for (let i = 0; i < chars.length; i++) {
-    for (let j = i + 1; j < chars.length; j++) pairs.push([chars[i], chars[j]])
+  if (focus) {
+    for (const c of chars) if (c.id !== focus.id) pairs.push([focus, c])
+  } else {
+    for (let i = 0; i < chars.length; i++) {
+      for (let j = i + 1; j < chars.length; j++) pairs.push([chars[i], chars[j]])
+    }
   }
   const pct = Math.round(confidence * 100)
   return (
@@ -935,6 +1031,13 @@ export function MatchupReport({ save, observe = null, confidence = 1, games = 0,
         zoning smothers slow approaches, pressure beats thin defense, damage decides trades.
         Matchups mostly matter at very high skill levels.
       </p>
+      {focus && (
+        <Field label={`Matchups for (${chars.length} characters — showing one at a time)`}>
+          <select value={focus.id} onChange={(e) => setFocusId(e.target.value)}>
+            {chars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+      )}
       {pairs.length === 0 && <p className="dim">Need at least two characters.</p>}
       {pairs.map(([a, b]) => {
         const mu = observe ? observe(save.game, a, b) : computeMatchup(a, b, save.game.rules, save.game)
