@@ -143,8 +143,8 @@ function UnlockBanner() {
           <div>
             <div className="d-title">{a.name} — unlocked for good</div>
             <div className="d-detail">
-              {a.unlockLabel}. Yours in every run from here, plus {a.points} creation
-              point{a.points === 1 ? '' : 's'}.
+              {a.unlockLabel}. Yours in every run from here
+              {a.points > 0 ? `, plus ${a.points} creation point${a.points === 1 ? '' : 's'}.` : '.'}
             </div>
             <div className="d-fix">{a.how}</div>
           </div>
