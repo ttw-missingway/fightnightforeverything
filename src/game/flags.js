@@ -46,6 +46,11 @@ const COUNTRY_CODE = {
   israel: 'IL', 'saudi arabia': 'SA', uae: 'AE', 'united arab emirates': 'AE',
 }
 
+/** Every spelling the country field will recognise — feeds the autocomplete. */
+export const KNOWN_COUNTRIES = [...new Set(Object.keys(COUNTRY_CODE))]
+  .map((k) => k.replace(/\b\w/g, (c) => c.toUpperCase()))
+  .sort()
+
 /**
  * A free-text country field → a flag. Falls back to a plain white flag rather
  * than to nothing, so an arcade whose owner typed something unrecognisable

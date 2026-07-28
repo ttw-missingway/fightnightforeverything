@@ -34,6 +34,7 @@ import {
 import { howToUnlock, isUnlocked } from '../game/achievements.js'
 import { bandwidthCap, scheduleLoad, fitsBandwidth, eventLoad, BANDWIDTH_TIERS } from '../game/bandwidth.js'
 import { canStream, STREAM_RIG_COST } from '../game/stream.js'
+import { countryFlag, KNOWN_COUNTRIES } from '../game/flags.js'
 import {
   FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
   switchTargetsOf, revertMoveOf,
@@ -113,6 +114,7 @@ export function SettingsEditor({ save, update }) {
             <button className="small" title="random name" onClick={() => update((s) => { s.stream.channelName = generateChannelName() })}>🎲</button>
           </div>
         </Field>
+        <LocationField save={save} update={update} />
         {/* Free forever, and switchable off. These are reading aids, not
             rewards — the owner who most needs them is the one with nothing
             banked, so they can never be something you buy. */}
@@ -179,6 +181,50 @@ export function SettingsEditor({ save, update }) {
   )
 }
 
+
+/**
+ * Where the arcade is — and therefore which flag your whole cast competes
+ * under at EVO and in the world rankings.
+ *
+ * This used to live only in the setup wizard, which meant that once a run had
+ * started there was no way to set it at all: the flag was decided forever by
+ * whatever you typed (or didn't) before day one. It is aesthetic, so it is
+ * editable any time, in any mode.
+ *
+ * The resolved flag is shown live next to the field because the match is on
+ * free text — a white flag is the control telling you it didn't recognise what
+ * you typed, rather than you finding out at EVO.
+ */
+export function LocationField({ save, update }) {
+  const country = save.arcade.location?.country || ''
+  const flag = countryFlag(country)
+  return (
+    <Field label="Location & flag">
+      <div className="row">
+        <input placeholder="city" value={save.arcade.location?.city || ''}
+          onChange={(e) => update((s) => { s.arcade.location = { ...(s.arcade.location || {}), city: e.target.value } })} />
+        <input placeholder="state / region" value={save.arcade.location?.state || ''}
+          onChange={(e) => update((s) => { s.arcade.location = { ...(s.arcade.location || {}), state: e.target.value } })} />
+        <input placeholder="country" list="fn-countries" value={country}
+          onChange={(e) => update((s) => { s.arcade.location = { ...(s.arcade.location || {}), country: e.target.value } })} />
+        <datalist id="fn-countries">
+          {KNOWN_COUNTRIES.map((c) => <option key={c} value={c} />)}
+        </datalist>
+        <span style={{ fontSize: 26, lineHeight: 1 }} title={flag === '🏳️' ? "Not recognised — your cast will fly a blank flag" : country}>
+          {flag}
+        </span>
+      </div>
+      <p className="dim small" style={{ margin: '4px 0 0' }}>
+        {flag === '🏳️'
+          ? country
+            ? `"${country}" isn't a country this recognises — try the suggestions, or a two-letter code like JP.`
+            : 'Set a country and your players carry its flag at EVO and in the world rankings.'
+          : `Your cast competes under ${flag} — at EVO, in the pools, and on the world ladder.`}
+      </p>
+    </Field>
+  )
+}
+
 export function BasicsEditor({ save, update }) {
   return (
     <div className="grid2">
@@ -199,16 +245,7 @@ export function BasicsEditor({ save, update }) {
             <button className="small" title="random name" onClick={() => update((s) => { s.arcade.name = generateArcadeName() })}>🎲</button>
           </div>
         </Field>
-        <Field label="Location (aesthetic only)">
-          <div className="row">
-            <input placeholder="city" value={save.arcade.location?.city || ''}
-              onChange={(e) => update((s) => { s.arcade.location.city = e.target.value })} />
-            <input placeholder="state / region" value={save.arcade.location?.state || ''}
-              onChange={(e) => update((s) => { s.arcade.location.state = e.target.value })} />
-            <input placeholder="country" value={save.arcade.location?.country || ''}
-              onChange={(e) => update((s) => { s.arcade.location.country = e.target.value })} />
-          </div>
-        </Field>
+        <LocationField save={save} update={update} />
         <Field label="Stream channel name">
           <div className="row">
             <input value={save.stream?.channelName || ''} onChange={(e) => update((s) => { s.stream.channelName = e.target.value })} />
