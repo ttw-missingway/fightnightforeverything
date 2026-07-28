@@ -699,3 +699,58 @@ roster a way to be re-spent between runs; decide whether points should keep
 buying anything past 40; and decide how a local player is ever supposed to get
 world-class reps (external tournaments are the obvious candidate, and would
 double as the late-game money sink noted above).
+
+---
+
+## Invasions — the answer to the lineage problem
+
+The three-part wall above (points unspendable → points saturate at 40 → skill
+growth is the real constraint) needed a fix aimed at the third part, because
+that is the one the other two were hiding.
+
+**Skill gain was blind to the opponent.** Being three-oh'd by the best player
+alive taught your regular exactly as much as beating the worst filler in the
+room. `lessonFactor(self, opp)` scales it by the gap — 0.35 for farming
+somebody far worse, 1.0 for an even set, 2.2 for being taken apart by somebody
+far better.
+
+**On its own that makes the wall worse**, because a big fish in a small pond
+now learns nothing from the pond. So invasions: a crew from one region visits
+for a day (up to a week as the arcade becomes a destination), plays your
+regulars through ordinary matchmaking, and goes home. Elites are materialised
+as temporary players, so matchmaking, dialogue, the rumor mill and the counter
+all work unchanged; their elo writes back to the world roster on the way out,
+so your scene can knock somebody down the world rankings.
+
+Elo makes it nearly free — losing to somebody 600 points above costs about ONE
+point, stealing a set pays about THIRTY. Gated on having EVER put somebody in
+the world top 64 (high-water, so a bad month can't switch it off). Measured:
+first crew around run-day 125, sixteen visits across four years.
+
+### Measured: does it produce a champion?
+
+Lineages of up to 6 runs × 3 years each, via `tools/balance/lineage.mjs`:
+
+| | as it ships (points unspendable) | points spendable |
+|---|---|---|
+| easy | 0/3 · best rank **28** | 0/4 · best rank **16** |
+| normal | 0/3 · best rank **26** | 0/4 · best rank **19** |
+| difficult | 0/3 · best rank **51** | **1/4 champion (run 2)** · best rank **13** |
+| master | 0/3 · best rank **60** | 0/4 · best rank **29** |
+
+**The first EVO champion this harness has ever produced.** Before invasions it
+was zero in every configuration; now it is roughly one lineage in sixteen —
+still the rarest thing in the game, which is right for a world championship.
+
+**But it only happens when creation points can be spent**, and in the shipped
+game they cannot (see the section above). As it ships, invasions raise the
+ceiling on world rank — best rank 28 instead of the old 31–38 — and still
+produce no champions. The roster re-spend is the load-bearing fix; invasions
+are what makes it pay off.
+
+### Still to decide
+
+1. **How the roster gets re-spent between runs.** Nothing else on this list
+   matters until this exists.
+2. Whether points should buy anything past 40 (currently dead weight).
+3. Whether one champion per ~16 lineages is the rate you want.
