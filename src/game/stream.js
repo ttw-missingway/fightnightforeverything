@@ -9,7 +9,7 @@ import { clamp, rand, randInt, choice, chance, displayName } from './util.js'
 import { CHAT_NAME_PARTS, CHAT_LINES } from './names.js'
 import { difficultyOf, statLevel } from './constants.js'
 import { upsetSeverityOf } from './match.js'
-import { bumpPassion } from './career.js'
+import { bumpPassion, noveltyOf } from './career.js'
 import { chronicle } from './model.js'
 import { econLog } from './economy.js'
 import { perceivedTier } from './interest.js'
@@ -131,7 +131,11 @@ export function applyStageReps(save, players, stream, context = 'daily', weight 
     const shine = 0.55 + (ref.personal?.presence ?? 5) * 0.09 // the camera finds some people
     ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * shine * (1 - (ref.popularity ?? 0) / 120), 0, 100)
     // Recognition rekindles the fire — being seen is why a lot of people play.
-    bumpPassion(ref, Math.min(2.5, 0.25 + viewers / 100))
+    // Being on the channel is a thrill that wears off like every other one —
+    // this was the single biggest passion fountain in the game, handing a
+    // streamed player up to +2.5 a night against a decay of ~0.17, which is
+    // why nobody ever burned out.
+    bumpPassion(ref, Math.min(2.5, 0.25 + viewers / 100) * noveltyOf(ref))
   }
 }
 

@@ -28,7 +28,7 @@ import { chronicle } from './model.js'
  * Catalogue unlocks — idle speeds, food packs, attractions, ad channels — pay
  * nothing: the content is the reward. Without that rule thirty achievements
  * would quietly hand out sixty points against a five-point budget. Total here
- * is 27, pitched against RUNG_ALLOWANCE (24) so the two legacy tracks stay
+ * is 25, pitched against RUNG_ALLOWANCE (24) so the two legacy tracks stay
  * peers. Phase 7 recalibrates.
  *
  * PHASE 4 SCOPE: this file is the ledger and the award loop. Nothing consults
@@ -84,12 +84,6 @@ export const ACHIEVEMENTS = [
   },
 
   // ---------- The tabs: information you have proved you can read ----------
-  {
-    key: 'full-card', icon: '📼', name: 'Ran the whole card',
-    unlock: 'vods', unlockLabel: 'The VODs tab — every bracket, rewatchable', points: 1,
-    how: 'Run twelve of your OWN tournaments to a finish.',
-    check: (s) => yours(s).length >= 12,
-  },
   {
     key: 'own-eyes', icon: '📊', name: 'Read it yourself',
     unlock: 'tiers', unlockLabel: 'The community tier list', points: 2,
@@ -179,6 +173,15 @@ export const ACHIEVEMENTS = [
     unlock: 'attr-vr', unlockLabel: 'Attraction pack: VR', points: 0,
     how: 'Get the channel to 80 hype.',
     check: (s) => (s.tally?.peakHype || 0) >= 80,
+  },
+  {
+    key: 'after-work', icon: '📱', name: 'The after-work crowd',
+    unlock: 'attr-touchscreen', unlockLabel: 'Attraction pack: touch-screen bar games', points: 0,
+    // The people who wander in without meaning to. Proof is a night where the
+    // room was full of faces that aren't part of your scene at all.
+    how: 'Have twenty regulars on the books while your floor carries four or more cabinets.',
+    check: (s) => (s.arcade?.otherGames || []).length >= 4
+      && Object.values(s.players).filter((p) => p.isRegular && !p.retired && !p.banished).length >= 20,
   },
   {
     key: 'the-hangout', icon: '🥒', name: 'The hangout',
@@ -367,7 +370,7 @@ export const achievementForUnlock = (unlockKey) =>
  */
 export const UNLOCK_GROUPS = [
   { key: 'speed', label: '⏩ Speed', blurb: 'How fast the arcade may run without you.', match: (a) => a.unlock.startsWith('idle-') },
-  { key: 'screens', label: '🖥 Screens', blurb: 'Information you have proved you can read.', match: (a) => ['vods', 'tiers', 'studio'].includes(a.unlock) },
+  { key: 'screens', label: '🖥 Screens', blurb: 'Information you have proved you can read.', match: (a) => ['tiers', 'studio'].includes(a.unlock) },
   { key: 'counter', label: '🍟 The Counter', blurb: 'What the concession stand is allowed to carry.', match: (a) => a.unlock.startsWith('food-') },
   { key: 'floor', label: '🎳 The Floor', blurb: 'Rooms that draw a crowd of their own.', match: (a) => a.unlock.startsWith('attr-') },
   { key: 'reach', label: '📣 Reach', blurb: 'Ways of telling people you exist.', match: (a) => a.unlock.startsWith('ads-') },

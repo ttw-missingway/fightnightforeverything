@@ -167,6 +167,12 @@ export const ATTRACTION_PACKS = [
     items: ['VR Rig A', 'VR Rig B', 'The Treadmill'],
   },
   {
+    key: 'attr-touchscreen', label: 'Touch-Screen Bar Games', icon: '📱',
+    demographic: 'the after-work crowd',
+    blurb: 'Trivia, photo hunt, quick-fire quizzes. Nobody comes for these and everybody plays them.',
+    items: ['Quiz Countertop', 'Photo Hunt Deluxe', 'Trivia Tower'],
+  },
+  {
     key: 'attr-pickleball', label: 'Pickleball Courts', icon: '🥒',
     demographic: 'the neighbourhood',
     blurb: "Two courts out back. Nothing to do with fighting games, and that's the point.",

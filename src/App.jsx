@@ -45,10 +45,14 @@ export default function App() {
   // The Tournament screen lost its tab (VODs cover replays) but still shows
   // live events — reached from the Arcade on event days, and from VODs.
   //
-  // Four of these are EARNED (see achievements.js). A locked tab still renders,
-  // greyed and unclickable, with what opens it in the tooltip: a first-time
-  // owner should be able to see that there is a Studio to earn, and an
-  // invisible tab teaches nobody anything.
+  // TWO of these are earned — Tiers and Studio (see achievements.js). A locked
+  // tab still renders, greyed and unclickable, with what opens it in the
+  // tooltip: a first-time owner should be able to see there is a Studio to
+  // earn, and an invisible tab teaches nobody anything.
+  //
+  // The Feed and VODs used to be locked too and are not any more, for the same
+  // reason in both cases: they are the things that make you WANT the goal, and
+  // an archive you unlock after the fact has already lost what it was archiving.
   const tabs = [
     ['arcade', '🕹 Arcade', null],
     ['players', '👥 Players', null],
@@ -56,7 +60,10 @@ export default function App() {
     // at, and a locked ladder motivates nobody.
     ['world', '🌍 World', null],
     ['teams', '🛡 Teams', null],
-    ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs', 'vods'],
+    // NOT gated, for the same reason the Feed isn't: it's an archive, and
+    // locking it means the tournaments you run before earning it can never be
+    // rewatched at all. A replay you can't reach isn't a reward, it's a loss.
+    ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs', null],
     ['halloffame', '🏛 Hall of Fame', null],
     ['codex', '📖 Codex', null],
     ['tiers', '📊 Tiers', 'tiers'],
@@ -106,7 +113,7 @@ export default function App() {
       {screen.name === 'world' && <World />}
       {screen.name === 'teams' && <Teams />}
       {screen.name === 'tournament' && <Tournament />}
-      {screen.name === 'vods' && isUnlocked(save, 'vods') && <Vods />}
+      {screen.name === 'vods' && <Vods />}
       {screen.name === 'halloffame' && <HallOfFame />}
       {screen.name === 'codex' && <Codex />}
       {screen.name === 'feed' && <Feed />}

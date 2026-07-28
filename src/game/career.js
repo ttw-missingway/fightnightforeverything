@@ -33,12 +33,28 @@ export function bumpPassion(player, delta) {
  *
  * ctx: { attendedToday, wonToday, staleDays }
  */
+/**
+ * How much a good thing still lands, 0.22–1.15.
+ *
+ * Everything that rekindles passion runs through this. A first night at the
+ * arcade is electric; the thousandth is a Tuesday. Burnout in this game is not
+ * bad things happening — it is good things stopping working, which is both
+ * truer and the only way a veteran ever actually leaves.
+ */
+export const noveltyOf = (player) =>
+  clamp(1.15 - (player.daysAttended || 0) / 480, 0.22, 1.15)
+
 export function passionDaily(save, player, ctx) {
   if (player.retired || !player.isRegular) return
   const tenure = player.daysAttended || 0
   const skill = Math.max(0, ...Object.values(player.charSkill || {}), 0)
 
-  let decay = 0.05 + Math.max(0, tenure - 120) * 0.00055
+  // Tenure is the engine of the whole late game, and it was far too weak: over
+  // two years, everything that ADDS passion totalled 14,231 against 2,693 taken
+  // away — five to one — so every regular simply pinned at the cap and nobody
+  // in the game had ever retired. A long-serving veteran now loses ground even
+  // on a good week, which is what burnout is.
+  let decay = 0.05 + Math.max(0, tenure - 90) * 0.0016
   if (skill >= 88) decay += 0.05 // fully mastered — less left to chase
   const stale = ctx.staleDays || 0
   if (stale > 90) decay += Math.min(0.12, (stale - 90) * 0.0007) // no fresh content wears thin
@@ -51,8 +67,14 @@ export function passionDaily(save, player, ctx) {
   bumpPassion(player, -decay)
 
   if (ctx.attendedToday) {
-    bumpPassion(player, 0.18 + (player.mood - 5) * 0.05) // a good night rekindles it
-    if (ctx.wonToday) bumpPassion(player, 0.5)
+    // NOVELTY FADES. A good night at the arcade rekindles a newcomer and barely
+    // touches somebody on their thousandth. Without this the refresher (+0.18 a
+    // visit) simply outran the decay (0.05 a day) for anyone attending more
+    // than a third of the time — measured over two years, average passion sat
+    // at 99 and NOBODY in the game ever retired. The whole burnout arc was off.
+    const novelty = noveltyOf(player)
+    bumpPassion(player, (0.18 + (player.mood - 5) * 0.05) * novelty)
+    if (ctx.wonToday) bumpPassion(player, 0.5 * novelty)
   }
 }
 
