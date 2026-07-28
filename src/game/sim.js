@@ -29,6 +29,7 @@ import {
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
 import { areSeparated, pruneSeparations } from './discipline.js'
 import { relevanceDaily } from './relevance.js'
+import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
 
@@ -835,9 +836,17 @@ function makeBeats(save, group, where, results) {
     }
   }
 
+  // A visiting crew is the loudest thing in the room. When one of them is in a
+  // huddle, that exchange takes priority over the ordinary counter chatter —
+  // the whole point of an invasion week is that the arcade feels different.
+  const exchange = where === 'at the concession stand'
+    ? visitorExchange(save, group, (p) => pName(save, p))
+    : null
+  if (exchange) beats.push(...exchange)
+
   // At the counter, the game falls away for a beat — someone says something
   // human. This is what makes the cast feel like people, not stat blocks.
-  if (where === 'at the concession stand' && chance(0.5)) {
+  if (!exchange && where === 'at the concession stand' && chance(0.5)) {
     const talker = choice(group)
     const other = group.find((p) => p !== talker)
     const line = speak(talker, 'lifeChat', { self: pName(save, talker), to: other, absDay: absDayOf(save.day, save.year), t: other ? pName(save, other) : 'someone' })
@@ -1923,6 +1932,8 @@ export function advanceDay(save) {
   }
   // The world keeps talking whether or not it has heard of you.
   worldFeedDaily(save)
+  // A visiting crew arrives, or goes home.
+  invasionDaily(save)
   // Legacy milestones: making it matters, growing matters — existing doesn't.
   if (save.settings.mode !== 'sandbox') {
     if ((save.stream?.followers || 0) >= 1000) awardMilestone(save, 'followers-1k', 2, 'A thousand people follow the channel now')

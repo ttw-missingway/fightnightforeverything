@@ -258,6 +258,7 @@ export function topUpNpcs(save, absDay) {
   // user has entangled with the cast (a team, a mentorship, a real rivalry)
   // sticks around — those are the ones who became part of the story.
   for (const p of npcs) {
+    if (p.visitor) continue // a visiting crew leaves on its own schedule
     const last = p.npcLastSeenAbs ?? absDay
     const feuding = Object.values(p.relationships || {}).some((v) => v <= -45)
     const attached = feuding || p.teamId ||
@@ -269,7 +270,7 @@ export function topUpNpcs(save, absDay) {
     if (!attached && absDay - last > patience) delete save.players[p.id]
   }
 
-  const alive = Object.values(save.players).filter((p) => p.npc && !p.retired && !p.banished).length
+  const alive = Object.values(save.players).filter((p) => p.npc && !p.retired && !p.banished && !p.visitor).length
   const target = npcPoolTarget(save)
   // Trickle in rather than materialising a crowd — a scene fills up over weeks.
   let room = Math.min(target - alive, 3)

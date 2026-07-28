@@ -283,6 +283,7 @@ export function newTally() {
     evoWinYears: [], // years a player of YOURS won EVO — a dynasty is a streak here
     usedDiscipline: false, // any warning, separation or banishment
     usedAds: false, // any paid channel was ever running
+    everRanked: false, // has anyone of yours EVER made the world top 64
   }
 }
 
@@ -554,6 +555,9 @@ export function newSave(partial = {}) {
     // Where the player is inside the EVO broadcast, if one is playing out.
     // null = no show running. See screens/EvoWeek.jsx.
     evoWeek: null,
+    // A visiting crew from one region, or null. See invasion.js.
+    invasion: null,
+    nextInvasionAbs: 0,
     tournamentInProgress: null, // record id while idle mode reveals a bracket match by match
     vods: [], // full tournament/EVO records kept for spoiler-free replay, newest first
     idle: newIdleState(), // idle-mode config + runtime clock
@@ -825,6 +829,8 @@ export function migrateSave(save) {
   save.unlockNotices ??= []
   save.freeInstalls ??= {}
   save.evoWeek ??= null
+  save.invasion ??= null
+  save.nextInvasionAbs ??= 0
   save.rosterCollapsed ??= false
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   save.attentionDrift ??= { untilAbs: 0, value: 0 }

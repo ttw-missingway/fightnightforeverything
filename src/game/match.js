@@ -88,6 +88,23 @@ export function skillGainMultiplier(save, player, charId) {
   return diffFactor * rate * Math.pow(prox, 1.15)
 }
 
+/**
+ * How much there is to learn from this opponent, 0.35–2.2.
+ *
+ * Skill gain used to be completely blind to who you played: being three-oh'd
+ * by the best player alive taught your regular exactly as much as beating the
+ * worst filler in the room. That is why a cultivated player stalls around
+ * skill 50–60 forever — a big fish in a small pond has nothing left to learn
+ * from the pond, and the game had no way to express that.
+ *
+ * An even set is the baseline. Below you it tails off toward nothing; above
+ * you it climbs, which is what makes an invasion week (see invasion.js) worth
+ * more to a player than a month of local nights.
+ */
+export function lessonFactor(selfSkill, oppSkill) {
+  return clamp(1 + (oppSkill - selfSkill) * 0.035, 0.35, 2.2)
+}
+
 export function gainSkill(save, player, charId, baseAmount) {
   if (!charId) return 0
   const cur = player.charSkill[charId] || 0
@@ -283,9 +300,16 @@ export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mai
   winner.mood = clamp(winner.mood + (10 - statLevel(winner.personal.temperance)) * 0.2, 0, 10)
 
   // Skill growth: dominance for the winner, determination for the loser — on the
-  // character they actually played this set.
-  let wGain = gainSkill(save, winner, winnerChar, 0.1 + winner.personal.dominance * 0.03)
-  let lGain = gainSkill(save, loser, loserChar, 0.1 + loser.personal.determination * 0.035)
+  // character they actually played this set, scaled by who they played it
+  // against. See lessonFactor: farming the worst player in the room teaches you
+  // almost nothing, and getting taken apart by somebody far better teaches you
+  // a great deal.
+  const wSkill = winner.charSkill[winnerChar] || 0
+  const lSkill = loser.charSkill[loserChar] || 0
+  const wLesson = lessonFactor(wSkill, lSkill)
+  const lLesson = lessonFactor(lSkill, wSkill)
+  let wGain = gainSkill(save, winner, winnerChar, (0.1 + winner.personal.dominance * 0.03) * wLesson)
+  let lGain = gainSkill(save, loser, loserChar, (0.1 + loser.personal.determination * 0.035) * lLesson)
   // Iron sharpens iron: a real rivalry pushes both to another level. Losing to
   // your rival especially lights a fire under you.
   if (areRivals(save, winner, loser)) {
