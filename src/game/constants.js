@@ -332,7 +332,11 @@ export const HELPERS = [
 export const helperOn = (save, key) => save?.settings?.helpers?.[key] !== false
 
 // Default per-item prices when something is first stocked/installed.
-export const DEFAULT_FOOD_PRICE = 4 // dollars per serving
+// Dollars per serving. Sits just under what an average wallet finds
+// comfortable, so an owner who never opens the price screen is charging
+// sensibly rather than quietly strangling their own counter. Measured: $3 is
+// the revenue peak, $2 trades margin for volume, $4+ falls off a cliff.
+export const DEFAULT_FOOD_PRICE = 3
 export const DEFAULT_GAME_TOKENS = 2 // tokens to play a side cabinet once
 
 // Advertising channels. Each you run adds `cost` to the weekly upkeep bill.

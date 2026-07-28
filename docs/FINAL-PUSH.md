@@ -564,3 +564,69 @@ reach rather than merely hard. **Decide deliberately** whether that is the
 intended shape — a local hero being nowhere near the world's best is honest —
 or whether pools should advance two, or your players need a stronger cultivation
 path. Do not tune it by feel; re-run `tools/balance` either way.
+
+---
+
+## The clean-up pass (before push)
+
+Everything left open above, worked through. Measured, not reasoned about.
+
+**Scholar was never a net tax — that was the confound.** Phase 7 flagged
+"removing Scholar cuts deaths 31pp" and explicitly refused to tune on it,
+because removing one of four rows also concentrates the cast into the other
+three. `ablate.mjs` now drops a row from the CONTROL too (averaged over all
+eight), so every arm shares that concentration. Re-measured at master/336:
+
+| removed | Δ died (matched control) | was (confounded) |
+|---|---|---|
+| Natural | **+39pp** | +25pp |
+| Killer | **+19pp** | −6pp |
+| Gracious | +9pp | 0pp |
+| Scholar | **−1pp** | −31pp |
+| Stoic / Warm | −1pp | +6 / −6pp |
+| Dramatic / Put-together | −11pp | +25 / +38pp |
+
+Scholar is survival-neutral and still the only source of tech (innovations
+−3.9 without them). Natural and Killer are the load-bearing rows. **Do not
+tune on the rest of this table** — at n=10 the small deltas move sign between
+runs, which is exactly what the first table was doing.
+
+**Nobody ever retired — fixed.** Everything that adds passion totalled 14,231
+against 2,693 removed, five to one, so every regular pinned at the cap.
+Two causes: tenure decay far too weak, and every rekindle worth as much on
+your thousandth night as your first. All rekindles now run through
+`noveltyOf()` (1.15 → 0.22 with tenure), including being on stream, which at
++2.5 a night against 0.17 of decay was single-handedly keeping the roster
+young. After: nothing retires in two years, **22.8 by year four**, median
+career 358 days on the floor, room stays full as filler arrives.
+
+**EVO was sending the wrong people.** Qualification was `glory >= 20`, a local
+measure, so eight players went every year of whom most were not ranked
+anywhere; they averaged 3.9th of four. Qualification is world-ranking now —
+2.3 qualifiers a year, pool win rate doubled, year-one still sends nobody.
+Winning EVO remains a multi-lineage goal (0 champions in 3 years).
+
+**The concession stand was a bug, not a balance choice.** `playerSpending`
+read `income` raw while `tokenDeterrence` three lines above read it through
+`statLevel` — so a generated player was modelled as having literally no money.
+Fixing it alone made price meaningless (charging more was strictly better), so
+the comfort curve was re-tuned too. Now: $3 is the revenue peak, $2 trades
+margin for volume, $4+ falls off a cliff. `DEFAULT_FOOD_PRICE` 4 → 3.
+
+**A perfect patch is already rare** — measured 51 patches: median score 7, p90
+12, and only **2%** clear the 24 the achievement asks for. No change needed;
+the Phase 7 threshold raise had already done it.
+
+**Feed and VODs unlocked** (see their commits). Ladder: **32 achievements /
+25 points**. Seventh attraction pack (touch-screen) added.
+
+### Still open, deliberately
+
+- **Surplus cash late.** A rent review now scales with how busy and famous you
+  are, but the concession fix added more revenue than it removes: three-year
+  cash went $22.7k → $32.9k on normal. Death rates are UNCHANGED (0/0/25/100
+  across the four difficulties), so the ladder is intact — this is surplus, not
+  difficulty. It wants a spending feature rather than a drain, and inventing
+  one at the end of a long session is how you get a bad one.
+- **The difficulty ladder deserves a fresh pass** now that food, retirements,
+  EVO qualification and rent have all moved. `tools/balance` is the instrument.

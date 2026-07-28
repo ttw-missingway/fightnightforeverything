@@ -21,8 +21,14 @@ function withRows(removeKey, fn) {
   }
 }
 
-function arm(removeKey) {
-  return withRows(removeKey, () => {
+const PERSONAL = ['killer', 'scholar', 'natural', 'stoic']
+const SOCIAL = ['warm', 'gracious', 'dramatic', 'puttogether']
+
+function arm(removeKey, i = 0) {
+  // Control drops one row too — alternating personal/social so it averages the
+  // same kind of concentration the real arms experience.
+  const key = removeKey ?? (i % 2 ? PERSONAL[i % 4] : SOCIAL[i % 4])
+  return withRows(key, () => {
     const rs = []
     for (let i = 0; i < N; i++) {
       const policy = { ...DEFAULT_POLICY,
@@ -48,9 +54,26 @@ function arm(removeKey) {
   })
 }
 
+// CONTROL IS MATCHED. Removing one of four rows also CONCENTRATES the cast into
+// the other three, so a naive control (all four rows) confounds "lost a row"
+// with "gained more of the others" — which is how Phase 7 read Scholar as a
+// net tax when it may only have been "more Naturals". Each control arm drops a
+// row too, so every arm has the same cast concentration and the only variable
+// is WHICH row is missing.
 const arms = [null, 'killer', 'scholar', 'natural', 'stoic', 'warm', 'gracious', 'dramatic', 'puttogether']
 const out = {}
-for (const a of arms) { out[a || 'control'] = arm(a); process.stderr.write('.') }
+for (const a of arms) {
+  if (a === null) {
+    // Average the control across all eight possible drops so it represents
+    // "some row is missing" rather than one arbitrary choice.
+    const runs = [...PERSONAL, ...SOCIAL].map((k, i) => arm(k, i))
+    const keys = Object.keys(runs[0])
+    out.control = Object.fromEntries(keys.map((k) => [k, runs.reduce((n, r) => n + r[k], 0) / runs.length]))
+  } else {
+    out[a] = arm(a)
+  }
+  process.stderr.write('.')
+}
 process.stderr.write('\n')
 const ctl = out.control
 const f = (v, d = 1) => v.toFixed(d)

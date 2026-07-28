@@ -116,8 +116,16 @@ export function monthlyRent(save) {
   // actually grown the takings. Standing still is a slow way of quitting.
   const years = Math.max(0, (save.year || 1) - 1)
   const escalation = Math.pow(1 + (diff.rentEscalation || 0), years)
+  // THE RENT REVIEW. A landmark pays landmark rent — the landlord reads the
+  // same news everyone else does. Without this a thriving arcade compounds
+  // cash forever with nothing pulling against it (measured: $51k banked over
+  // three years, and rising). Success should cost something, and the thing it
+  // costs is the reason you were successful.
+  const busy = clamp((save.peakAttendance || 0) / 60, 0, 0.35)
+  const famous = clamp(((save.relevance ?? 55) - 55) / 150, 0, 0.2)
+  const review = 1 + busy + famous
   // Active world events (a landlord "revisiting the market rate") stack on top.
-  return Math.round(base * diff.rentMult * escalation * worldRentMult(save))
+  return Math.round(base * diff.rentMult * escalation * review * worldRentMult(save))
 }
 
 // ---------- Fixed catalogs ----------
@@ -432,7 +440,14 @@ export function playerSpending(save, attendees, gamesToday, events) {
   const sellouts = {} // food -> how many walked away hungry
   const lines = {} // cabinet -> how many never got a turn
   for (const p of attendees) {
-    const wallet = p.social?.income ?? 5
+    // Read through statLevel like every other consumer of a point-buy stat.
+    // Raw, an unspent `income` is 0 rather than the ~5 "average" these formulas
+    // were written against — so a generated player was modelled as having
+    // literally no money and the concession stand was nearly a closed counter
+    // (measured: 111 servings a year at $4 against 469 at $2). tokenDeterrence
+    // three lines up was already doing this correctly; this one was missed in
+    // the temperament rework.
+    const wallet = statLevel(p.social?.income)
     // Main-game matches: a token a game, paid at the change machine.
     tokens += gamesToday[p.id] || 0
     // Their favorite cabinet: one machine only seats so many a night. Coming
@@ -474,7 +489,13 @@ export function playerSpending(save, attendees, gamesToday, events) {
     const price = foodPriceOf(save, food)
     // The $2 hot dog a broke kid buys every night is a $4 hot dog they never
     // buy again. Wallet decides the ceiling; your price list has to respect it.
-    const priceFactor = price / (1.8 + wallet * 0.5)
+    // What a player considers a fair price. Reading `income` through statLevel
+    // (above) fixed a counter that was effectively closed, but at the old
+    // comfort curve it went too far the other way: an average wallet was
+    // comfortable up to $4.30, so the catalogue's default $4 carried NO
+    // deterrent and charging more was strictly better. Pricing has to be a
+    // trade-off — volume against margin — not a free lever.
+    const priceFactor = price / (1.15 + wallet * 0.33)
     const buyChance = clamp(appetite - Math.max(0, priceFactor - 1) * 0.85, 0.02, 0.9)
     if (chance(buyChance)) {
       foodRevenue += price
