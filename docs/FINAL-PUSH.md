@@ -630,3 +630,72 @@ the Phase 7 threshold raise had already done it.
   one at the end of a long session is how you get a bad one.
 - **The difficulty ladder deserves a fresh pass** now that food, retirements,
   EVO qualification and rent have all moved. `tools/balance` is the instrument.
+
+---
+
+## The lineage question: how many runs to an EVO champion?
+
+Asked directly, measured with a new harness (`tools/balance/lineage.mjs`),
+which plays run → reset → carry prestige → rebuild → run again, mirroring
+`resetSaveById` exactly.
+
+**The answer is "never", and there are three separate reasons stacked on top
+of each other.**
+
+### 1. Banked creation points cannot be spent at all
+
+They accumulate — a lineage reaches 130+ points — and there is nowhere to
+spend them. The only two components that read `statPoints + prestige.points`
+are `RosterEditor` (renders **only** inside the Setup wizard) and `PlayerForm`
+(gated on `mode === 'sandbox'` in the Players screen). `resetCurrentRun` drops
+you straight onto the arcade screen, never the wizard, while displaying:
+
+> ♻ New run started. +N prestige earned — N points to spend on player creation stats.
+
+There is no player creation to spend them on. The whole legacy economy — 25
+points from the achievement ladder, 24 from the rung allowance, plus every
+milestone — is inert in consequential mode, which is the intended experience.
+
+### 2. Even if they could be spent, they saturate almost immediately
+
+Measured `skillCeiling` against creation budget:
+
+| creation points | 5 | 20 | **40** | 60 | 80 | 114 |
+|---|---|---|---|---|---|---|
+| skill ceiling | 33 | 48 | **96** | 96 | 96 | 96 |
+
+Forty points maxes the stats that feed the ceiling; everything after that is
+spent on stats the ceiling does not read. A lineage banks 40 by about run 3
+and every point after is dead. This matches the observed plateau exactly —
+across six runs, best world rank went 44 → 30 → 25 → 32 → 24 → 30 while points
+went 6 → 31 → 64 → 92 → 112 → 134.
+
+### 3. The real wall is skill GROWTH, not the ceiling
+
+A 40-point player's ceiling is **96** — above the god tier (76–86). They could
+beat anyone. Measured, they reach skill ~50–60 in three years and stall around
+world #13–30, because skill is earned from matches and their matches are
+against a local scene. The ceiling was never the constraint; the climb toward
+it is.
+
+### What was actually measured
+
+Six runs × three years × four difficulties, both modes:
+
+| | best rank reached (as it ships) | best rank (points spendable) | champions |
+|---|---|---|---|
+| easy | 31 | **18** | 0 |
+| normal | 32 | **13** | 0 |
+| difficult | 38 | **20** | 0 |
+| master | 37 | 30 | 0 |
+
+Spending the points clearly helps — normal reaches #13 instead of #32 — so the
+loop *would* do something if wired up. It still produces no champions.
+
+**Consequences.** `world-champion` (which unlocks the larger creation
+allowance), the `dynasty` cosmetic, and the entire creation-point economy are
+all currently unreachable. Fixing this is three decisions, in order: give the
+roster a way to be re-spent between runs; decide whether points should keep
+buying anything past 40; and decide how a local player is ever supposed to get
+world-class reps (external tournaments are the obvious candidate, and would
+double as the late-game money sink noted above).

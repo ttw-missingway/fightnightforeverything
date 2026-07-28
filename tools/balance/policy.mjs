@@ -48,9 +48,10 @@ export const DEFAULT_POLICY = {
 }
 
 /** Build a world the way the setup wizard would, then apply the policy's opening. */
-export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POLICY, seedTweak = null } = {}) {
+export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POLICY, seedTweak = null, prestige = null } = {}) {
   const save = newSave({ saveName: 'P7' })
   save.settings.difficulty = difficulty
+  if (prestige) save.prestige = structuredClone(prestige)
   const used = new Set()
   for (let i = 0; i < chars; i++) {
     const c = newCharacter(generateCharacter(used))
@@ -63,7 +64,9 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
   // YOUR cast. Without these the harness measures a room full of strangers:
   // created players attend far more readily, are the only ones teams form
   // around, and are the only ones who can qualify for EVO.
-  const budget = difficultyOf(save).statPoints
+  // Banked creation points make a later lineage's cast better — the entire
+  // point of the legacy loop. See tools/balance/lineage.mjs.
+  const budget = difficultyOf(save).statPoints + (save.prestige?.points || 0)
   const rows = policy.rows || null // ablation: restrict which temperaments exist
   for (let i = 0; i < (policy.cast ?? 6); i++) {
     const p = newPlayer({ createdBy: 'user', npc: false })
