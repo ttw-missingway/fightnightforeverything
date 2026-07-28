@@ -341,8 +341,9 @@ never legal at any tier — which is the point.
 persistent", written before Phase 4 made achievements the unlock mechanism.
 Buying it would have made bandwidth the one thing in the game with a price and
 given creation points a second use; earning it keeps one rule for everything.
-Three new achievements (33 total, still 27 points): thirty tournaments run to a
-finish, a 32-entrant field filled, a round robin of eight taken to a finish.
+Three new achievements: thirty tournaments run to a finish, a 32-entrant field
+filled, a round robin of eight taken to a finish. (The ladder is 32 / 26 points
+as of the Feed unlock — see "After the plan" below.)
 
 The meter is enforced, not advisory — `fitsBandwidth` runs on a trial clone of
 every edit before it lands, so an over-budget change is refused rather than
@@ -514,3 +515,52 @@ fixed cast composition before touching a number.
   the refreshers outrun the decay; not diagnosed.
 - **Money has no late sink.** A three-year economy-first run banks $51k with
   nothing to spend it on.
+
+---
+
+## After the plan
+
+Work agreed after Phase 7, in one place so the next balance pass knows what
+moved under it.
+
+- **EVO is a 64-player major.** Sixteen pools of four, one out of each, real
+  group tables with game-difference and health tiebreaks. Presented as a
+  broadcast: neon intro, browsable pools, seeding, pre-tournament chatter, the
+  exhibition, interviews, a bracket that reveals one set at a time, the
+  champion. `src/screens/EvoWeek.jsx`.
+- **World rankings** (`src/game/world.js`, `src/screens/World.jsx`). 64 places,
+  never locked, elites and your cast on one elo ladder; below the cut you are
+  UNRANKED rather than given an invented number. Clickable dossiers.
+- **The elite roster was re-tiered** to make that ladder reachable: a
+  `contender` band at 1430–1760 elo, and `driftEvoRoster`'s yearly floor
+  dropped 1700 → 1400 (it had been rebuilding the wall every New Year).
+- **The feed has a world half**, seeded ~a month before opening night and
+  dominated by EVO buildup; arcade chatter is throttled by how many of your
+  players are world-ranked. The Feed tab is no longer earned — the ladder is
+  **32 achievements / 26 points**.
+- **Team founding** gate 40/30 → 28/18 (measured; see Phase 7).
+- Flags replace `[BR]`; your cast flies the arcade's country.
+
+### ⚠ Phase 7's numbers predate all of the above
+
+The verification pass ran BEFORE the EVO restructure and the elo re-tiering, so
+its ladder and playstyle tables describe a game that no longer exists in one
+important respect. Measured after (normal, competent policy, 5 runs × 3 years):
+
+| | before (pools of 6, top 4 of each advanced) | now |
+|---|---|---|
+| your entrants reaching top 16 | routine — 16 of 24 advanced | **1 of 63 wins their pool** |
+| your players in EVO top 8 | — | **0 of 15 EVOs** |
+| EVO won by one of yours | — | **0** |
+
+63 arcade pool entries finished 1st once, 2nd six times, 3rd seven times and
+**4th forty-nine times**. Snake seeding puts one top-16 seed in every pool, so
+escaping means beating a genuine world-class player; qualifying now gets you a
+0–3 and a plane ticket.
+
+That has knock-on effects: `world-champion` (which unlocks the permanently
+larger creation allowance) and the `dynasty` cosmetic are currently out of
+reach rather than merely hard. **Decide deliberately** whether that is the
+intended shape — a local hero being nowhere near the world's best is honest —
+or whether pools should advance two, or your players need a stronger cultivation
+path. Do not tune it by feel; re-run `tools/balance` either way.
