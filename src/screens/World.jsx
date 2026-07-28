@@ -66,8 +66,9 @@ export default function World() {
             <>
               {climb.map((r) => (
                 <div className="row spread" key={r.id} style={{ padding: '2px 0' }}>
-                  <span className="small"><span className="dim">#{r.rank}</span> {r.name}
-                    {r.region !== 'home' && <span className="dim"> [{r.region}]</span>}</span>
+                  <span className="small">
+                    <span className="dim">#{r.rank}</span> {r.flag} {r.name}
+                  </span>
                   <span className="dim small">{r.elo}</span>
                 </div>
               ))}
@@ -89,7 +90,7 @@ export default function World() {
       <div className="card">
         <div className="table-scroll"><table>
           <thead>
-            <tr><th>#</th><th>Player</th><th>Region</th><th>Main</th><th>Elo</th><th>Skill</th><th>EVO</th></tr>
+            <tr><th>#</th><th>Player</th><th>Scene</th><th>Main</th><th>Elo</th><th>Skill</th><th>EVO</th></tr>
           </thead>
           <tbody>
             {shown.map((r) => (
@@ -103,6 +104,7 @@ export default function World() {
                       const c = save.game.characters.find((x) => x.id === r.charId)
                       return c ? <Portrait url={lookArt(c, r.id)} size={20} alt={c.name} /> : null
                     })()}
+                    <span title={r.region === 'home' ? save.arcade.name : r.region}>{r.flag}</span>
                     <strong className={r.yours ? 'cyan' : ''}>{r.name}</strong>
                     {r.retired && <span className="dim small"> 🏁</span>}
                   </span>

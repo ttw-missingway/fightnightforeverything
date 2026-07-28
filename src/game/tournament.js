@@ -9,6 +9,7 @@ import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { bumpPassion } from './career.js'
 import { applyChampionDividend } from './relevance.js'
 import { econLog, trySpend } from './economy.js'
+import { regionFlag, arcadeFlag } from './flags.js'
 import { tournamentMess } from './bandwidth.js'
 import { buildStream, personalityOf, elitePersonality, applyStageReps } from './stream.js'
 import { speak } from './dialogue.js'
@@ -18,11 +19,30 @@ const pName = (save, p) => displayName(p, save)
 // ---------- Entrants (arcade players and EVO elites share one shape) ----------
 
 function arcadeEntrant(save, player) {
-  return { kind: 'arcade', id: player.id, name: pName(save, player), charId: player.mainCharId, ref: player }
+  // Your people compete under YOUR flag — whatever country the arcade is in.
+  const flag = arcadeFlag(save)
+  const name = pName(save, player)
+  return {
+    kind: 'arcade',
+    id: player.id,
+    name: flag ? `${flag} ${name}` : name,
+    charId: player.mainCharId,
+    ref: player,
+  }
 }
 
 function eliteEntrant(elite) {
-  return { kind: 'elite', id: elite.id, name: `${elite.alias} [${elite.region}]`, charId: elite.mainCharId, ref: elite }
+  // The flag rides along in the NAME because a match record only ever carries
+  // strings — narration, pool tables and brackets all read `aName`, so this is
+  // the one place that can put a nationality on every screen at once.
+  const flag = regionFlag(elite.region)
+  return {
+    kind: 'elite',
+    id: elite.id,
+    name: flag ? `${flag} ${elite.alias}` : elite.alias,
+    charId: elite.mainCharId,
+    ref: elite,
+  }
 }
 
 function entrantPerformance(save, e, context = 'tournament') {

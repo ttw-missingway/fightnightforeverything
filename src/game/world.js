@@ -11,6 +11,7 @@
 // something about it.
 
 import { statusOf } from './constants.js'
+import { regionFlag, arcadeFlag } from './flags.js'
 
 const bestSkillOf = (p) => Math.max(0, ...Object.values(p.charSkill || {}), 0)
 
@@ -32,6 +33,7 @@ export function worldRankings(save) {
     kind: 'elite',
     name: e.alias,
     region: e.region,
+    flag: regionFlag(e.region),
     tier: e.tier,
     elo: Math.round(e.elo || 0),
     skill: Math.round(e.skill || 0),
@@ -46,6 +48,7 @@ export function worldRankings(save) {
       kind: 'yours',
       name: p.alias || `${p.firstName} ${p.lastName}`,
       region: 'home',
+      flag: arcadeFlag(save), // your cast fly the arcade's colours
       tier: statusOf(p)?.key || 'newbie',
       elo: Math.round(p.elo || 0),
       skill: Math.round(bestSkillOf(p)),
