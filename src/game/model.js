@@ -547,6 +547,9 @@ export function newSave(partial = {}) {
     evoLegacy: {}, // eliteId -> {titles}
     lastDayReport: null, // events from the most recent simulated day
     lastTournament: null, // full bracket/narration of most recent tournament
+    // Where the player is inside the EVO broadcast, if one is playing out.
+    // null = no show running. See screens/EvoWeek.jsx.
+    evoWeek: null,
     tournamentInProgress: null, // record id while idle mode reveals a bracket match by match
     vods: [], // full tournament/EVO records kept for spoiler-free replay, newest first
     idle: newIdleState(), // idle-mode config + runtime clock
@@ -817,6 +820,7 @@ export function migrateSave(save) {
   save.tally = { ...newTally(), ...(save.tally || {}) }
   save.unlockNotices ??= []
   save.freeInstalls ??= {}
+  save.evoWeek ??= null
   save.rosterCollapsed ??= false
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   save.attentionDrift ??= { untilAbs: 0, value: 0 }

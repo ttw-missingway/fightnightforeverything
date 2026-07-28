@@ -15,6 +15,7 @@ import Vods from './screens/Vods.jsx'
 import { formatDay } from './game/constants.js'
 import { isVodWatched } from './game/model.js'
 import DangerBanner from './components/dangers.jsx'
+import EvoWeek from './screens/EvoWeek.jsx'
 import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
 
 export default function App() {
@@ -26,6 +27,19 @@ export default function App() {
   }
 
   const newVods = (save.vods || []).filter((v) => !isVodWatched(v)).length
+
+  // EVO takes over the whole screen while it is on. It is the one night of the
+  // year the game stops being a management sim and puts on a broadcast, and a
+  // tab bar over the top of it would say the opposite.
+  const evoLive = save.evoWeek && save.evoWeek.step !== 'done' && save.lastTournament?.type === 'evo'
+  if (evoLive) {
+    return (
+      <EvoWeek
+        record={save.lastTournament}
+        onFinish={() => nav('arcade')}
+      />
+    )
+  }
 
   // The Tournament screen lost its tab (VODs cover replays) but still shows
   // live events — reached from the Arcade on event days, and from VODs.

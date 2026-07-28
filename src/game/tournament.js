@@ -713,6 +713,80 @@ const EVO_SOUNDBITES = [
   "My arcade back home is watching. I'm not letting them down.",
 ]
 
+const EVO_HYPE_HANDLES = [
+  'fgc_daily', 'framedata_andy', 'neutralgod', 'pooltourist', 'saltmine',
+  'downback_dave', 'combovideo', 'the_rail', 'wakeup_dp', 'lab_monster',
+  'bracketdemon', 'grandfinals', 'hitconfirm_hq', 'tourneylife',
+]
+
+const EVO_WIN_LINES = [
+  "I told everybody. Nobody listened. Now they have to.",
+  "Every early morning in the lab was for this. Every one.",
+  "I'm not going to pretend I'm surprised. I knew what I had.",
+  "This is for my arcade. This whole thing is for my arcade.",
+  "I've lost this bracket in my head a thousand times. Not today.",
+  "Ask me again tomorrow. Right now I can't feel my hands.",
+]
+const EVO_LOSS_LINES = [
+  "I'll be back. Write that down.",
+  "They were better today. Today. That's all it was.",
+  "One read. The whole thing came down to one read and I got it wrong.",
+  "I'm not going to cry about it on camera. I'm going to go practice.",
+  "Congratulations to them, genuinely. Now if you'll excuse me.",
+  "I learned more in that set than in the last six months.",
+]
+
+/**
+ * The noise around the tournament, baked at sim time so the broadcast plays
+ * back the same way twice. Everything the EVO screen shows between matches —
+ * the pre-bracket chatter, the words either side of the exhibition, and what
+ * the champion says while they still can't feel their hands — comes from here
+ * rather than being invented live in the UI.
+ */
+function buildEvoTalk(save, { seeds, favourite }) {
+  const pick = (n, arr) => {
+    const out = []
+    const pool = [...arr]
+    for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(randInt(0, pool.length - 1), 1)[0])
+    return out
+  }
+  const names = seeds.map((s) => s.name)
+  const mine = seeds.filter((s) => s.kind === 'arcade').map((s) => s.name)
+  const dark = names[names.length - 1] || 'the last seed'
+  const lines = [
+    `the ${names.length} that made it out of pools. this is the best bracket we've had in years`,
+    `${favourite} is the favourite and it isn't close. someone please take a game off them`,
+    `putting money on ${dark}. i know. i KNOW. but watch.`,
+    `every year i say pools are the best part of ${save.game.name} and every year i'm right`,
+    `whoever seeded this bracket has a personal problem with me`,
+    `if ${favourite} wins this again i'm switching games. (i am not switching games)`,
+    `the top half of this bracket is a bloodbath and the bottom half is a coronation`,
+    `genuinely no idea who wins this. best ${save.game.name} has ever looked`,
+  ]
+  if (mine.length) {
+    lines.push(`wait ${mine[0]} is in this?? from ${save.arcade.name}?? the local scene is COOKING`)
+    lines.push(`nobody outside their arcade has heard of ${mine[0]}. that changes tonight`)
+  }
+  return pick(Math.min(6, lines.length), lines).map((text) => ({
+    handle: choice(EVO_HYPE_HANDLES),
+    text,
+  }))
+}
+
+/** What somebody says with a camera in their face. */
+function interviewFor(save, entrant, won) {
+  if (!entrant) return null
+  const pool = won ? EVO_WIN_LINES : EVO_LOSS_LINES
+  const lines = [choice(pool)]
+  if (chance(0.6)) lines.push(choice(EVO_SOUNDBITES))
+  // One of yours gets to sound like themselves rather than like a press release.
+  if (entrant.kind === 'arcade' && entrant.ref) {
+    const own = speak(entrant.ref, won ? 'ggWin' : 'ggLossGood', { self: entrant.name })
+    if (own) lines.push(own)
+  }
+  return { name: entrant.name, kind: entrant.kind, won, lines }
+}
+
 // Distribute a field into `count` pools, snake-seeded by elo so each pool is
 // balanced (best player to pool 0, next to pool 1, … then back).
 // ---------- EVO pools ----------
@@ -829,7 +903,18 @@ function buildMediaDay(save, advancers) {
   for (const e of marquee.slice(0, 3)) {
     storylines.push(`${e.name} at the presser: "${choice(EVO_SOUNDBITES)}"`)
   }
-  return { rounds, storylines }
+  // The headline exhibition and the two people in it — the EVO screen puts a
+  // camera in both their faces the moment it ends.
+  const headline = matches[0] || null
+  const pair = headline
+    ? [marquee[0], marquee[1]].filter(Boolean)
+    : []
+  const expo = headline && pair.length === 2 ? {
+    matchId: headline.id,
+    winner: pair.find((e) => e.id === headline.winnerId) || pair[0],
+    loser: pair.find((e) => e.id !== headline.winnerId) || pair[1],
+  } : null
+  return { rounds, storylines, expo }
 }
 
 /**
@@ -971,6 +1056,9 @@ export function runEvo(save) {
     // round by round, rather than a flat list of 96 matches.
     pools: pools.map((p) => ({
       letter: p.letter,
+      // Seed order, so the grid can list a pool before it has been played
+      // without the running order quietly spoiling who wins it.
+      entrants: p.entrants.map((e) => ({ id: e.id, name: e.name, kind: e.kind })),
       rounds: p.rounds.map((r) => ({ title: r.title, matchIds: r.matches.map((m) => m.id) })),
       standings: p.standings.map((r) => ({
         id: r.entrant.id,
@@ -983,10 +1071,25 @@ export function runEvo(save) {
       winnerId: p.winner.id,
     })),
     seeds: advancers.map((e, i) => ({ seed: i + 1, id: e.id, name: e.name, kind: e.kind })),
+    // Everything the EVO broadcast says between the matches, baked now so a
+    // replay plays back word for word.
+    talk: buildEvoTalk(save, {
+      seeds: advancers.map((e, i) => ({ seed: i + 1, id: e.id, name: e.name, kind: e.kind })),
+      favourite: [...advancers].sort((a, b) => (b.ref.elo || 0) - (a.ref.elo || 0))[0]?.name || 'the top seed',
+    }),
+    expo: media.expo ? {
+      matchId: media.expo.matchId,
+      winner: interviewFor(save, media.expo.winner, true),
+      loser: interviewFor(save, media.expo.loser, false),
+    } : null,
+    championInterview: interviewFor(save, champion, true),
   }
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)
   applyTournamentMess(save, { type: 'singles', format: 'doubleelim', size: 16 })
+  // Roll the broadcast. The whole tournament is already decided; this is the
+  // cursor the EVO screen walks through it with.
+  save.evoWeek = { step: 'intro', poolRound: 0, openPool: null }
   // The year you send nobody is the year the goal gets set. Say so, plainly.
   if (!qualified.length) {
     chronicle(save, '📺', `EVO ${save.year} came and went and nobody from ${save.arcade.name} was in it. ${champion.name} took the title.`)
