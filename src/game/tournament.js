@@ -10,6 +10,7 @@ import { bumpPassion } from './career.js'
 import { applyChampionDividend } from './relevance.js'
 import { econLog, trySpend } from './economy.js'
 import { regionFlag, arcadeFlag } from './flags.js'
+import { rankedWorld } from './world.js'
 import { tournamentMess } from './bandwidth.js'
 import { buildStream, personalityOf, elitePersonality, applyStageReps } from './stream.js'
 import { speak } from './dialogue.js'
@@ -946,12 +947,30 @@ function buildMediaDay(save, advancers) {
  * seven days after you open the doors.
  */
 export const EVO_QUALIFY_GLORY = 20
-export const evoQualifiers = (save) =>
-  Object.values(save.players)
+
+/**
+ * You qualify for EVO by being one of the best players IN THE WORLD, which is
+ * exactly what the world rankings are for.
+ *
+ * This used to be `glory >= 20` — a local measure. Measured across 15 EVOs, it
+ * sent EIGHT people every year of whom forty entries were players not ranked
+ * anywhere; they averaged 3.9th of 4 in their pool and dragged the whole read
+ * of the tournament down with them. Meanwhile the genuinely good ones did fine
+ * (the 17–32 band averaged 2nd). The problem was never that pools are too
+ * hard; it was that the arcade was sending its Tuesday regulars to the world
+ * championship.
+ *
+ * Now: ranked, or you watch it on the stream like everybody else. That also
+ * makes the World tab the thing you check to see who is going.
+ */
+export const evoQualifiers = (save) => {
+  const ranked = new Map(rankedWorld(save).map((r) => [r.id, r.rank]))
+  return Object.values(save.players)
     .filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
-    .filter((p) => (p.glory || 0) >= EVO_QUALIFY_GLORY)
-    .sort(castFirst)
+    .filter((p) => ranked.has(p.id))
+    .sort((a, b) => ranked.get(a.id) - ranked.get(b.id))
     .slice(0, 8)
+}
 
 export function runEvo(save) {
   const qualified = evoQualifiers(save)
