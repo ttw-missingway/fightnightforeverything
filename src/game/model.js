@@ -467,7 +467,11 @@ export function newSave(partial = {}) {
     freshMetaUntilAbs: 0, // a hit patch opens a window where everyone piles back in
     lastRelevanceAbs: 0, // guard so relevance drifts exactly once per day
     scene: { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [], castTopSkill: 0 }, // daily scene-health read
-    lastPatch: { day: 1, year: 1 },
+    // The build shipped the day the doors opened. This MUST track the opening
+    // day, not day 1 of the calendar: relevance measures staleness from here,
+    // so a run opening in June with this at January 1 is born 154 days stale
+    // and bleeds national interest from its first night. (It did. Phase 7.)
+    lastPatch: { day: OPENING_DAY, year: 1 },
     patchGames: 0, // sets played on the current build — balance data accrues from these
     chronicle: [], // the collective memory: {day, year, icon, text} — capped
     tierLists: [], // community tier lists, newest first — one lands ~a week after each patch

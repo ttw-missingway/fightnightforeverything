@@ -103,10 +103,12 @@ export const ACHIEVEMENTS = [
     // players who perform. A run OPENS at 55, so the bar has to sit above that
     // or it is just a survival timer: measured, a neglected scene sags to a
     // ceiling of 57 while a streamed, staffed, well-advertised one reaches 69.
-    // 65 is the line between those two, and it has to be cleared on the build
-    // as it shipped — after which you have earned the right to change it.
-    how: 'Push national interest in the game to 65 — on stream, guides, and results.',
-    check: (s) => (s.tally?.peakRelevance || 0) >= 65,
+    // 62 is the line between those two. It sat at 65 until Phase 7 measured
+    // the actual curve of a competent first year — which peaks at 63-66, so 65
+    // was a coin flip on noise, and the Studio is far too important to hand out
+    // by coin flip.
+    how: 'Push national interest in the game to 62 — on stream, guides, and results.',
+    check: (s) => (s.tally?.peakRelevance || 0) >= 62,
   },
 
   // ---------- Food packs: the counter argues for itself ----------
@@ -162,11 +164,13 @@ export const ACHIEVEMENTS = [
     // Laser tag is the one attraction nobody plays alone, so it is priced in
     // squads rather than turnstiles: six real teams means a room that already
     // organises itself into sides.
-    // Three, not six: a team only ever forms around one of YOUR players
-    // (social.js tryFoundTeam), so this is bounded by how big a cast you could
-    // afford to create — and on Normal that is a handful of people.
-    how: 'Have three teams of three or more running at once.',
-    check: (s) => Object.values(s.teams || {}).filter((t) => (t.memberIds || []).length >= 3).length >= 3,
+    // Two, and that is a real ask. Phase 6 shipped this at three on reasoning
+    // alone (flagged at the time as the one unmeasured threshold); Phase 7
+    // measured it. Teams only form around YOUR players and only once a genuine
+    // friendship exists, which takes most of a year — a well-run two-year scene
+    // produces one or two crews, so three at once was unreachable.
+    how: 'Have two teams of three or more running at once.',
+    check: (s) => Object.values(s.teams || {}).filter((t) => (t.memberIds || []).length >= 3).length >= 2,
   },
   {
     key: 'the-spectacle', icon: '🥽', name: 'The spectacle',

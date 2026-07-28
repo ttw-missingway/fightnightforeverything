@@ -1101,7 +1101,22 @@ function runInteraction(save, group, where, events, results = {}) {
         }
       }
     } else if (freeAgents >= 5 && chance((0.01 + a.social.community * 0.015) * foundingPressure)) {
-      const buddy = group.find((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 40 && getRel(b, a) > 30)
+      // Your co-founder is your FRIEND, not whoever happened to be standing in
+      // this particular huddle. Searching only `group` meant the roll and the
+      // friendship had to coincide inside one small conversation, and measured
+      // over two years that produced 0 teams in a 66-person scene with 19
+      // eligible pairs — the whole team subsystem was effectively off.
+      const here = (save.dayInProgress?.attendeeIds || [])
+        .map((id) => save.players[id])
+        .filter((p) => p && !p.retired && !p.banished)
+      const pool = here.length ? here : group
+      // The bar is what a real friendship in THIS sim looks like, not what 40
+      // sounds like. Measured over a two-year run: mutual 40/30 pairs do not
+      // exist at all until day ~336 and reach only 11 by day 672, so the old
+      // gate made founding a team impossible for a whole year and vanishingly
+      // rare after — 0 teams in eight two-year runs. At 28/18 the first pairs
+      // appear mid-year-one, which is when a scene should start forming crews.
+      const buddy = pool.find((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 28 && getRel(b, a) > 18)
       if (buddy) tryFoundTeam(save, a, buddy, save.day, save.year, events)
     }
   }

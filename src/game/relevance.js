@@ -8,6 +8,7 @@
 
 import { clamp, hash01, rand } from './util.js'
 import { absDayOf, runAge, DAYS_PER_YEAR, difficultyOf } from './constants.js'
+import { isUnlocked } from './achievements.js'
 import { chronicle, awardMilestone } from './model.js'
 import { communityGameOpinion } from './social.js'
 
@@ -63,7 +64,17 @@ export function relevanceDaily(save) {
   // patch for months happily, some get restless in weeks — so the same play
   // produces genuinely different timelines run to run.
   const patience = 0.82 + hash01(`${save.id}:patience`) * 0.36 // 0.82..1.18
-  const staleness = clamp((stale * patience - 55) * 0.0035, 0, 0.5) * (1 + age * 0.3)
+  // You cannot be blamed for failing to patch a game you have no way to patch.
+  // Staleness is the punishment for neglecting the build, so it only applies
+  // once the Studio has been earned — otherwise a first run is killed by the
+  // absence of the very tool it is trying to unlock, which is a trap and not a
+  // difficulty. (Measured in Phase 7: with the Studio locked, EVERY normal run
+  // died of the opinion funnel.) Age still bites regardless: the game gets old
+  // on its own, you just aren't held responsible for it.
+  const canPatch = isUnlocked(save, 'studio')
+  const staleness = canPatch
+    ? clamp((stale * patience - 55) * 0.0035, 0, 0.5) * (1 + age * 0.3)
+    : 0
   const timeDecay = 0.045 + age * 0.043
   let decayMult = (difficultyOf(save).relevanceDecayMult ?? 1) * worldDecayMult(save, abs)
   // What holds it off is the QUALITY of the scene, not just its size: a room
@@ -104,13 +115,20 @@ export function relevanceDaily(save) {
 // relevance rot and the scene tips into a SLUMP that takes real work (a hit
 // patch, a champion) to climb out of. The hysteresis — hard to enter, hard to
 // leave — is what stretches great runs and buries failing ones.
+// How long the scene has to wait between golden ages.
+const GOLDEN_COOLDOWN = 200
+
 function updateMomentum(save, abs) {
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   const m = save.momentum
   const rel = save.relevance ?? 55
   if (m.state === 'golden') {
     if (abs >= m.untilAbs || rel < 55) {
-      save.momentum = { state: 'steady', untilAbs: 0 }
+      // A golden age can't roll straight into the next one. Without this the
+      // 88-point entry bar re-armed the day it expired, and since a golden age
+      // halves relevance decay, anything that once crossed 88 stayed there for
+      // good — the single biggest reason a well-run scene became immortal.
+      save.momentum = { state: 'steady', untilAbs: 0, nextGoldenAbs: abs + GOLDEN_COOLDOWN }
       chronicle(save, '🌇', `The golden age of ${save.game.name} has cooled into something quieter. What a stretch it was.`)
     }
   } else if (m.state === 'slump') {
@@ -119,7 +137,7 @@ function updateMomentum(save, abs) {
       chronicle(save, '🌅', `${save.game.name} has pulled out of its slump — people are coming back.`)
     }
   } else {
-    if (rel >= 88) {
+    if (rel >= 88 && abs >= (m.nextGoldenAbs || 0)) {
       save.momentum = { state: 'golden', untilAbs: abs + 75 }
       chronicle(save, '🌟', `A GOLDEN AGE: ${save.game.name} is the center of the fighting-game world right now.`)
     } else if (rel < 20) {
@@ -151,7 +169,13 @@ export function applyChampionDividend(save) {
   if (save.relevance == null) save.relevance = 55
   const abs = absDayOf(save.day, save.year)
   const before = save.relevance
-  const gain = Math.round(14 + (100 - before) * 0.3)
+  // Scaled ENTIRELY by headroom, with no flat floor. A world title out of your
+  // arcade makes the game roar back into the conversation — but at relevance 98
+  // there is no conversation to roar back into, and a flat +14 there simply
+  // pinned a thriving scene to 100 forever. This is the same shape the patch
+  // gamble already uses (see `stakes`): the lower you are, the more a title is
+  // worth. A fading scene at 30 gets a +31 revival; a scene at 95 gets +2.
+  const gain = Math.round((100 - before) * 0.45)
   save.relevance = clamp(before + gain, 0, 100)
   save.momentum = { state: 'golden', untilAbs: abs + 100 }
   chronicle(save, '🌟', `A world champion, from THIS arcade. ${save.game.name} is back in every conversation — a golden age begins.`)

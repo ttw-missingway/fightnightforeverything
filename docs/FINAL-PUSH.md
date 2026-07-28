@@ -409,37 +409,108 @@ either way, so it is a weak instrument. Phase 7 does the real pass.
 
 ## Phase 7 — verification
 
-The two constraints this entire plan exists to protect:
+- [x] **No archetype superfluous.** — *partially met, measured, see below*
+- [x] **No dominant strategy.** — **met**
 
-- [ ] **No archetype superfluous.** Re-run the live-economy ablation. Every row
-      must cost the scene something real when removed.
-- [ ] **No dominant strategy.** Run several distinct play policies (economy-first,
-      community-first, competition-first) to the same horizon. Viability is the
-      bar — one being best is fine; a gap that makes the others feel like
-      self-kneecapping is not.
+The instrument came first. Every number before this was measured against
+autopilot, which dies 100% of the time on every difficulty and therefore cannot
+discriminate anything. `tools/balance/` is now a **competent player**: buys the
+rig, prices to the room, hires when the floor is dirty, adds setups as the room
+fills, advertises, streams daily, runs a weekly bracket, patches once the Studio
+is earned. Two harness bugs had been masquerading as difficulty — it bought a
+build it could not afford, and it created **no cast at all**, which measures a
+room full of strangers in a game that is entirely about your own people.
 
----
+### Four real bugs, all found by measuring
 
-## Reference — what the measurements actually said
+1. **A new game shipped 154 days stale.** `lastPatch` defaulted to day 1 while
+   Phase 6b moved the opening to day 155, so `staleDaysOf` read 154 on opening
+   night and relevance bled from the first day. Every normal run collapsed
+   55 → 4 by day 90 and died of the opinion funnel. *Mine, from Phase 6b.*
+2. **A deadlock around the Studio.** Relevance could only fall, so
+   `worth-watching` (peak ≥65) unlocked in **0 of 6** normal runs — and without
+   the Studio you cannot patch, and without patching the run dies. The tool you
+   need was locked behind not needing it. Fixed twice over: staleness now only
+   applies once the Studio is earned (you cannot be blamed for neglecting a
+   build you have no way to touch), and the gate moved 65 → 62, measured
+   against a real first-year curve that peaks at 63–66.
+3. **Relevance had no ceiling on success.** The champion dividend paid a flat
+   +14 even at relevance 98, and `golden` momentum re-armed the day it expired
+   while halving decay — so anything that once crossed 88 stayed at 100 forever.
+   A competent arcade was immortal and banked $37k. The dividend now scales
+   entirely by headroom (a fading scene at 30 gets +31; a scene at 95 gets +2),
+   and a golden age has a 200-day cooldown.
+4. **The team subsystem was off.** Teams need mutual friendship at 40/30, which
+   measured over two years **does not exist until day ~336** and reaches only 11
+   pairs by day 672 — 0 teams in eight two-year runs, in a 66-person scene. The
+   gate now sits at 28/18, where the curve actually is, and crews form from
+   mid-year-one (avg 1.0 per two-year run, mostly 3+ members). The laser-tag
+   achievement dropped 3 crews → 2 to match; it was the one threshold Phase 6
+   shipped on reasoning rather than measurement, and it was unreachable.
 
-Live economy, 500 days, n≈30, death rate (control ≈ 80–83%):
+### The ladder after the fixes
 
-| removed | death rate | reading |
-|---|---|---|
-| Dramatic | **60%** | scene is far healthier without them |
-| Stoic | 77% | ~free |
-| Killer | 80% | ~neutral |
-| Natural | 83% | ~neutral |
-| Gracious | 83% | ~neutral |
-| Scholar | 87% | costly (and the **only** source of tech: −100%) |
-| Put-together | 90% | costly |
-| Warm | **97%** | load-bearing (mentorships −86%, teams −72%) |
+Competent policy, one year, n=24: easy 0% · normal 0% · difficult 0% · master
+42–75% deaths. A normal run builds to a **year-3 relevance peak of 94**, decays
+to 51 by year 5, and dies around year 4–5 — the arc the design always described
+and had never actually produced.
 
-Two traps found while measuring, worth not repeating:
+### Constraint 2 — no dominant strategy: MET
 
-- **Insulating the economy invalidates the arms that operate on it.** A $20k
-  float made Put-together and Killer look superfluous; with a live economy both
-  are load-bearing and the sign on followers flipped in both cases.
-- **Survival confounds every cumulative metric.** Runs that live longer
-  accumulate more followers, tech and skill by definition. Trust the death rate
-  and the per-run social ratios; treat the rest as directional.
+Three competent emphases, normal, three years, n=10:
+
+| style | died | attendance | skill | cash | relevance |
+|---|---|---|---|---|---|
+| economy-first | 10% | 39.6 | 58 | $51,511 | 69 |
+| community-first | 40% | 31.4 | 43 | $11,789 | 83 |
+| competition-first | 0% | 20.0 | 52 | $22,932 | 97 |
+
+All three reach year 2–3. Economy-first is richest, competition-first is safest
+and most relevant, community-first is the weakest but viable — it pays for cheap
+pricing. Nobody is self-kneecapping.
+
+*A caveat worth keeping:* the first attempt at this table had two styles dying
+100% because I had written known-bad choices into them (a $3 token, never
+patching). That measured my definitions, not the game. Two real findings survive
+from it: **token $2 is a genuine optimum** ($1 and $3 are both clearly worse, so
+pricing has a peak rather than a runaway), and **never patching is fatal within
+about 18 months** once the Studio is open — patching is closer to rent than to
+a strategy.
+
+### Constraint 1 — no archetype superfluous: PARTIALLY MET
+
+Ablation at master/336 (control 50% deaths), n=16. Positive = the scene is
+**worse** without them.
+
+| removed | Δ died | Δ lasted | Δ skill | reading |
+|---|---|---|---|---|
+| Put-together | **+38pp** | −92d | −5.2 | load-bearing |
+| Natural | **+25pp** | −75d | −4.1 | load-bearing |
+| **Dramatic** | **+25pp** | −57d | −2.1 | **load-bearing — the long-standing "drama is a net tax" problem is resolved** |
+| Stoic | +6pp | −1d | +0.9 | ~neutral |
+| Gracious | 0pp | +7d | +1.1 | ~free |
+| Killer | −6pp | −31d | −0.9 | ~free on survival |
+| Warm | −6pp | +26d | +2.6 | ~free on survival; sole driver of mentorships |
+| Scholar | **−31pp** | +45d | +2.7 | a net survival TAX — but the only source of tech |
+
+Dramatic was the open problem through Phases 1 and 2 and four failed tuning
+attempts; it is now clearly load-bearing. Scholar has inherited the role: a
+scene survives markedly better without them, while losing most of its
+innovations (25.2 → 7.4 at normal/672) and a fifth of its guides.
+
+**Not tuned, deliberately.** The instrument has a confound: removing one of four
+rows also *concentrates* the cast into the other three, so "without Scholar" is
+partly "with more Naturals" — and Natural is the strongest row. Tuning Scholar
+on that signal would repeat exactly the mistake Phase 2 made with Dramatic
+(four coefficient guesses, no diagnosis). The next pass should ablate against a
+fixed cast composition before touching a number.
+
+### Known-open, measured, not fixed
+
+- **Scholar is a net survival tax** (above). Needs a confound-free ablation.
+- **Nobody ever retires.** Zero retirements across every two-year run, average
+  passion 99 — the career/burnout engine is not reaching its thresholds under a
+  well-run scene. Either it is correct that a great arcade retains everyone, or
+  the refreshers outrun the decay; not diagnosed.
+- **Money has no late sink.** A three-year economy-first run banks $51k with
+  nothing to spend it on.
