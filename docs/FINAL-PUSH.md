@@ -360,27 +360,50 @@ four-event calendar with three staff: cleanliness averaged 71 and bottomed at
 
 ## Phase 6b — the school year, and the EVO hook
 
-Not started. Agreed 2026-07-27; slots after Phase 6.
+The cast are high-school and college kids, so the calendar behaves like theirs.
 
-The cast is high-school and college kids, so the calendar should behave like
-theirs. Two changes, one hook:
+- [x] **A run opens in summer** (June 15), not on January 1.
+- [x] **Attendance takes a real hit when school goes back.**
+- [x] **EVO moves to June 22** — seven days after a run opens.
 
-- [ ] **A run opens in summer**, not on January 1. The arcade's best months are
-      its first months, which is also when a new owner most needs the room to
-      be full.
-- [ ] **Attendance takes a real hit when school goes back.** The summer crowd
-      thins in September and the scene has to survive its first winter on
-      whoever stayed. This is the first difficulty cliff a new owner meets, and
-      it arrives early enough to teach rather than to end the run.
-- [ ] **EVO moves to June 22** — days after a run opens. Nobody you made will
-      be anywhere near ready for the first one, and that is the point: it is a
-      date on the calendar from day one, it happens *to* you while you are
-      still learning the room, and everything you do for the next year is
-      pointed at the next one.
+**Built.** The hidden dependency was that five systems computed the age of the
+run as `absDay - 1`, which is only true if a run starts on January 1. A run now
+stamps `openedAbs` and everything asking "how old is this arcade" reads
+`runAge(save)` instead: the advertising fade, the discovery ramp, relevance
+decay, the legacy milestones, the idle ladder, and the "this place is new"
+scene triggers. The calendar keeps `absDayOf` — rent, upkeep and the schedule
+are dates, not ages. Old saves migrate to `openedAbs: 1` and behave exactly as
+before. The rent/upkeep ledgers seed from the opening day too, or a June run
+would be back-billed for a January it was never open for.
 
-Depends on: the idle ladder in Phase 4 is already sized to this calendar (62
-days = the summer, 175 = New Year's Day) and its names come true when the
-start moves. Nothing else reads the season yet.
+`SEASONS` in constants.js is a straight attendance multiplier, because being at
+school isn't a preference — it's whether they're free at all:
+
+| | days | factor |
+|---|---|---|
+| Summer | Jun–Aug | ×1.30 |
+| **Back to school** | September | **×0.70** |
+| Term time | Oct–May | ×0.88 |
+| Winter break | late Dec – early Jan | ×1.15 |
+
+Measured over 400 days: summer averaged 5.1 through the door, September 2.1,
+term time 2.5, winter break 3.6. September is a cliff rather than a slope, and
+it gets a chronicle beat and a line in the Arcade header on the day, so a thin
+Tuesday reads as the season rather than as something the owner did wrong.
+
+**The EVO hook works.** `EVO_QUALIFY_GLORY` (20) means turning up at your local
+is not a qualification — you have to have won something. Measured on a fresh
+run: **Year 1 EVO, 7 days in, zero qualifiers**; the tournament runs anyway
+with the elite field and the chronicle says so ("EVO 1 came and went and nobody
+from The Arcade was in it"). **Year 2: eight qualifiers.** A full year of work
+is exactly what it takes, which is what the date is there to make you want.
+
+*Not re-balanced here,* per the measurement policy. The September cliff was
+checked for the one thing that would have made it unshippable — whether it
+categorically worsens the ladder — and it does not: at an autopilot baseline
+the death rate and the median death day are identical with seasons on or off;
+only the funnel mix moves (economy 11→4, dynamics 0→6). That baseline dies 100%
+either way, so it is a weak instrument. Phase 7 does the real pass.
 
 ---
 
