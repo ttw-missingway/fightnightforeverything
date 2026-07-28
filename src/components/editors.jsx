@@ -32,6 +32,7 @@ import {
   hasFreeInstall, claimFreeInstall,
 } from '../game/catalog.js'
 import { howToUnlock, isUnlocked } from '../game/achievements.js'
+import { bandwidthCap, scheduleLoad, fitsBandwidth, eventLoad, BANDWIDTH_TIERS } from '../game/bandwidth.js'
 import { canStream, STREAM_RIG_COST } from '../game/stream.js'
 import {
   FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
@@ -1717,18 +1718,53 @@ export function ScheduleEditor({ save, update }) {
   // singles brackets and no sub-4-team crew battles. Sandbox allows anything.
   const minBracket = (type) => (consequential ? (type === 'teams' ? 4 : 8) : 2)
 
+  // Every edit is checked against the bandwidth meter BEFORE it lands, so an
+  // over-booked calendar is impossible rather than merely inadvisable. A change
+  // that doesn't fit is simply refused — see game/bandwidth.js.
   const patchEntry = (id, fn) => update((s) => {
     const x = s.arcade.schedule.find((y) => y.id === id)
-    if (x) fn(x)
+    if (!x) return
+    const trial = structuredClone(x)
+    fn(trial)
+    if (!fitsBandwidth(s, trial, id)) return
+    fn(x)
   })
+
+  const cap = bandwidthCap(save)
+  const used = scheduleLoad(save)
+  const pct = Math.min(100, Math.round((used / cap) * 100))
+  const tone = used > cap ? 'red' : pct > 85 ? 'gold' : 'green'
+  const nextTier = BANDWIDTH_TIERS.find((t) => !isUnlocked(save, t.unlock))
+
   return (
     <div className="card">
       <div className="row spread">
         <h3>Recurring Tournaments</h3>
         <button className="small" onClick={() => update((s) => {
-          s.arcade.schedule.push(newTournamentEntry({ name: generateTournamentName(), size: minBracket('singles') }))
+          const entry = newTournamentEntry({ name: generateTournamentName(), size: minBracket('singles') })
+          if (!fitsBandwidth(s, entry)) return
+          s.arcade.schedule.push(entry)
         })}>+ Schedule tournament</button>
       </div>
+
+      {/* The meter. A bracket costs a night of setups, a staff shift and a
+          floor that needs cleaning afterwards — this is where you find out
+          that a weekly 32-player double-elim was never a real plan. */}
+      <div style={{ margin: '4px 0 10px' }}>
+        <div className="row spread">
+          <span className="small">📡 Bandwidth</span>
+          <span className={`small ${tone}`}>{used} / {cap} matches a month</span>
+        </div>
+        <div className="track" style={{ height: 8, background: 'var(--bg2)', borderRadius: 4, overflow: 'hidden', marginTop: 3 }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: `var(--${tone})` }} />
+        </div>
+        <p className="dim small" style={{ margin: '4px 0 0' }}>
+          What a calendar costs is the SETS it has to get through, so a round robin is dear and a
+          yearly major is cheap. You cannot book past the meter.
+          {nextTier && <> <span className="gold">Next {nextTier.amount}: {howToUnlock(nextTier.unlock)}</span></>}
+        </p>
+      </div>
+
       <p className="dim small">
         Brackets are always a power of two — the bracket size you set here is the invite list, filled by
         elo + reputation. If the slots can't be filled, that running of the tournament is cancelled.
@@ -1798,6 +1834,12 @@ export function ScheduleEditor({ save, update }) {
             <button className="small danger" onClick={() => update((s) => {
               s.arcade.schedule = s.arcade.schedule.filter((y) => y.id !== t.id)
             })}>×</button>
+          </div>
+          {/* What this one event is spending, so an over-budget edit that got
+              refused is self-explanatory rather than mysterious. */}
+          <div className="dim small" style={{ marginTop: 4 }}>
+            📡 {eventLoad(t)} matches a month
+            {eventLoad(t) > bandwidthCap(save) * 0.5 && <span className="gold"> — that's most of your bandwidth</span>}
           </div>
         </div>
       ))}

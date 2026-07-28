@@ -9,6 +9,7 @@ import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
 import { bumpPassion } from './career.js'
 import { applyChampionDividend } from './relevance.js'
 import { econLog, trySpend } from './economy.js'
+import { tournamentMess } from './bandwidth.js'
 import { buildStream, personalityOf, elitePersonality, applyStageReps } from './stream.js'
 import { speak } from './dialogue.js'
 
@@ -567,6 +568,7 @@ export function runSinglesTournament(save, scheduleEntry) {
   }
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)
+  applyTournamentMess(save, scheduleEntry)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   pushVod(save, record) // same object reference → shared reveal cursor
@@ -691,6 +693,7 @@ export function runTeamTournament(save, scheduleEntry) {
   }
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)
+  applyTournamentMess(save, scheduleEntry)
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   pushVod(save, record) // same object reference → shared reveal cursor
@@ -864,6 +867,7 @@ export function runEvo(save) {
   }
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)
+  applyTournamentMess(save, { type: 'singles', format: 'doubleelim', size: 16 })
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   pushVod(save, record) // same object reference → shared reveal cursor
@@ -924,6 +928,20 @@ function decorateStreamStats(save, record) {
   return record
 }
 
+/**
+ * The state of the room after a bracket night.
+ *
+ * Cleanliness is already an attendance multiplier and already summons the
+ * health inspector under 30, so this doesn't need a new system — a big event
+ * simply spends the thing a busy arcade was already short of. It is why a
+ * packed calendar quietly demands staff.
+ */
+function applyTournamentMess(save, entry) {
+  if (!save.arcade || !entry) return
+  const mess = tournamentMess(entry)
+  save.arcade.cleanliness = clamp((save.arcade.cleanliness ?? 80) - mess, 0, 100)
+}
+
 function summaryOf(record) {
   return {
     id: record.id,
@@ -935,5 +953,6 @@ function summaryOf(record) {
     placements: record.placements,
     arcadeResults: record.arcadeResults || null,
     entrantCount: record.entrantCount,
+    format: record.format || null, // achievements ask what shape it was
   }
 }

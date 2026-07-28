@@ -316,12 +316,45 @@ income posts daily.
 
 Self-contained subsystem; slot anywhere after Phase 4.
 
-- [ ] Formats: double elimination, 16 / 32 player, team, 8-team, round robin
-- [ ] **Bandwidth meter at world creation.** Tournament count × frequency ×
+- [x] Formats: double elimination, 16 / 32 player, team, 8-team, round robin
+      *(already built — single/double-elim/round-robin, singles and teams,
+      sizes 2–64, weekly/monthly/yearly. Verified all four shapes run.)*
+- [x] **Bandwidth meter at world creation.** Tournament count × frequency ×
       duration (a product of player count and format) consumes bandwidth.
       Starting bandwidth ≈ one weekly 8-player plus one monthly 16-player.
-- [ ] Bandwidth is purchasable and persistent
-- [ ] Tournaments cost cleanliness, scaled by size
+- [x] Bandwidth is **earned** and persistent — see the decision below
+- [x] Tournaments cost cleanliness, scaled by size
+
+**Built.** `src/game/bandwidth.js`. The unit is MATCHES PER MONTH, because
+what a bracket actually costs you is the sets it has to get through: single
+elim `n−1`, double elim `2n−2`, round robin `n(n−1)/2`, crew battles
+`(n−1)×3`, times 4 / 1 / ¹⁄₁₂ for weekly / monthly / yearly.
+
+`BASE_BANDWIDTH` is 45, which is exactly the plan's opening allowance — a
+weekly 8-player (28) plus a monthly 16-player (15) with two matches spare.
+Three earned tiers (+25/+25/+55) take a full lineage to 150, sized so the top
+of the ladder buys a flagship weekly 16-player double-elim (120) with a monthly
+major beside it and nothing more. A weekly 32-player double-elim is 248 and is
+never legal at any tier — which is the point.
+
+**DECIDED: bandwidth is earned, not bought.** The plan said "purchasable and
+persistent", written before Phase 4 made achievements the unlock mechanism.
+Buying it would have made bandwidth the one thing in the game with a price and
+given creation points a second use; earning it keeps one rule for everything.
+Three new achievements (33 total, still 27 points): thirty tournaments run to a
+finish, a 32-entrant field filled, a round robin of eight taken to a finish.
+
+The meter is enforced, not advisory — `fitsBandwidth` runs on a trial clone of
+every edit before it lands, so an over-budget change is refused rather than
+warned about. Verified in-app: resizing a weekly 8 to 16 and switching it to
+round robin both snap back; moving the same event to monthly frees 21.
+
+Cleanliness: `tournamentMess` is `3 + matches × 0.35`, capped at 30 — 5.4 for a
+weekly 8-player, 13.5 for a 16-player double-elim, 24.7 for a 32. It spends the
+resource a busy arcade was already short of rather than adding a system, which
+is the quiet reason a packed calendar needs staff. Measured over 400 days on a
+four-event calendar with three staff: cleanliness averaged 71 and bottomed at
+13 — low enough to invite the health inspector after a big weekend.
 
 ---
 

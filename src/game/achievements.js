@@ -234,6 +234,30 @@ export const ACHIEVEMENTS = [
     check: (s) => Object.values(s.players).some((p) => !p.npc && (p.evoTitles || 0) >= 1),
   },
 
+  // ---------- Bandwidth: how much calendar the room can carry ----------
+  {
+    key: 'weekly-habit', icon: '🗓', name: 'A standing fixture',
+    unlock: 'bandwidth-1', unlockLabel: '+25 bandwidth — a busier calendar', points: 0,
+    how: 'Run thirty tournaments to a finish.',
+    check: (s) => (s.hallOfFame || []).length >= 30,
+  },
+  {
+    key: 'a-real-field', icon: '🎟', name: 'A real field',
+    unlock: 'bandwidth-2', unlockLabel: '+25 bandwidth — a busier calendar', points: 0,
+    // Thirty-two entrants means thirty-two people who all turned up on the
+    // same night, which is a bigger ask of the room than of the bracket.
+    how: 'Fill a 32-entrant bracket.',
+    check: (s) => (s.hallOfFame || []).some((r) => (r.entrantCount || 0) >= 32),
+  },
+  {
+    key: 'all-day-affair', icon: '⏳', name: 'An all-day affair',
+    unlock: 'bandwidth-3', unlockLabel: '+55 bandwidth — a full circuit', points: 0,
+    // A round robin of eight is twenty-eight sets. Running one to a finish is
+    // the proof that this arcade can hold a room for a whole day.
+    how: 'Run a round robin of eight or more to a finish.',
+    check: (s) => (s.hallOfFame || []).some((r) => r.format === 'roundrobin' && (r.entrantCount || 0) >= 8),
+  },
+
   // ---------- The long haul ----------
   //
   // Five that nobody earns by accident. Each pays a COSMETIC, because at this
@@ -343,6 +367,7 @@ export const UNLOCK_GROUPS = [
   { key: 'floor', label: '🎳 The Floor', blurb: 'Rooms that draw a crowd of their own.', match: (a) => a.unlock.startsWith('attr-') },
   { key: 'reach', label: '📣 Reach', blurb: 'Ways of telling people you exist.', match: (a) => a.unlock.startsWith('ads-') },
   { key: 'tools', label: '🛠 Tools', blurb: 'Levers on the scene itself.', match: (a) => ['discipline', 'hotfix', 'family', 'points'].includes(a.unlock) },
+  { key: 'calendar', label: '🗓 Calendar', blurb: 'How much tournament this room can carry.', match: (a) => a.unlock.startsWith('bandwidth-') },
   { key: 'legend', label: '🏆 The Long Haul', blurb: 'Nobody earns these by accident.', match: (a) => !!a.cosmetic },
 ]
 
