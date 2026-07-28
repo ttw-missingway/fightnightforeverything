@@ -153,6 +153,7 @@ function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' }
     stageName: stage?.name,
     probA, winnerId: winner.id, winnerName: winner.name,
     narration: nar.lines, narrationMeta: nar.meta, setScore: nar.score,
+    setLoserGames: nar.loserGames, // pool tables need games-for/against
     narrationHud: nar.hud, ftTarget: nar.target, narrationSeed: nar.seed,
     stream,
     postMatch,
@@ -714,6 +715,88 @@ const EVO_SOUNDBITES = [
 
 // Distribute a field into `count` pools, snake-seeded by elo so each pool is
 // balanced (best player to pool 0, next to pool 1, … then back).
+// ---------- EVO pools ----------
+
+/**
+ * The world major. 64 entrants, sixteen pools of four, one out of each — which
+ * is what makes pools mean anything. The old shape put 24 people into four
+ * pools and advanced sixteen of them, so qualifying was very nearly automatic.
+ */
+export const EVO_FIELD = 64
+export const EVO_POOL_SIZE = 4
+export const EVO_POOLS = EVO_FIELD / EVO_POOL_SIZE // 16 — a 4×4 grid
+
+/**
+ * A pool table, in the shape a group stage is always drawn in: played, won,
+ * lost, games for and against, and points.
+ *
+ * Sets have no draws, so `D` is always zero — it is carried anyway because the
+ * table reads as a group table and a missing column reads as a mistake.
+ *
+ * Ties break the way the fight does: points, then game differential (how many
+ * games you took off people — the stocks), then games won, then how much
+ * HEALTH you had left across the pool. Two players who both went 2–1 are
+ * separated by how close their losses were, which is exactly the argument the
+ * room would have.
+ */
+function poolStandings(entrants, matches) {
+  const row = new Map(entrants.map((e) => [e.id, {
+    entrant: e, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, hp: 0, form: [],
+  }]))
+  for (const m of matches) {
+    const a = row.get(m.aId)
+    const b = row.get(m.bId)
+    if (!a || !b) continue
+    const target = m.ftTarget ?? 2
+    const lg = m.setLoserGames ?? 0
+    const aWon = m.winnerId === m.aId
+    const win = aWon ? a : b
+    const lose = aWon ? b : a
+    win.mp++; lose.mp++
+    win.w++; lose.l++
+    win.gf += target; win.ga += lg
+    lose.gf += lg; lose.ga += target
+    win.form.push('w'); lose.form.push('l')
+    // Health left at the final bell, from the last HUD snapshot of the set.
+    const last = (m.narrationHud || []).filter(Boolean).at(-1)
+    if (last) {
+      a.hp += Math.max(0, last.hpA || 0)
+      b.hp += Math.max(0, last.hpB || 0)
+    }
+  }
+  return [...row.values()]
+    .map((r) => ({ ...r, gd: r.gf - r.ga, pts: r.w * 3 + r.d }))
+    .sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || y.hp - x.hp
+      || (y.entrant.ref.elo || 0) - (x.entrant.ref.elo || 0))
+}
+
+/**
+ * A four-player round robin: three rounds, two matches a round, everybody
+ * plays everybody. Returned round by round so the UI can walk it.
+ */
+function runPool(save, entrants, letter) {
+  const [p1, p2, p3, p4] = entrants
+  const pairings = [
+    [[p1, p2], [p3, p4]],
+    [[p1, p3], [p2, p4]],
+    [[p1, p4], [p2, p3]],
+  ]
+  const rounds = []
+  const all = []
+  for (let r = 0; r < pairings.length; r++) {
+    const matches = []
+    for (const [a, b] of pairings[r]) {
+      if (!a || !b) continue
+      const m = resolveEntrantMatch(save, a, b, { context: 'evo', long: false })
+      matches.push(m)
+      all.push(m)
+    }
+    rounds.push({ title: `Round ${r + 1}`, matches })
+  }
+  const standings = poolStandings(entrants, all)
+  return { letter, entrants, rounds, matches: all, standings, winner: standings[0].entrant }
+}
+
 function snakePools(entrants, count) {
   const sorted = [...entrants].sort((a, b) => (b.ref.elo || 0) - (a.ref.elo || 0))
   const pools = Array.from({ length: count }, () => [])
@@ -768,11 +851,13 @@ export const evoQualifiers = (save) =>
 export function runEvo(save) {
   const qualified = evoQualifiers(save)
 
-  // EVO WEEK. A 24-player field (8 arcade qualifiers + 16 world elites) runs as:
-  //  · Pools — four round-robin groups; the top 4 of each advance (16 make it).
-  //  · Media Day — exhibition money matches and interviews.
+  // EVO WEEK. A 64-player field (your qualifiers + the world's elite) runs as:
+  //  · Pools — SIXTEEN four-player round robins, one out of each. A 4×4 grid.
+  //  · Media Day — the exhibition, and the words either side of it.
   //  · Top 16 — a double-elimination bracket to the Grand Finals.
-  const elites = [...save.evoRoster].sort((a, b) => b.elo - a.elo).slice(0, 16)
+  const elites = [...save.evoRoster]
+    .sort((a, b) => b.elo - a.elo)
+    .slice(0, EVO_FIELD - qualified.length)
   if (!elites.length) return { ok: false, reason: 'No elite field exists for EVO.' }
   const entrants = [
     ...qualified.map((p) => arcadeEntrant(save, p)),
@@ -782,15 +867,20 @@ export function runEvo(save) {
   const storylines = []
 
   // ---- Pools ----
-  const pools = snakePools(entrants, 4)
-  const advancers = []
-  const poolOut = [] // pool non-advancers, ranked, fill places 17+
-  pools.forEach((pool, pi) => {
-    const rr = roundRobinBracket(save, pool, { context: 'evo' })
-    const letter = String.fromCharCode(65 + pi)
-    rr.rounds.forEach((r) => rounds.push({ title: `Pool ${letter} · ${r.title}`, matches: r.matches, phase: 'pools' }))
-    rr.placements.forEach((pl, idx) => { if (idx < 4) advancers.push(pl.entrant); else poolOut.push(pl.entrant) })
-  })
+  // Snaked by seed so the field is spread evenly: no pool of death, and your
+  // qualifier is never quietly buried behind three gods.
+  const grouped = snakePools(entrants, Math.min(EVO_POOLS, Math.ceil(entrants.length / EVO_POOL_SIZE)))
+  const pools = grouped
+    .filter((g) => g.length >= 2)
+    .map((g, pi) => runPool(save, g, String.fromCharCode(65 + pi)))
+  const advancers = pools.map((p) => p.winner)
+  // Everyone who didn't get out of their pool, ranked, fills places 17+.
+  const poolOut = pools.flatMap((p) => p.standings.slice(1).map((r) => r.entrant))
+  for (const pool of pools) {
+    for (const r of pool.rounds) {
+      rounds.push({ title: `Pool ${pool.letter} · ${r.title}`, matches: r.matches, phase: 'pools' })
+    }
+  }
 
   // ---- Media Day ----
   const media = buildMediaDay(save, advancers)
@@ -877,6 +967,22 @@ export function runEvo(save) {
     champion: champion.name,
     abrupt: false,
     entrantCount: entrants.length,
+    // The pool stage as a browsable thing: sixteen tables the player can open,
+    // round by round, rather than a flat list of 96 matches.
+    pools: pools.map((p) => ({
+      letter: p.letter,
+      rounds: p.rounds.map((r) => ({ title: r.title, matchIds: r.matches.map((m) => m.id) })),
+      standings: p.standings.map((r) => ({
+        id: r.entrant.id,
+        name: r.entrant.name,
+        kind: r.entrant.kind,
+        charId: r.entrant.charId || null,
+        mp: r.mp, w: r.w, d: r.d, l: r.l, gf: r.gf, ga: r.ga, gd: r.gd, pts: r.pts,
+        hp: Math.round(r.hp), form: r.form,
+      })),
+      winnerId: p.winner.id,
+    })),
+    seeds: advancers.map((e, i) => ({ seed: i + 1, id: e.id, name: e.name, kind: e.kind })),
   }
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)

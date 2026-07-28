@@ -3,7 +3,7 @@ import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game
 import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyOf } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
-import { generateEvoRoster, populateRoster } from '../game/generate.js'
+import { generateEvoRoster, populateRoster, EVO_ROSTER_SIZE } from '../game/generate.js'
 import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
@@ -88,10 +88,28 @@ export function persistSave(save) {
 export function loadSaveById(id) {
   try {
     const save = JSON.parse(localStorage.getItem(saveKey(id)))
-    return save ? migrateSave(save) : null
+    return save ? topUpEvoRoster(migrateSave(save)) : null
   } catch {
     return null
   }
+}
+
+/**
+ * EVO grew from a 24-entrant bracket to a 64-player major, so a save made
+ * before that carries a 20-strong world field. Top it up rather than
+ * regenerate — these people have titles and history attached to them.
+ *
+ * Lives here rather than in migrateSave because model.js and generate.js
+ * already import each other, and adding a third edge to that cycle is asking
+ * for a module-init bug nobody will enjoy finding.
+ */
+function topUpEvoRoster(save) {
+  if (!save) return save
+  const have = (save.evoRoster || []).length
+  if (have && have < EVO_ROSTER_SIZE) {
+    save.evoRoster.push(...generateEvoRoster(save, EVO_ROSTER_SIZE - have))
+  }
+  return save
 }
 
 export function deleteSaveById(id) {

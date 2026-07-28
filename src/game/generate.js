@@ -282,7 +282,17 @@ export function topUpNpcs(save, absDay) {
 
 // The EVO elite roster is generated once per save and persists year to year,
 // so the wider world stays internally consistent.
-export function generateEvoRoster(save, count = 20) {
+/**
+ * The world field. Big enough that EVO is a real 64-player major rather than a
+ * bracket everyone qualifies for by turning up — see EVO_FIELD in tournament.js.
+ * A handful of gods, a tier of legends, and a long tail of killers who are
+ * still miles better than anyone in your arcade.
+ */
+// Sixty-four so the field is full even in a year your arcade sends nobody —
+// EVO is the world's tournament and it does not shrink to fit you.
+export const EVO_ROSTER_SIZE = 64
+
+export function generateEvoRoster(save, count = EVO_ROSTER_SIZE) {
   const roster = []
   const usedAliases = new Set()
   for (let i = 0; i < count; i++) {
@@ -292,7 +302,7 @@ export function generateEvoRoster(save, count = 20) {
     const pool = selectableChars(save.game)
     const char = pool.length ? choice(pool) : null
     // Elites are strong but tiered: a few gods, many killers.
-    const tier = i < 3 ? 'god' : i < 10 ? 'legend' : 'killer'
+    const tier = i < 3 ? 'god' : i < 12 ? 'legend' : 'killer'
     const skill = tier === 'god' ? randInt(76, 86) : tier === 'legend' ? randInt(66, 78) : randInt(56, 70)
     const elo = tier === 'god' ? randInt(2200, 2450) : tier === 'legend' ? randInt(2000, 2250) : randInt(1800, 2050)
     roster.push({
