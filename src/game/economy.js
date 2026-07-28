@@ -6,7 +6,7 @@
 
 import { clamp, chance, choice, randInt, uid, hash01 } from './util.js'
 import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
-import { difficultyOf, absDayOf, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
+import { difficultyOf, absDayOf, runAge, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
 import { chronicle, bump, bumpPeak } from './model.js'
 import { worldRentMult } from './worldevents.js'
 import { attractionIncome } from './catalog.js'
@@ -24,7 +24,7 @@ export const adWeeklyCost = (save) => activeAds(save).reduce((s, c) => s + c.cos
 // campaign for a place everyone already goes is wasted paper. 1 when brand new,
 // tapering toward 0.1 as days pass and a following builds.
 function earlyWeight(save) {
-  const daysOpen = absDayOf(save.day, save.year) - 1
+  const daysOpen = runAge(save) - 1
   const followers = save.stream?.followers || 0
   return clamp(1.1 - daysOpen / 50 - followers / 700, 0.1, 1)
 }

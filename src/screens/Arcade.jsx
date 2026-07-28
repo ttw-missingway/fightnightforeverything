@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf,
-  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf, helperOn } from '../game/constants.js'
+  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf, helperOn, seasonOf } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
@@ -49,6 +49,20 @@ export default function Arcade() {
               <div className="small dim">📍 {formatLocation(save.arcade.location)}</div>
             )}
             <span className="dim">{WEEKDAYS[weekdayOf(save.day)]}, {formatDay(save.day, save.year)} · running <span className="cyan">{save.game.name}</span></span>
+            {/* The cast are students, so the school calendar decides how much
+                of the week is theirs. A thin Tuesday in September is the
+                season, not something you did wrong — say which. */}
+            {(() => {
+              const season = seasonOf(save.day)
+              const tone = season.factor >= 1.1 ? 'green' : season.factor < 0.8 ? 'red' : 'dim'
+              return (
+                <div className="small" style={{ marginTop: 2 }} title={season.blurb}>
+                  <span className="dim">🎒 </span>
+                  <span className={tone}>{season.label}</span>
+                  <span className="dim"> · {season.blurb}</span>
+                </div>
+              )
+            })()}
             {save.relevance != null && (
               <div className="small" style={{ marginTop: 2 }}>
                 <span className="dim">🌐 national interest: </span>

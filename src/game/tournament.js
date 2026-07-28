@@ -749,18 +749,31 @@ function buildMediaDay(save, advancers) {
   return { rounds, storylines }
 }
 
-export function runEvo(save) {
-  const regulars = Object.values(save.players)
+/**
+ * What it takes to be invited to the world championship.
+ *
+ * Turning up at your local every night is not a qualification. Glory is the
+ * record of having actually WON something, so a scene that has never run a
+ * bracket sends nobody — which is exactly what happens at your first EVO,
+ * seven days after you open the doors.
+ */
+export const EVO_QUALIFY_GLORY = 20
+export const evoQualifiers = (save) =>
+  Object.values(save.players)
     .filter((p) => p.isRegular && p.mainCharId && !p.retired && !p.banished)
+    .filter((p) => (p.glory || 0) >= EVO_QUALIFY_GLORY)
     .sort(castFirst)
-  const qualified = regulars.slice(0, 8)
-  if (!qualified.length) return { ok: false, reason: 'No arcade players qualified for EVO this year.' }
+    .slice(0, 8)
+
+export function runEvo(save) {
+  const qualified = evoQualifiers(save)
 
   // EVO WEEK. A 24-player field (8 arcade qualifiers + 16 world elites) runs as:
   //  · Pools — four round-robin groups; the top 4 of each advance (16 make it).
   //  · Media Day — exhibition money matches and interviews.
   //  · Top 16 — a double-elimination bracket to the Grand Finals.
   const elites = [...save.evoRoster].sort((a, b) => b.elo - a.elo).slice(0, 16)
+  if (!elites.length) return { ok: false, reason: 'No elite field exists for EVO.' }
   const entrants = [
     ...qualified.map((p) => arcadeEntrant(save, p)),
     ...elites.map(eliteEntrant),
@@ -868,6 +881,10 @@ export function runEvo(save) {
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)
   applyTournamentMess(save, { type: 'singles', format: 'doubleelim', size: 16 })
+  // The year you send nobody is the year the goal gets set. Say so, plainly.
+  if (!qualified.length) {
+    chronicle(save, '📺', `EVO ${save.year} came and went and nobody from ${save.arcade.name} was in it. ${champion.name} took the title.`)
+  }
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record
   pushVod(save, record) // same object reference → shared reveal cursor

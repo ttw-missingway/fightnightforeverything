@@ -134,7 +134,56 @@ export const GENDERS = ['woman', 'man', 'non-binary']
 export const DAYS_PER_MONTH = 28
 export const MONTHS_PER_YEAR = 12
 export const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR // 336
-export const EVO_DAY = 322 // day-of-year EVO fires automatically
+/**
+ * EVO is a fixed date on the world's calendar: June 22.
+ *
+ * It sits a week after a new arcade opens, and that is the whole point. Your
+ * first one happens TO you — nobody from your room is anywhere near qualifying
+ * — and then it is a date you can see coming for the next eleven months.
+ */
+export const EVO_DAY = 162 // June 22
+
+/**
+ * A run opens on June 15. Two reasons, and they are the same reason.
+ *
+ * The cast are school and college kids, so summer is when the room is full —
+ * a new owner gets their best months first, learns the place while it is easy,
+ * and then meets September. And opening a week before EVO means the goal is
+ * set before the player has done anything at all.
+ */
+export const OPENING_DAY = 155 // June 15
+
+/**
+ * Days this run has been open. NOT the same as the absolute day any more:
+ * a run starts on day 155, so `absDayOf` reads 155 on opening night.
+ *
+ * Anything asking "how old is this arcade" wants this. Anything asking "what
+ * date is it" (rent, EVO, the schedule) wants the calendar.
+ */
+export const runAge = (save) =>
+  absDayOf(save?.day ?? 1, save?.year ?? 1) - (save?.openedAbs ?? 1) + 1
+
+/**
+ * The school year, which is the calendar the cast actually lives on.
+ *
+ * Summer is the good months. September is a cliff, not a slope — everyone
+ * goes back at once, and a room that felt like a scene in August is suddenly
+ * four people on a Tuesday. Surviving that first September is the earliest
+ * real test of whether the place is built on anything.
+ */
+export const SEASONS = [
+  { key: 'summer', from: 141, to: 224, factor: 1.3, label: 'Summer', blurb: 'School is out and the room is full.' },
+  { key: 'backtoschool', from: 225, to: 252, factor: 0.7, label: 'Back to school', blurb: 'Everyone just went back. The floor is half empty and nobody has a routine yet.' },
+  { key: 'term', from: 253, to: 329, factor: 0.88, label: 'Term time', blurb: 'Classes, homework, jobs. Weekends carry the scene now.' },
+  { key: 'winterbreak', from: 330, to: 336, factor: 1.15, label: 'Winter break', blurb: 'Everyone is home for the holidays.' },
+  { key: 'winterbreak2', from: 1, to: 7, factor: 1.15, label: 'Winter break', blurb: 'Everyone is home for the holidays.' },
+  { key: 'spring', from: 8, to: 140, factor: 0.88, label: 'Term time', blurb: 'Classes, homework, jobs. Weekends carry the scene now.' },
+]
+
+export const seasonOf = (dayOfYear) =>
+  SEASONS.find((s) => dayOfYear >= s.from && dayOfYear <= s.to) || SEASONS[5]
+
+export const seasonFactor = (dayOfYear) => seasonOf(dayOfYear).factor
 
 // How long a brand-new arcade still feels brand new. For this long the floor
 // talk is mostly ABOUT the room — first impressions, what everyone played

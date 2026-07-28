@@ -1,5 +1,5 @@
 import { uid, clamp } from './util.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, OPENING_DAY, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { defaultRules, migrateRules } from './rules.js'
@@ -422,8 +422,12 @@ export function newSave(partial = {}) {
     saveName: 'New Save',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    day: 1, // day of year, 1..336
+    day: OPENING_DAY, // day of year, 1..336 — a run opens in mid-June
     year: 1,
+    // The absolute day the doors opened. Everything asking "how old is this
+    // arcade" reads runAge() against this, because day-of-year no longer
+    // starts at 1. Old saves opened on January 1 and migrate to 1.
+    openedAbs: OPENING_DAY,
     hour: 0, // hours simulated so far in the current day
     dayInProgress: null, // live day state while the arcade is open
     settings: {
@@ -501,8 +505,11 @@ export function newSave(partial = {}) {
       todayAttendance: null, // door count for the day currently open (folded into history)
       redDays: 0, // consecutive days in the negative — the landlord is counting
       foreclosed: false, // consequential: the landlord took the keys; reset to continue
-      lastRentMonth: 0, // month index rent was last settled through (0 = opening month grace)
-      lastUpkeepWeek: 0, // week index upkeep was last settled through
+      // Settled THROUGH the opening month/week, so a run that starts in June
+      // isn't back-billed for the January-to-May it was never open for. Both
+      // ledgers are calendar indices, not run-age.
+      lastRentMonth: Math.floor((OPENING_DAY - 1) / DAYS_PER_MONTH),
+      lastUpkeepWeek: Math.floor((OPENING_DAY - 1) / 7),
     },
     rosterCollapsed: false, // legacy alias for a scene-dynamics ending; see gameOver
     // A run ends down exactly one of three funnels, and which one it was is the
@@ -797,6 +804,7 @@ export function migrateSave(save) {
   save.prestige.achievements ??= {}
   save.prestige.unlocks ??= {}
   save.settings.helpers ??= { tips: true, vitals: true, rumors: true }
+  save.openedAbs ??= 1 // saves from before the summer start opened on January 1
   save.milestones ??= {}
   save.prestigePending ??= 0
   // A save that predates the counters starts them now rather than backfilling:

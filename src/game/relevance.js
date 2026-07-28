@@ -7,7 +7,7 @@
 // get, so late-game balance changes are genuinely dangerous.
 
 import { clamp, hash01, rand } from './util.js'
-import { absDayOf, DAYS_PER_YEAR, difficultyOf } from './constants.js'
+import { absDayOf, runAge, DAYS_PER_YEAR, difficultyOf } from './constants.js'
 import { chronicle, awardMilestone } from './model.js'
 import { communityGameOpinion } from './social.js'
 
@@ -24,7 +24,7 @@ export function relevanceLabel(v) {
 // run). This is what accelerates the decline: an old franchise is hard to keep
 // alive no matter how good the game is.
 export function gameAgeYears(save) {
-  return (absDayOf(save.day, save.year) - 1) / DAYS_PER_YEAR
+  return (runAge(save) - 1) / DAYS_PER_YEAR
 }
 
 const staleDaysOf = (save) =>

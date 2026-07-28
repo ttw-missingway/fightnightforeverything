@@ -18,7 +18,7 @@
 // silent.
 
 import { choice, hash01 } from './util.js'
-import { absDayOf, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS } from './constants.js'
+import { absDayOf, runAge, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS } from './constants.js'
 import { familiarity } from './dialogue.js'
 import { charPower } from './patch.js'
 import SCENES from './data/scenes.js'
@@ -118,8 +118,8 @@ export const ROLE_PREDICATES = {
 // ---------- World predicates ----------
 
 export const WORLD_PREDICATES = {
-  'arcade:new': (c) => c.absDay <= OPENING_DAYS,
-  'arcade:established': (c) => c.absDay > DAYS_PER_YEAR / 2,
+  'arcade:new': (c) => c.runDay <= OPENING_DAYS,
+  'arcade:established': (c) => c.runDay > DAYS_PER_YEAR / 2,
   'arcade:dirty': (c) => (c.save.arcade.cleanliness ?? 80) < 45,
   'arcade:packed': (c) => c.attendance >= Math.max(6, (c.save.peakAttendance || 0) * 0.8),
   'arcade:dead': (c) => c.attendance <= Math.max(3, (c.save.peakAttendance || 0) * 0.25),
@@ -181,6 +181,9 @@ const ctxFor = (save, results, extra) => {
     save,
     results,
     absDay: absDayOf(save.day, save.year),
+    // "Is this place still new?" is about the ARCADE, not the calendar — a
+    // run opens in June, so absDay reads 155 on opening night.
+    runDay: runAge(save),
     attendance: dip?.attendeeIds?.length || 0,
     // sim.js owns the event calendar and importing it here would be circular,
     // so the caller passes today's verdict in.

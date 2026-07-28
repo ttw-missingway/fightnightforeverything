@@ -1,5 +1,5 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
-import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, statusOf, difficultyOf, statLevel } from './constants.js'
+import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, runAge, seasonOf, seasonFactor, statusOf, difficultyOf, statLevel } from './constants.js'
 import { driftEvoRoster, topUpNpcs } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup, bumpPeak } from './model.js'
 import { checkAchievements } from './achievements.js'
@@ -343,6 +343,11 @@ function attendChance(save, player) {
   // barely trickle in until word spreads. Once someone's a regular, they come
   // regardless — so those early discoverers are what seeds the whole scene.
   if (!player.isRegular) p *= 0.55 * awarenessFactor(save)
+  // THE SCHOOL YEAR. The cast are students, so the calendar they live on is
+  // the one that decides how much of the week is theirs. Summer fills the
+  // room; September empties it overnight. This is a straight multiplier
+  // because it isn't a preference — it's whether they are free at all.
+  p *= seasonFactor(save.day)
   // A hard-difficulty arcade is a struggling unknown — thinner crowds.
   p *= 0.45 + 0.55 * popularityFactor(save)
   // Passion: a player losing the fire for the game turns up less and less.
@@ -380,7 +385,7 @@ function attendChance(save, player) {
 // generated faces), not the loyalty of existing regulars. Resets on a fresh
 // run (day and followers both reset).
 function awarenessFactor(save) {
-  const daysOpen = absDayOf(save.day, save.year) - 1
+  const daysOpen = runAge(save) - 1
   const followers = save.stream?.followers || 0
   const hype = save.stream?.hype || 0
   // Advertising is the deliberate lever here — the main way to fill the room
@@ -1923,7 +1928,7 @@ export function advanceDay(save) {
     // by nearly 2x on Normal. Gating on beating your best run instead killed
     // farming AND progression — Difficult froze at 5 points forever, because
     // beating your record is exactly what a player short on points cannot do.
-    const absDay = absDayOf(save.day, save.year)
+    const absDay = runAge(save)
     if (rungAllowanceLeft(save) > 0) {
       if (absDay >= 42) awardMilestone(save, 'six-weeks', 1, `Six weeks and ${save.arcade.name} is still standing`)
       if (absDay >= 84) {
@@ -1940,6 +1945,20 @@ export function advanceDay(save) {
     // universal tick and has no day report to write into (tournament, EVO and
     // idle catch-up days all come through here too).
     checkAchievements(save)
+  }
+  // The September cliff, said out loud once a year. Everyone goes back at the
+  // same time, so this is a thing that HAPPENS rather than a slope you notice
+  // three weeks late in a graph.
+  const season = seasonOf(save.day)
+  if (save.seasonFlagged !== `${season.key}:${save.year}`) {
+    save.seasonFlagged = `${season.key}:${save.year}`
+    // Chronicle only: advanceDay is the universal tick and has no day report
+    // to write into (tournament, EVO and idle catch-up days come through here).
+    if (season.key === 'backtoschool') {
+      chronicle(save, '🎒', `School went back. ${save.arcade.name} is going to feel empty for a while.`)
+    } else if (season.key === 'summer' && runAge(save) > 30) {
+      chronicle(save, '☀️', `School is out. ${save.arcade.name} is about to get busy.`)
+    }
   }
   save.day += 1
   if (save.day > DAYS_PER_YEAR) {

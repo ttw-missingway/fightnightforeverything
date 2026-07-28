@@ -1,4 +1,4 @@
-import { absDayOf, DAYS_PER_YEAR } from './constants.js'
+import { runAge, DAYS_PER_YEAR } from './constants.js'
 import { chronicle } from './model.js'
 
 /**
@@ -37,18 +37,16 @@ import { chronicle } from './model.js'
  */
 
 /**
- * The idle ladder is measured in DAYS SURVIVED, not calendar dates, and the
- * numbers are the seasons of the planned summer start (see FINAL-PUSH.md):
- * open in late June, 62 days carries you through to the end of the summer,
- * 175 reaches New Year's Day, then a year, then five.
+ * The idle ladder is measured in DAYS THIS RUN HAS BEEN OPEN, and the numbers
+ * are now literally the seasons: a run opens June 15, so 70 days carries you
+ * to the end of August and 182 reaches New Year's Day.
  *
- * Written this way on purpose. A run currently opens on January 1, so reading
- * the literal calendar would put "survive the summer" AFTER "reach New Year's"
- * and the ladder would climb backwards. Elapsed days give the same lengths
- * either way, and the names come true the day the start moves.
+ * (These were written before the summer start existed, as elapsed-day
+ * approximations of a calendar that hadn't landed yet. It has now — Phase 6b —
+ * so they say what they always meant.)
  */
-const SUMMER = 62
-const TO_NEW_YEAR = 175
+const SUMMER = 70 // June 15 → the end of August
+const TO_NEW_YEAR = 182 // June 15 → January 1
 
 export const ACHIEVEMENTS = [
   // ---------- Idle speeds: you earn the right to skip ahead ----------
@@ -406,7 +404,7 @@ export function checkAchievements(save) {
   save.prestige.achievements ??= {}
   save.prestige.unlocks ??= {}
   save.unlockNotices ??= []
-  const absDay = absDayOf(save.day, save.year)
+  const absDay = runAge(save) // every check below means "days this run has been open"
   const earned = []
   for (const a of ACHIEVEMENTS) {
     if (save.prestige.achievements[a.key]) continue
