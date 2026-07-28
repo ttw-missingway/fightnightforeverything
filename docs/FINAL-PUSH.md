@@ -251,30 +251,64 @@ Carry into later phases:
 
 ## Phase 5 — the shop
 
-Priced only after Phases 1–2 land, because the prices encode what things are
-worth.
+Not a shop in the end. Phase 4 made achievements the unlock mechanism, so
+nothing here has a price — `isUnlocked()` is the gate everywhere and the
+Legacy tab is the catalogue.
 
-- [ ] Idle mode — every speed beyond real time
-- [ ] VODs tab
-- [ ] Community tier list tab
-- [ ] Feed tab
-- [ ] Studio tab
-- [ ] **Food packs** — cut the catalogue to 5 at start, 4 purchasable packs of 5.
+- [x] Idle mode — every speed beyond real time
+- [x] VODs tab
+- [x] Community tier list tab
+- [x] Feed tab
+- [x] Studio tab
+- [x] **Food packs** — catalogue cut to 5 at start, 4 earned packs of 5.
       Players can prefer food you cannot yet stock; that gap is the motivation.
-- [ ] **Arcade attraction packs** — pinball, bowling, VR, pickleball, laser tag,
-      classic games, touch-screen. Passive revenue scaled by arcade popularity,
-      each targeting a different demographic. No NPCs needed.
-      *Buying the pack persistently unlocks the **option**; you still install it
-      per-run — but the purchase grants the first installation free in the run
-      where it is bought.*
-- [ ] Separate / ban players
-- [ ] Hotfixes from the Studio — small changes only, to correct an overlooked
+- [x] **Arcade attraction packs** — pinball, bowling, VR, pickleball, laser tag,
+      classic games. Passive revenue scaled by arcade popularity, each targeting
+      a different demographic. No NPCs needed.
+      *Earning the pack unlocks the **option**; you still install it per-run —
+      and the run that earns it gets the first installation free.*
+- [x] Separate / ban players
+- [x] Hotfixes from the Studio — small changes only, to correct an overlooked
       problem without the community irritation of a full patch
-- [ ] Family business — start with a small staff who never quit and need no pay
-- [ ] Extra allocation points (expensive)
-- [ ] Advertising options — start with flyers and word of mouth only
-- [ ] **Streaming setup** — per-run purchase, not persistent. You cannot stream
+- [x] Family business — start with a small staff who never quit and need no pay
+- [x] Extra allocation points (expensive)
+- [x] Advertising options — start with flyers and word of mouth only
+- [x] **Streaming setup** — per-run purchase, not persistent. You cannot stream
       until you buy it.
+
+**Built.** Content, gating and three new features.
+
+*Content.* `FOODS` went 12 → 25: five starters plus four themed packs (The
+Fryer, The Sweet Counter, The Hot Line, Late Night). Every existing food name
+survived into a pack, so old saves keep their stock and every player's taste
+still resolves. Six attraction packs add 20 rooms on top of the ten ordinary
+cabinets. Attractions are NOT cabinets: `attractionIncome` pays daily from the
+walk-in trade, scaled by `arcadePopularity` (recent attendance, followers,
+cleanliness), so a floor full of them in a dead arcade is a bill rather than an
+income — they still carry rent and upkeep. Player tastes now draw from
+`STARTER_GAMES` only; nobody's favourite side cabinet is "Court 1".
+
+*Gating.* `src/game/catalog.js` is the single place that answers what may be
+stocked or installed. Locked packs are LISTED, not hidden, with the achievement
+that opens them — a counter you can't stock yet is supposed to be visible,
+because half the room already wants something off it. Same for ad channels
+(flyers free, radio+social/billboards/TV earned) and the four earned tabs,
+which render greyed and unclickable with the requirement in the tooltip.
+
+*New features.* The **streaming rig** is the one per-run purchase ($180,
+`arcade.streamRig`, cleared by `resetSaveById`): `canStream()` short-circuits
+`buildStream`, and every consumer already null-checked a missing stream, so no
+rig means no channel at all that run. The **family business** seeds two unpaid
+staff who are skipped by payroll and never quit. **Hotfixes** ship at most two
+move changes with no version bump, no reception score, no relevance gamble and
+no fresh-meta window — and correspondingly can never save a souring scene.
+
+*Measured.* A fresh locked lineage survives 200 days with 5 foods, 10 cabinets
+and no channel. A veteran lineage opens with 25 foods, 30 floor items, two free
+hands and its first attraction on the house. Verified in-app: the free install
+consumes exactly once per pack (first pinball room $0, second $282, bowling
+credit untouched), payroll stays empty with a family crew, and attraction
+income posts daily.
 
 ---
 

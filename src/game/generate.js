@@ -4,7 +4,7 @@ import { seedTakes } from './takes.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, GENDERS, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
-  ELITE_ALIASES, FOODS, OTHER_GAMES, APPEARANCES, CATCHPHRASES,
+  ELITE_ALIASES, FOODS, STARTER_GAMES, APPEARANCES, CATCHPHRASES,
   GAME_TITLE_PARTS, ARCADE_NAME_PARTS, STAGE_IDEAS, TOURNAMENT_NAME_PARTS,
 } from './names.js'
 import { newStage } from './model.js'
@@ -69,7 +69,7 @@ export function randomPreferences(save) {
     attractedPlayerTags: drawnTo,
     repelledPlayerTags: pTags.length ? sample(pTags.filter((t) => !drawnTo.includes(t)), randInt(0, 1)) : [],
     // ONE favorite each, from the whole catalog — carrying it is your call.
-    otherGames: sample(OTHER_GAMES, 1),
+    otherGames: sample(STARTER_GAMES, 1),
     foods: sample(FOODS, 1),
   }
 }
@@ -186,7 +186,7 @@ export function generatePlayer(save, overrides = {}) {
     attractedPlayerTags: drawnTo,
     repelledPlayerTags: putOffBy,
     // Tastes span the whole catalog, not just what's stocked (see randomPreferences).
-    otherGames: sample(OTHER_GAMES, 1),
+    otherGames: sample(STARTER_GAMES, 1),
     foods: sample(FOODS, 1),
     slob,
     ...overrides,

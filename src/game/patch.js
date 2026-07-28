@@ -415,6 +415,78 @@ export function forecastNoise(save, seed) {
   return { offset, uncertainty: Math.round(uncertainty) }
 }
 
+// ---------- Hotfixes ----------
+
+/** How many moves a hotfix may touch, and what it may never do. */
+export const HOTFIX_MAX_MOVES = 2
+
+/**
+ * Is this draft small enough to go out quietly?
+ *
+ * A hotfix is a correction, not an event: two moves at most, and nothing that
+ * changes what the game IS — no new characters, nothing removed, no renames,
+ * no rule changes. Anything bigger has to face the community as a real patch.
+ */
+export function hotfixCheck(save) {
+  if (!save.gameDraft) return { ok: false, why: 'No draft changes to ship.' }
+  const d = diffGame(save.game, save.gameDraft)
+  if (d.added.length) return { ok: false, why: 'A new character is a patch, not a hotfix.' }
+  if (d.removed.length) return { ok: false, why: 'Removing a character is a patch, not a hotfix.' }
+  if (d.stageAdds) return { ok: false, why: 'New stages are a patch, not a hotfix.' }
+  if (d.ruleChanges) return { ok: false, why: 'Changing the rules is a patch, not a hotfix.' }
+  if (!d.moveChanges) return { ok: false, why: 'Nothing has actually changed.' }
+  if (d.moveChanges > HOTFIX_MAX_MOVES) {
+    return { ok: false, why: `${d.moveChanges} moves changed — a hotfix touches at most ${HOTFIX_MAX_MOVES}.` }
+  }
+  return { ok: true, diff: d, moveChanges: d.moveChanges }
+}
+
+/**
+ * Ship a correction without holding a press conference.
+ *
+ * The whole point is what does NOT happen: no version bump the community can
+ * point at, no reception score, no relevance gamble, no franchise fatigue, no
+ * fresh-meta window. It quietly fixes the thing you overlooked. The cost is
+ * that it can never save you either — a scene souring on the balance is not
+ * going to be talked round by a patch nobody noticed.
+ *
+ * Players whose main was touched still feel it, because they play the
+ * character every day and they can tell.
+ */
+export function releaseHotfix(save) {
+  const check = hotfixCheck(save)
+  if (!check.ok) return null
+  const { diff } = check
+  save.game = save.gameDraft
+  computeMatchups(save.game)
+  save.gameDraft = null
+  save.patchGames = 0 // the numbers moved, so the community's read is stale
+
+  const hotfix = {
+    id: uid('hotfix'),
+    version: save.game.version, // deliberately unchanged
+    hotfix: true,
+    day: save.day, year: save.year,
+    notes: diff.notes.length ? diff.notes : ['A quiet correction.'],
+    reception: 'barely noticed',
+    score: 0,
+    why: [],
+    buffedIds: diff.buffed.map((b) => b.char.id),
+    nerfedIds: diff.nerfed.map((n) => n.char.id),
+  }
+  save.patches.unshift(hotfix)
+
+  if (save.settings.mode !== 'sandbox') {
+    for (const p of Object.values(save.players)) {
+      if (!p.isRegular || p.retired || p.banished) continue
+      if (diff.nerfed.some((n) => n.char.id === p.mainCharId)) { p.mood = clamp(p.mood - 0.4, 0, 10); bumpPassion(p, -1) }
+      if (diff.buffed.some((b) => b.char.id === p.mainCharId)) { p.mood = clamp(p.mood + 0.3, 0, 10); bumpPassion(p, 2) }
+    }
+  }
+  chronicle(save, '🩹', `A quiet hotfix went out — ${diff.notes[0] || 'a small correction'}`)
+  return hotfix
+}
+
 /**
  * Commit the draft as a new patch. Returns the patch record.
  * Consequential mode: the community reaction has teeth (morale, moods,

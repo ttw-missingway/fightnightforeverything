@@ -12,6 +12,7 @@ import { displayName } from '../game/util.js'
 import { skillCeiling } from '../game/match.js'
 import { voiceSummary } from '../game/dialogue.js'
 import { warnPlayer, banish, separate, unseparate, separationOf, warnableBehaviors, toxicityBlame } from '../game/discipline.js'
+import { isUnlocked } from '../game/achievements.js'
 
 const bestSkill = (p) => Math.round(Math.max(0, ...Object.values(p.charSkill || {}), 0))
 
@@ -508,6 +509,10 @@ function DisciplinePanel({ save, player: p, mutate }) {
   const [note, setNote] = useState(null)
   const [confirmBan, setConfirmBan] = useState(false)
   if (p.retired || p.banished) return null
+  // Warnings, separations and bans are earned tools. Until then the only
+  // levers on a souring room are the ones that were always there: matchmaking,
+  // a clean floor, a staffed counter, and a meta nobody hates.
+  if (!isUnlocked(save, 'discipline')) return null
   const behaviors = warnableBehaviors(save, p)
   const blame = toxicityBlame(save, p)
   const warnings = p.warnings || []

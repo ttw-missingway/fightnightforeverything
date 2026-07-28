@@ -5,7 +5,7 @@ import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNex
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { generateEvoRoster, populateRoster } from '../game/generate.js'
 import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '../game/model.js'
-import { prestigeEarned, startingBudget, arcadeBuildCost } from '../game/economy.js'
+import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
 
@@ -128,6 +128,7 @@ export function resetSaveById(id) {
   arcade.otherGames = []
   arcade.cleanliness = 80
   arcade.closedUntilAbs = null
+  arcade.streamRig = false // the one thing you buy again every single run
 
   const world = newSave({
     settings: structuredClone(save.settings),
@@ -158,6 +159,7 @@ export function resetSaveById(id) {
   for (const p of Object.values(save.players)) {
     world.players[p.id] = resetPlayerForNewRun(p)
   }
+  seedFamilyCrew(world)
   world.id = save.id
   world.saveName = save.saveName
   world.createdAt = save.createdAt
@@ -461,6 +463,7 @@ export function StoreProvider({ children }) {
     if (next.settings.mode !== 'sandbox') {
       next.economy.money = Math.max(0, startingBudget(next) - arcadeBuildCost(next))
     }
+    seedFamilyCrew(next) // a lineage that earned it opens with two free hands
     persistSave(next)
     setSave(next)
     setScreen({ name: 'arcade' })

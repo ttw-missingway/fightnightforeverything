@@ -28,6 +28,12 @@ import {
   HELPERS, helperOn,
 } from '../game/constants.js'
 import {
+  availableFoods, lockedFoodPacks, availableAttractions, lockedAttractionPacks,
+  hasFreeInstall, claimFreeInstall,
+} from '../game/catalog.js'
+import { howToUnlock, isUnlocked } from '../game/achievements.js'
+import { canStream, STREAM_RIG_COST } from '../game/stream.js'
+import {
   FORM_MOVE_TYPE, selectableChars, formsOf, originOf, canBeFormOf, reachableForms, pruneForms,
   switchTargetsOf, revertMoveOf,
 } from '../game/forms.js'
@@ -1289,7 +1295,8 @@ export function ArcadeEditor({ save, update, live = false, budget = false }) {
     if (owned) {
       s.arcade[key] = s.arcade[key].filter((x) => x !== name)
     } else {
-      if (live && !trySpend(s, initialCost, costLabel)) return
+      // The run that earns an attraction gets one room on the house.
+      if (live && !claimFreeInstall(s, name) && !trySpend(s, initialCost, costLabel)) return
       s.arcade[key].push(name)
       // Seed a default price so it's sellable from day one (editable in Prices).
       if (key === 'foods') { s.arcade.foodPrices = { ...(s.arcade.foodPrices || {}) }; s.arcade.foodPrices[name] ??= DEFAULT_FOOD_PRICE }
@@ -1308,22 +1315,40 @@ export function ArcadeEditor({ save, update, live = false, budget = false }) {
     }
   })
 
-  const catalogCard = (title, blurb, key, catalog, describe, costOf, labelOf) => (
+  // Only what this lineage has earned the right to carry. Locked packs are
+  // listed below the catalogue rather than hidden — a counter you cannot stock
+  // yet is supposed to be visible, because half the regulars want something off
+  // it and you can read exactly what would open it.
+  const catalogCard = (title, blurb, key, catalog, describe, costOf, labelOf, allowed, locked) => (
     <div className="card">
       <h3>{title}</h3>
       <p className="dim small">{blurb}</p>
-      {catalog.map((item) => {
+      {catalog.filter((item) => allowed.includes(item.name)).map((item) => {
         const owned = save.arcade[key].includes(item.name)
+        const free = !owned && hasFreeInstall(save, item.name)
         return (
           <div className="row spread" key={item.name} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
             <span className={`pill clickable ${owned ? 'on' : ''}`}
               onClick={() => toggle(key, item.name, costOf(item), labelOf(item))}>
               {owned ? '✓ ' : '+ '}{item.name}
             </span>
-            <span className="dim small">{describe(item)}</span>
+            <span className="dim small">
+              {free && <span className="gold">first one on the house · </span>}{describe(item)}
+            </span>
           </div>
         )
       })}
+      {locked.map((pack) => (
+        <div key={pack.key} style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 6, opacity: 0.75 }}>
+          <div className="row spread">
+            <span className="small">🔒 {pack.icon} {pack.label}</span>
+            <span className="dim small">{(pack.foods || pack.items).length} items</span>
+          </div>
+          <p className="dim small" style={{ margin: '2px 0 0' }}>
+            {pack.blurb} <span className="gold">Earned by: {howToUnlock(pack.key)}</span>
+          </p>
+        </div>
+      ))}
       {/* Legacy custom items from before the fixed catalogs still work — they just can't be re-added. */}
       {save.arcade[key].filter((n) => !catalog.some((c) => c.name === n)).map((n) => (
         <div className="row spread" key={n} style={{ padding: '3px 0' }}>
@@ -1337,6 +1362,7 @@ export function ArcadeEditor({ save, update, live = false, budget = false }) {
   return (
     <div>
       {budget && <BudgetBar save={save} />}
+      <StreamRigCard save={save} update={update} priced={priced} />
       <div className="card">
         <h3>🕹 Setups <span className="dim small">— cabinets running {save.game.name || 'the main game'}</span></h3>
         <p className="dim small">
@@ -1352,16 +1378,64 @@ export function ArcadeEditor({ save, update, live = false, budget = false }) {
           'foods', FOOD_CATALOG,
           (f) => `${priced ? `$${f.stockCost} to stock · ` : ''}$${f.restock}/wk restock`,
           (f) => f.stockCost, (f) => `stocked ${f.name}`,
+          availableFoods(save), lockedFoodPacks(save),
         )}
         {catalogCard(
-          'Other Games in the Arcade',
-          'Side cabinets where players hang out between sets. Each has an up-front installation fee, needs weekly maintenance, and adds to the rent.',
+          'The Floor',
+          'Side cabinets your players hang around between sets, and attractions that pull a crowd of their own — the bowling lanes take money on an afternoon when not one fighting-game player walks in. Everything here costs an installation fee, weekly maintenance, and rent.',
           'otherGames', GAME_CATALOG,
           (g) => `${priced ? `$${g.price} to install · ` : ''}$${g.upkeep}/wk upkeep`,
-          (g) => g.price, (g) => `installed ${g.name} cabinet`,
+          (g) => g.price, (g) => `installed ${g.name}`,
+          availableAttractions(save), lockedAttractionPacks(save),
         )}
       </div>
       <AdvertisingEditor save={save} update={update} />
+    </div>
+  )
+}
+
+/**
+ * The camera. Bought every single run, and never carried over.
+ *
+ * Streaming is the strongest lever in the game — belief, popularity, followers,
+ * and the only route to a player who doesn't choke at EVO — so the price is
+ * really "will you spend most of an opening float on something that pays back
+ * over months". Skipping it is a legitimate strategy for one lean run and a
+ * terrible one for a lineage.
+ */
+function StreamRigCard({ save, update, priced }) {
+  const has = canStream(save)
+  const afford = (save.economy?.money ?? 0) >= STREAM_RIG_COST
+  return (
+    <div className="card" style={has ? undefined : { borderColor: 'var(--gold)' }}>
+      <div className="row spread">
+        <h3 style={{ margin: 0 }}>📡 Streaming Setup</h3>
+        {has
+          ? <span className="green small">✓ on the air as {save.stream?.channelName}</span>
+          : <span className="gold small">{priced ? `$${STREAM_RIG_COST}` : 'not set up'}</span>}
+      </div>
+      {has ? (
+        <p className="dim small" style={{ margin: '4px 0 0' }}>
+          A camera on setup one and an encoder under the counter. Every match you put on the
+          channel builds followers, and builds the nerve of whoever is playing.
+        </p>
+      ) : (
+        <>
+          <p className="dim small" style={{ margin: '4px 0 6px' }}>
+            Without one there is no channel this run — no followers, no hype, and nobody on
+            your roster gets the stage time that stops them freezing at EVO. It does not
+            carry over: every run buys its own.
+          </p>
+          <button className="primary small" disabled={priced && !afford}
+            onClick={() => update((s) => {
+              if (priced && !trySpend(s, STREAM_RIG_COST, 'streaming setup')) return
+              s.arcade.streamRig = true
+            })}>
+            {priced ? `Buy the rig — $${STREAM_RIG_COST}` : 'Set up the channel'}
+          </button>
+          {priced && !afford && <span className="red small"> — you can't afford it yet.</span>}
+        </>
+      )}
     </div>
   )
 }
@@ -1397,7 +1471,21 @@ export function AdvertisingEditor({ save, update }) {
       </p>
       {AD_CHANNELS.map((c) => {
         const on = active.includes(c.key)
+        const locked = c.unlock && !isUnlocked(save, c.unlock)
         const hint = phaseHint(c)
+        if (locked) {
+          return (
+            <div key={c.key} className="row spread" style={{ borderBottom: '1px solid var(--border)', padding: '5px 0', alignItems: 'flex-start', opacity: 0.7 }}>
+              <div style={{ flex: 1 }}>
+                <span className="pill">🔒 {c.label}</span>
+                <p className="dim small" style={{ margin: '2px 0 0' }}>
+                  {c.blurb} <span className="gold">Earned by: {howToUnlock(c.unlock)}</span>
+                </p>
+              </div>
+              <span className="dim small" style={{ whiteSpace: 'nowrap' }}>${c.cost}/wk</span>
+            </div>
+          )
+        }
         return (
           <div key={c.key} className="row spread" style={{ borderBottom: '1px solid var(--border)', padding: '5px 0', alignItems: 'flex-start' }}>
             <div style={{ flex: 1 }}>

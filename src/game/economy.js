@@ -9,6 +9,8 @@ import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
 import { difficultyOf, absDayOf, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
 import { chronicle, bump, bumpPeak } from './model.js'
 import { worldRentMult } from './worldevents.js'
+import { attractionIncome } from './catalog.js'
+import { isUnlocked } from './achievements.js'
 
 export const foodPriceOf = (save, name) => save.arcade.foodPrices?.[name] ?? DEFAULT_FOOD_PRICE
 export const gameTokensOf = (save, name) => save.arcade.gameTokens?.[name] ?? DEFAULT_GAME_TOKENS
@@ -195,13 +197,38 @@ export function projectedMonthlyCost(save) {
 export const FAIR_WAGE = { employee: 10, manager: 16 } // $/day the market expects
 export const HIRE_COST = 25 // posting the job, training the hire
 
-export function newStaffMember(role, playerId = null, name = null) {
+export function newStaffMember(role, playerId = null, name = null, family = false) {
   return {
     id: uid('staff'),
     role, // 'employee' | 'manager'
     playerId, // a player who took the job — they can't play while staffed
     name: name || `${choice(FIRST_NAMES)} ${choice(LAST_NAMES)}`,
+    // Family. They draw no wage and they never walk out — see FAMILY_CREW.
+    family,
     hiredAbs: 0,
+  }
+}
+
+/**
+ * The family business: two people behind the counter from day one who are
+ * never on the payroll and never quit.
+ *
+ * This is the single biggest early-game gift in the ladder, which is why it
+ * costs half a year of running the floor completely alone to earn. Payroll and
+ * cleaning are what kill an opening month; a run that starts with two free
+ * hands starts a different game.
+ */
+export const FAMILY_CREW = [
+  { role: 'employee' },
+  { role: 'employee' },
+]
+
+export function seedFamilyCrew(save) {
+  if (!isUnlocked(save, 'family')) return
+  save.staffing ??= newStaffing()
+  if (save.staffing.staff.some((s) => s.family)) return
+  for (const { role } of FAMILY_CREW) {
+    save.staffing.staff.push(newStaffMember(role, null, null, true))
   }
 }
 
@@ -287,8 +314,18 @@ export function staffDaily(save, attendeeCount, gamesPlayed, events) {
   const abs = absDayOf(save.day, save.year)
   const { employees, managers } = staffCounts(save)
 
-  const payroll = employees * st.employeeWage + managers * st.managerWage
+  // Family work for nothing, so they are not on this bill.
+  const paid = st.staff.filter((x) => !x.family)
+  const payroll = paid.filter((x) => x.role === 'employee').length * st.employeeWage
+    + paid.filter((x) => x.role === 'manager').length * st.managerWage
   if (payroll > 0) econLog(save, -payroll, 'payroll')
+
+  // Attractions earn from the general public, not from your roster — the
+  // bowling lanes take money on an afternoon when not one fighting-game player
+  // walked in. Scaled by how busy and how known the place is, so a room full
+  // of unlocked attractions in a dead arcade is a bill, not an income.
+  const rooms = attractionIncome(save)
+  if (rooms > 0) econLog(save, rooms, 'attractions — walk-in trade')
 
   const target = staffMoraleTarget(save)
   st.morale = clamp(st.morale + (target - st.morale) * 0.12, 0, 100)
@@ -315,6 +352,7 @@ export function staffDaily(save, attendeeCount, gamesPlayed, events) {
   // org chart pile on. Managers quit too.
   const overm = overmanagement(save)
   for (const s of [...st.staff]) {
+    if (s.family) continue // family don't quit over the pay they aren't getting
     const fair = s.role === 'manager' ? FAIR_WAGE.manager : FAIR_WAGE.employee
     const wage = s.role === 'manager' ? st.managerWage : st.employeeWage
     const ratio = wage / fair

@@ -13,6 +13,7 @@ import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
 import { revealState } from '../game/tournament.js'
 import { relevanceLabel } from '../game/relevance.js'
 import { gatherRumors, allRumors, rumorHeatLabel } from '../game/rumors.js'
+import { isUnlocked, howToUnlock } from '../game/achievements.js'
 
 export default function Arcade() {
   const { save, screen, advance, skipDay, nav, enableIdle } = useStore()
@@ -78,9 +79,15 @@ export default function Arcade() {
               <IdleBar save={save} />
             ) : (
               <div className="row">
-                <button className="small" title="auto-advance the arcade over real time" onClick={() => enableIdle(true)}>
-                  🎮 Idle mode
-                </button>
+                {isUnlocked(save, 'idle-realtime') ? (
+                  <button className="small" title="auto-advance the arcade over real time" onClick={() => enableIdle(true)}>
+                    🎮 Idle mode
+                  </button>
+                ) : (
+                  <button className="small" disabled title={`Locked — earned by: ${howToUnlock('idle-realtime')}`}>
+                    🔒 Idle mode
+                  </button>
+                )}
                 <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
                   ⏩ Skip to recap
                 </button>
@@ -241,8 +248,18 @@ function IdleBar({ save }) {
         <button className="primary small" onClick={() => setIdleRunning(!idle.running)}>
           {idle.running ? '⏸ Pause' : '▶ Play'}
         </button>
+        {/* Every speed is earned separately — see achievements.js. A locked
+            one stays listed so you can see what the ladder above you looks
+            like, and what buys the next rung. */}
         <select value={idle.speed} onChange={(e) => setIdleSpeed(e.target.value)}>
-          {IDLE_SPEEDS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          {IDLE_SPEEDS.map((s) => {
+            const locked = !isUnlocked(save, `idle-${s.key}`)
+            return (
+              <option key={s.key} value={s.key} disabled={locked}>
+                {locked ? `🔒 ${s.label} — ${howToUnlock(`idle-${s.key}`)}` : s.label}
+              </option>
+            )
+          })}
         </select>
         <button className="small" title="return to manual play" onClick={() => enableIdle(false)}>
           ✕ Exit

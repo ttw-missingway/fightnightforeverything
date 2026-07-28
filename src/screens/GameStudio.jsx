@@ -4,7 +4,7 @@ import {
   CharactersEditor, MatchupReport, StagesEditor, TagsEditor, RulesEditor, StyleWheel,
 } from '../components/editors.jsx'
 import {
-  diffGame, computeReception, daysSincePatch, releasePatch,
+  diffGame, computeReception, daysSincePatch, releasePatch, releaseHotfix, hotfixCheck,
   schedulePatch, cancelScheduledPatch, scheduledPatchDaysLeft,
   communityDemands, demandAdjustment, forecastNoise, receptionLabel as receptionLabelJs,
 } from '../game/patch.js'
@@ -12,6 +12,7 @@ import { balanceConfidence, observedMatchup, observedPower, draftChangedCharIds 
 import { franchiseFatigue, gameAgeYears, relevanceLabel } from '../game/relevance.js'
 import { formatDay, dateOfAbs, difficultyOf } from '../game/constants.js'
 import { clamp } from '../game/util.js'
+import { isUnlocked } from '../game/achievements.js'
 import { selectableChars, formsOf } from '../game/forms.js'
 
 const TABS = [
@@ -105,6 +106,7 @@ export default function GameStudio() {
                 <>
                   <div className="row">
                     <button className="danger" onClick={() => mutate((s) => { s.gameDraft = null; cancelScheduledPatch(s) })}>Discard draft</button>
+                    <HotfixButton save={save} mutate={mutate} />
                     <button className="primary" onClick={() => mutate((s) => releasePatch(s))}>
                       🚀 Release Patch v{bumpPreview(save.game.version)}
                     </button>
@@ -216,6 +218,30 @@ export function ConfidenceMeter({ confidence, games, changedCount = 0 }) {
             : 'Fresh build, thin data — these reads can be flat wrong. Patch now to appease the impatient, or wait for the meta to reveal itself.'}
       </p>
     </div>
+  )
+}
+
+/**
+ * Ship a correction quietly.
+ *
+ * Earned (see achievements.js) and deliberately narrow: two moves, nothing
+ * structural. The pitch is what it AVOIDS — no version number for anyone to
+ * argue about, no reception, and none of the relevance gamble that makes a
+ * real patch dangerous once the game is old.
+ */
+function HotfixButton({ save, mutate }) {
+  if (!isUnlocked(save, 'hotfix')) return null
+  const check = hotfixCheck(save)
+  return (
+    <button
+      className="small"
+      disabled={!check.ok}
+      title={check.ok
+        ? `Ships ${check.moveChanges} move change${check.moveChanges === 1 ? '' : 's'} with no version bump, no reception score and no relevance swing.`
+        : check.why}
+      onClick={() => { if (check.ok) mutate((s) => releaseHotfix(s)) }}>
+      🩹 Hotfix
+    </button>
   )
 }
 

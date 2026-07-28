@@ -3,7 +3,7 @@ import { useStore } from '../state/store.jsx'
 import { ordinal } from './Tournament.jsx'
 import { displayName } from '../game/util.js'
 import { formatDay } from '../game/constants.js'
-import { ACHIEVEMENTS } from '../game/achievements.js'
+import { ACHIEVEMENTS, groupedAchievements } from '../game/achievements.js'
 
 export default function HallOfFame() {
   const { save, nav } = useStore()
@@ -157,15 +157,13 @@ function LegacyLadder({ save, earned }) {
   const record = save.prestige?.achievements || {}
   const points = save.prestige?.points || 0
   const runs = save.prestige?.runs || 0
-  const unearned = ACHIEVEMENTS.filter((a) => !record[a.key])
-  const done = ACHIEVEMENTS.filter((a) => record[a.key])
 
   return (
     <div>
       <h1 style={{ fontSize: 30 }}>🎖 Legacy</h1>
       <p className="dim">
-        What survives a reset. Every tool here is earned by proving you can run the place
-        without it — and the proof pays creation points on top.
+        What survives a reset. None of it is for sale — every tool here is earned by proving you
+        can run the place without it, and nothing you earn is ever taken away again.
       </p>
       <div className="card">
         <div className="row spread">
@@ -174,33 +172,42 @@ function LegacyLadder({ save, earned }) {
         </div>
       </div>
 
-      {done.map((a) => {
-        const at = record[a.key]
+      {groupedAchievements().map((group) => {
+        const done = group.items.filter((a) => record[a.key]).length
         return (
-          <div className="card" key={a.key} style={{ borderColor: 'var(--gold)' }}>
+          <div className="card" key={group.key}>
             <div className="row spread">
-              <span><span style={{ fontSize: 18 }}>{a.icon}</span> <strong className="gold">{a.name}</strong></span>
-              <span className="dim small">
-                {at?.day ? `${formatDay(at.day, at.year)}` : 'earned'}{at?.run ? ` · run ${at.run}` : ''}
+              <h3 style={{ margin: 0 }}>{group.label}</h3>
+              <span className={done === group.items.length ? 'gold small' : 'dim small'}>
+                {done}/{group.items.length}
               </span>
             </div>
-            <p className="small" style={{ margin: '4px 0 0' }}>✅ {a.unlockLabel}</p>
-            <p className="dim small" style={{ margin: 0 }}>{a.how} · +{a.points} creation points</p>
+            <p className="dim small" style={{ margin: '2px 0 8px' }}>{group.blurb}</p>
+            {group.items.map((a) => {
+              const at = record[a.key]
+              return (
+                <div key={a.key} style={{
+                  borderTop: '1px solid var(--border)', padding: '6px 0',
+                  opacity: at ? 1 : 0.75,
+                }}>
+                  <div className="row spread">
+                    <span style={{ color: at ? 'var(--gold)' : 'var(--dim)' }}>
+                      {at ? a.icon : '🔒'} <strong>{a.unlockLabel}</strong>
+                    </span>
+                    <span className="dim small" style={{ whiteSpace: 'nowrap' }}>
+                      {a.points > 0 && <span className="gold">+{a.points} pt{a.points === 1 ? '' : 's'} </span>}
+                      {at?.day ? `${formatDay(at.day, at.year)}${at.run ? ` · run ${at.run}` : ''}` : ''}
+                    </span>
+                  </div>
+                  <p className="small" style={{ margin: '2px 0 0', color: at ? 'var(--dim)' : 'inherit' }}>
+                    {at ? <>✅ earned — {a.how.toLowerCase()}</> : a.how}
+                  </p>
+                </div>
+              )
+            })}
           </div>
         )
       })}
-
-      {unearned.length > 0 && <h3 style={{ marginTop: 16 }}>Still to prove</h3>}
-      {unearned.map((a) => (
-        <div className="card" key={a.key}>
-          <div className="row spread">
-            <span className="dim"><span style={{ fontSize: 18 }}>🔒</span> <strong>{a.name}</strong></span>
-            <span className="dim small">+{a.points} creation points</span>
-          </div>
-          <p className="small" style={{ margin: '4px 0 0' }}>{a.how}</p>
-          <p className="dim small" style={{ margin: 0 }}>Unlocks: {a.unlockLabel}</p>
-        </div>
-      ))}
     </div>
   )
 }

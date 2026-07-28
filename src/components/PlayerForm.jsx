@@ -10,6 +10,7 @@ import { deriveVoice, DEFAULT_VOICE, VOICE_ENERGIES, VOICE_HUMORS, VOICE_SPEECHE
 import { SpritePicker } from './SpritePicker.jsx'
 import { PLAYER_SPRITE_CATALOG, playerArtFor } from './art.js'
 import { selectableChars } from '../game/forms.js'
+import { isUnlocked, CHAMPION_POINTS } from '../game/achievements.js'
 
 const STAT_DESC = Object.fromEntries([...PERSONAL_STATS, ...SOCIAL_STATS])
 const uiVal = (v) => Math.round((v || 0) / STAT_UNIT)
@@ -40,7 +41,10 @@ export default function PlayerForm({ save, player, patch }) {
   const consequential = save.settings.mode !== 'sandbox'
   const diff = difficultyOf(save)
   const prestigeBonus = save.prestige?.points || 0
-  const budget = consequential ? diff.statPoints + prestigeBonus : null
+  // The one unlock that is pure power rather than a tool: an EVO title buys
+  // every future build a permanently bigger allowance.
+  const championBonus = isUnlocked(save, 'points') ? CHAMPION_POINTS : 0
+  const budget = consequential ? diff.statPoints + prestigeBonus + championBonus : null
   const spent = pointsSpent(player)
 
   return (
@@ -217,6 +221,7 @@ export default function PlayerForm({ save, player, patch }) {
                 <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
                   {spent > budget ? `${spent - budget} over budget` : `${budget - spent} left`}
                   {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
+                  {championBonus > 0 && <span className="gold"> · +{championBonus} champion</span>}
                 </span>
               </span>
             )}

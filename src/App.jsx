@@ -15,7 +15,7 @@ import Vods from './screens/Vods.jsx'
 import { formatDay } from './game/constants.js'
 import { isVodWatched } from './game/model.js'
 import DangerBanner from './components/dangers.jsx'
-import { ACHIEVEMENTS } from './game/achievements.js'
+import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
 
 export default function App() {
   const { save, screen, nav, closeSave } = useStore()
@@ -29,17 +29,22 @@ export default function App() {
 
   // The Tournament screen lost its tab (VODs cover replays) but still shows
   // live events — reached from the Arcade on event days, and from VODs.
+  //
+  // Four of these are EARNED (see achievements.js). A locked tab still renders,
+  // greyed and unclickable, with what opens it in the tooltip: a first-time
+  // owner should be able to see that there is a Studio to earn, and an
+  // invisible tab teaches nobody anything.
   const tabs = [
-    ['arcade', '🕹 Arcade'],
-    ['players', '👥 Players'],
-    ['teams', '🛡 Teams'],
-    ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs'],
-    ['halloffame', '🏛 Hall of Fame'],
-    ['codex', '📖 Codex'],
-    ['tiers', '📊 Tiers'],
-    ['feed', '📱 Feed'],
-    ['studio', '🛠 Studio'],
-    ['manage', '🏪 Manage'],
+    ['arcade', '🕹 Arcade', null],
+    ['players', '👥 Players', null],
+    ['teams', '🛡 Teams', null],
+    ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs', 'vods'],
+    ['halloffame', '🏛 Hall of Fame', null],
+    ['codex', '📖 Codex', null],
+    ['tiers', '📊 Tiers', 'tiers'],
+    ['feed', '📱 Feed', 'feed'],
+    ['studio', '🛠 Studio', 'studio'],
+    ['manage', '🏪 Manage', null],
   ]
   const activeTab = screen.name === 'tournament' ? (screen.vodId ? 'vods' : 'arcade') : screen.name
 
@@ -47,13 +52,17 @@ export default function App() {
     <div>
       <div className="topnav">
         <span className="brand">FIGHT NIGHT</span>
-        {tabs.map(([k, label]) => (
-          <button key={k}
-            style={activeTab === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' } : {}}
-            onClick={() => nav(k)}>
-            {label}
-          </button>
-        ))}
+        {tabs.map(([k, label, gate]) => {
+          const locked = gate && !isUnlocked(save, gate)
+          return (
+            <button key={k} disabled={!!locked}
+              title={locked ? `Locked — earned by: ${howToUnlock(gate)}` : undefined}
+              style={activeTab === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' } : {}}
+              onClick={() => { if (!locked) nav(k) }}>
+              {locked ? `🔒 ${label.replace(/^\S+\s/, '')}` : label}
+            </button>
+          )
+        })}
         <span className="spacer" />
         {save.idle?.enabled && (
           <span className="idle-badge" title={save.idle.running ? 'idle mode running' : 'idle mode paused'}>
@@ -75,12 +84,12 @@ export default function App() {
       {screen.name === 'players' && <Players />}
       {screen.name === 'teams' && <Teams />}
       {screen.name === 'tournament' && <Tournament />}
-      {screen.name === 'vods' && <Vods />}
+      {screen.name === 'vods' && isUnlocked(save, 'vods') && <Vods />}
       {screen.name === 'halloffame' && <HallOfFame />}
       {screen.name === 'codex' && <Codex />}
-      {screen.name === 'feed' && <Feed />}
-      {screen.name === 'tiers' && <TierList />}
-      {screen.name === 'studio' && <GameStudio />}
+      {screen.name === 'feed' && isUnlocked(save, 'feed') && <Feed />}
+      {screen.name === 'tiers' && isUnlocked(save, 'tiers') && <TierList />}
+      {screen.name === 'studio' && isUnlocked(save, 'studio') && <GameStudio />}
       {screen.name === 'manage' && <Manage />}
 
       <ForeclosureModal />

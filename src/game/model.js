@@ -480,6 +480,7 @@ export function newSave(partial = {}) {
       gameTokens: {}, // per-side-cabinet token cost to play — set when installed
       ads: [], // active advertising channel keys (constants.AD_CHANNELS) — weekly upkeep
       cleanliness: 80, // 0-100 — dirt accrues with traffic, staff clean it back
+      streamRig: false, // camera + encoder. Bought PER RUN, never carries over — see stream.js
       letdowns: 0, // rolling share of the room let down by sellouts & cabinet lines
       closedUntilAbs: null, // absolute day the health-department shutdown lifts (null = open)
     },
@@ -520,6 +521,7 @@ export function newSave(partial = {}) {
     prestigePending: 0, // legacy points earned THIS run — banked when the run ends
     tally: newTally(), // per-run counters the achievement checks read (reset with the run)
     unlockNotices: [], // achievement keys earned but not yet announced to the owner
+    freeInstalls: {}, // attraction pack key -> one installation on the house, this run
     archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
     socialFeed: [], // fake posts about the scene — newest first, capped
     dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
@@ -786,6 +788,8 @@ export function migrateSave(save) {
   save.arcade.ads ??= []
   delete save.arcade.prices.food
   save.arcade.cleanliness ??= 80
+  // Old saves were streaming before the rig existed; they keep their channel.
+  save.arcade.streamRig ??= true
   save.arcade.letdowns ??= 0
   save.arcade.closedUntilAbs ??= null
   save.staffing ??= newStaffing()
@@ -800,6 +804,7 @@ export function migrateSave(save) {
   // you must have done at some point.
   save.tally = { ...newTally(), ...(save.tally || {}) }
   save.unlockNotices ??= []
+  save.freeInstalls ??= {}
   save.rosterCollapsed ??= false
   save.momentum ??= { state: 'steady', untilAbs: 0 }
   save.attentionDrift ??= { untilAbs: 0, value: 0 }

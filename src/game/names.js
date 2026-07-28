@@ -46,15 +46,107 @@ export const ELITE_ALIASES = [
   'Heartbreaker', 'The Standard', 'Apex', 'Nightmare', 'The Gatekeeper', 'Sovereign', 'Eclipse',
 ]
 
-export const FOODS = [
-  'nachos', 'pizza slices', 'energy drinks', 'ramen cups', 'pretzels', 'slushies',
-  'chicken tenders', 'takoyaki', 'churros', 'cold brew', 'onigiri', 'hot dogs',
+/**
+ * What a brand-new counter can carry. Five things, and they are the five
+ * nobody has ever been excited about.
+ *
+ * People's tastes span the WHOLE catalogue from day one — see randomPreferences
+ * — so a regular whose favourite is katsu curry will keep wanting katsu curry
+ * in an arcade that can only sell them a pretzel. That gap is the point: the
+ * counter is supposed to feel thin until you have earned it out.
+ */
+export const STARTER_FOODS = [
+  'nachos', 'pretzels', 'hot dogs', 'slushies', 'energy drinks',
 ]
 
-export const OTHER_GAMES = [
+/**
+ * The four packs, each earned by an achievement (see achievements.js — the
+ * `unlock` keys match). A theme apiece, because "five more foods" is inventory
+ * and "the fryer" is a decision about what kind of counter you run.
+ */
+export const FOOD_PACKS = [
+  {
+    key: 'food-fryer', label: 'The Fryer', icon: '🍟',
+    blurb: 'Hot, salty and fast. Nobody plans to buy it; everybody buys it.',
+    foods: ['chicken tenders', 'curly fries', 'mozzarella sticks', 'corn dogs', 'onion rings'],
+  },
+  {
+    key: 'food-sweets', label: 'The Sweet Counter', icon: '🍬',
+    blurb: 'Sugar and cold hands. What the youngest half of the room actually comes for.',
+    foods: ['churros', 'cotton candy', 'soft serve', 'candy bars', 'milkshakes'],
+  },
+  {
+    key: 'food-hotline', label: 'The Hot Line', icon: '🍜',
+    blurb: 'Food people sit down for — and people who sit down stay for another set.',
+    foods: ['pizza slices', 'ramen cups', 'takoyaki', 'onigiri', 'katsu curry'],
+  },
+  {
+    key: 'food-latenight', label: 'Late Night', icon: '🌙',
+    blurb: "What a closing-time crowd eats when they've decided not to go home yet.",
+    foods: ['cold brew', 'energy shots', 'beef jerky', 'pork buns', 'breakfast sandwiches'],
+  },
+]
+
+// Every food in the game. Prices are hashed from the name (economy.js), so a
+// food must never be renamed once it exists — old saves hold these as strings.
+export const FOODS = [...STARTER_FOODS, ...FOOD_PACKS.flatMap((p) => p.foods)]
+
+/** The cabinets any arcade can install from day one. */
+export const STARTER_GAMES = [
   'Puzzle Blitz', 'Rhythm Storm', 'Metal Racer GT', 'House of Zombies', 'Air Hockey',
   'Star Shooter EX', 'Dance Cascade', 'Crane Game', 'Pinball: Dragon Lair', 'Time Crisis Delta',
 ]
+
+/**
+ * Attractions. Not cabinets — ROOMS, and they behave differently: each draws a
+ * crowd that isn't your fighting-game roster, so it earns whether or not any
+ * simulated player walks over to it. See attractionIncome in economy.js.
+ *
+ * `draw` is what the room pulls per day at full popularity; `demographic` is
+ * who it pulls, which is flavour today and matchmaking for the ages of the
+ * scene later. Each pack is earned by an achievement (`key` matches `unlock`).
+ */
+export const ATTRACTION_PACKS = [
+  {
+    key: 'attr-pinball', label: 'The Pinball Collection', icon: '🎱',
+    demographic: 'the old heads',
+    blurb: 'A row of real tables along the back wall. Quiet money, and it never breaks a sweat.',
+    items: ['Silverball Row', 'Gothic Manor Pin', 'Cosmic Drift Pin', 'Diner Deluxe Pin'],
+  },
+  {
+    key: 'attr-bowling', label: 'The Bowling Alley', icon: '🎳',
+    demographic: 'families',
+    blurb: 'Four lanes and a shoe counter. Turns an afternoon into an outing.',
+    items: ['Lanes 1–2', 'Lanes 3–4', 'The Shoe Counter'],
+  },
+  {
+    key: 'attr-classics', label: 'Classic Cabinets', icon: '👾',
+    demographic: 'everyone',
+    blurb: 'The wall of originals. Half nostalgia, half the reason anyone calls this an arcade.',
+    items: ['Asteroid Field', 'Ladder Kong', 'Maze Muncher', 'Tank Battalion', 'Frog Crossing'],
+  },
+  {
+    key: 'attr-lasertag', label: 'Laser Tag Arena', icon: '🔫',
+    demographic: 'groups and birthdays',
+    blurb: 'Nobody plays this alone. Books out for parties and empties your counter of food.',
+    items: ['The Arena', 'Vest Rack', 'Briefing Room'],
+  },
+  {
+    key: 'attr-vr', label: 'VR Bay', icon: '🥽',
+    demographic: 'the curious',
+    blurb: 'Expensive, temperamental, and the thing every first-timer asks about.',
+    items: ['VR Rig A', 'VR Rig B', 'The Treadmill'],
+  },
+  {
+    key: 'attr-pickleball', label: 'Pickleball Courts', icon: '🥒',
+    demographic: 'the neighbourhood',
+    blurb: "Two courts out back. Nothing to do with fighting games, and that's the point.",
+    items: ['Court 1', 'Court 2'],
+  },
+]
+
+// Everything installable on the floor.
+export const OTHER_GAMES = [...STARTER_GAMES, ...ATTRACTION_PACKS.flatMap((p) => p.items)]
 
 export const GAME_TITLE_PARTS = {
   a: ['Savage', 'Eternal', 'Hyper', 'Crimson', 'Final', 'Ultra', 'Neon', 'Iron', 'Astral', 'Burning'],

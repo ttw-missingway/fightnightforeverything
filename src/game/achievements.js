@@ -309,8 +309,45 @@ function hasStreak(years, n) {
   return false
 }
 
+/**
+ * What an EVO title is worth to every build that comes after it.
+ *
+ * Deliberately large against a Normal allowance of five — this is the top of
+ * the competitive ladder and the only unlock in the game that makes your
+ * PEOPLE better rather than your arcade. Winning the world championship should
+ * change what you are able to make next time.
+ */
+export const CHAMPION_POINTS = 3
+
 /** Has this lineage earned it? (Reads the permanent record, not the run.) */
 export const hasAchievement = (save, key) => !!save?.prestige?.achievements?.[key]
+
+/**
+ * What earns a given unlock, in words — for every screen that has to explain
+ * why something is greyed out. A lock with no stated way through is just a wall.
+ */
+export const howToUnlock = (unlockKey) =>
+  ACHIEVEMENTS.find((a) => a.unlock === unlockKey)?.how || 'not yet earnable'
+
+export const achievementForUnlock = (unlockKey) =>
+  ACHIEVEMENTS.find((a) => a.unlock === unlockKey) || null
+
+/**
+ * The ladder as a catalogue: what kind of thing each unlock is. Thirty rows in
+ * one list is inventory; six short lists is a shop.
+ */
+export const UNLOCK_GROUPS = [
+  { key: 'speed', label: '⏩ Speed', blurb: 'How fast the arcade may run without you.', match: (a) => a.unlock.startsWith('idle-') },
+  { key: 'screens', label: '🖥 Screens', blurb: 'Information you have proved you can read.', match: (a) => ['vods', 'tiers', 'feed', 'studio'].includes(a.unlock) },
+  { key: 'counter', label: '🍟 The Counter', blurb: 'What the concession stand is allowed to carry.', match: (a) => a.unlock.startsWith('food-') },
+  { key: 'floor', label: '🎳 The Floor', blurb: 'Rooms that draw a crowd of their own.', match: (a) => a.unlock.startsWith('attr-') },
+  { key: 'reach', label: '📣 Reach', blurb: 'Ways of telling people you exist.', match: (a) => a.unlock.startsWith('ads-') },
+  { key: 'tools', label: '🛠 Tools', blurb: 'Levers on the scene itself.', match: (a) => ['discipline', 'hotfix', 'family', 'points'].includes(a.unlock) },
+  { key: 'legend', label: '🏆 The Long Haul', blurb: 'Nobody earns these by accident.', match: (a) => !!a.cosmetic },
+]
+
+export const groupedAchievements = () =>
+  UNLOCK_GROUPS.map((g) => ({ ...g, items: ACHIEVEMENTS.filter(g.match) }))
 
 /**
  * Is a tool available to this lineage?
@@ -353,6 +390,12 @@ export function checkAchievements(save) {
     if (!ok) continue
     save.prestige.achievements[a.key] = { day: save.day, year: save.year, run: (save.prestige.runs || 0) + 1 }
     save.prestige.unlocks[a.unlock] = true
+    // An attraction earned by a run that is nearly over is a trophy you never
+    // get to touch, so the run that wins it gets one room on the house.
+    if (a.unlock.startsWith('attr-')) {
+      save.freeInstalls ??= {}
+      save.freeInstalls[a.unlock] = true
+    }
     save.prestige.points = (save.prestige.points || 0) + a.points
     const pay = a.points > 0 ? ` (+${a.points} creation point${a.points === 1 ? '' : 's'})` : ''
     chronicle(save, a.icon, `${a.name} — ${a.unlockLabel} is yours for good${pay}`)

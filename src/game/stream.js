@@ -325,10 +325,26 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
  * Builds the full stream payload for a resolved match and applies channel
  * growth (hype, followers, peak). Attach the returned object to the match.
  */
+/**
+ * Does this arcade have a channel at all?
+ *
+ * The streaming rig is bought PER RUN and never carries over — it is the one
+ * thing on the whole board you re-buy every time, because the first hundred
+ * dollars of a new run going on a camera instead of a cabinet is a real
+ * decision, and streaming is the single strongest lever in the game (belief,
+ * popularity, followers, and the only way a champion gets forged).
+ */
+export const canStream = (save) => !!save?.arcade?.streamRig
+
+export const STREAM_RIG_COST = 180
+
 export function buildStream(save, {
   level, personality, probA, aWins, narration, meta = [], aName, bName, winnerName, context,
   mirror = false, staleness = 0,
 }) {
+  // No rig, no broadcast — every consumer of a stream already null-checks it,
+  // so this is the whole gate.
+  if (!canStream(save)) return null
   const upsetSeverity = upsetSeverityOf(probA, aWins)
   // Hidden variance: some sets just deliver, some just don't. The pre-match
   // read is never a guarantee — that's the risk in picking.
@@ -397,6 +413,7 @@ export function buildStream(save, {
 
 // Convenience for arcade-vs-arcade daily matches.
 export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily') {
+  if (!canStream(save)) return null
   // What they actually BROUGHT, not what they main — a counterpick or a lab
   // character is what the audience saw.
   const aChar = matchEvent.charAId || a.mainCharId

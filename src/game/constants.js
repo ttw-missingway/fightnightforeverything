@@ -294,29 +294,32 @@ export const DEFAULT_GAME_TOKENS = 2 // tokens to play a side cabinet once
 //  - 'steady' : constant presence — momentum once you're established
 //  - 'late'   : big reach, but the cost self-selects for a bankrolled arcade
 //  - 'opinion': primarily a hype/opinion lever, compounds with your following
+// `unlock` is the achievement key that opens the channel (see achievements.js).
+// A new lineage starts with flyers and word of mouth and nothing else — the
+// rest are earned by outgrowing what you already have.
 export const AD_CHANNELS = [
   {
-    key: 'flyers', label: 'Flyers', cost: 18, phase: 'early',
+    key: 'flyers', label: 'Flyers', cost: 18, phase: 'early', unlock: null,
     awareness: 0.18, arrivals: 0.015, hypePerDay: 0.02,
     blurb: 'Cheap and local. Nudges the room fuller while nobody knows you exist — but no one reads a flyer for a place they already go.',
   },
   {
-    key: 'radio', label: 'Radio', cost: 44, phase: 'early',
+    key: 'radio', label: 'Radio', cost: 44, phase: 'early', unlock: 'ads-airwaves',
     awareness: 0.15, arrivals: 0.025, hypePerDay: 0.05,
     blurb: 'Local drive-time spots. Solid early reach that fades once you\'re a known quantity — and the weekly cost stings on a tight budget.',
   },
   {
-    key: 'social', label: 'Social Media', cost: 36, phase: 'opinion',
+    key: 'social', label: 'Social Media', cost: 36, phase: 'opinion', unlock: 'ads-airwaves',
     awareness: 0.06, arrivals: 0.025, hypePerDay: 0.16,
     blurb: 'Compounds with your following. The best lever for steering public opinion back up when it sours.',
   },
   {
-    key: 'billboards', label: 'Billboards', cost: 90, phase: 'steady',
+    key: 'billboards', label: 'Billboards', cost: 90, phase: 'steady', unlock: 'ads-billboards',
     awareness: 0.15, arrivals: 0.04, hypePerDay: 0.04,
     blurb: 'A constant presence on the commute. Pricey, but keeps momentum once you\'re established.',
   },
   {
-    key: 'tv', label: 'TV', cost: 190, phase: 'late',
+    key: 'tv', label: 'TV', cost: 190, phase: 'late', unlock: 'ads-tv',
     awareness: 0.20, arrivals: 0.07, hypePerDay: 0.13,
     blurb: 'The big reach. Expensive enough to hurt early, but it moves everything — attendance and opinion alike.',
   },
