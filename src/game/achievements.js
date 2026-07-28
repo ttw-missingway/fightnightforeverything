@@ -48,6 +48,14 @@ import { chronicle } from './model.js'
 const SUMMER = 70 // June 15 → the end of August
 const TO_NEW_YEAR = 182 // June 15 → January 1
 
+/**
+ * Tournaments YOU ran. EVO sits on the same hall-of-fame shelf but it is the
+ * WORLD's tournament — you did not book it, fill it, or clean up after it, and
+ * counting its 64-player field as "you filled a 32-entrant bracket" is exactly
+ * the sort of free credit these achievements exist not to give.
+ */
+const yours = (save) => (save.hallOfFame || []).filter((r) => r.type !== 'evo')
+
 export const ACHIEVEMENTS = [
   // ---------- Idle speeds: you earn the right to skip ahead ----------
   {
@@ -79,8 +87,8 @@ export const ACHIEVEMENTS = [
   {
     key: 'full-card', icon: '📼', name: 'Ran the whole card',
     unlock: 'vods', unlockLabel: 'The VODs tab — every bracket, rewatchable', points: 1,
-    how: 'Run twelve tournaments to a finish.',
-    check: (s) => (s.hallOfFame || []).length >= 12,
+    how: 'Run twelve of your OWN tournaments to a finish.',
+    check: (s) => yours(s).length >= 12,
   },
   {
     key: 'own-eyes', icon: '📊', name: 'Read it yourself',
@@ -240,16 +248,17 @@ export const ACHIEVEMENTS = [
   {
     key: 'weekly-habit', icon: '🗓', name: 'A standing fixture',
     unlock: 'bandwidth-1', unlockLabel: '+25 bandwidth — a busier calendar', points: 0,
-    how: 'Run thirty tournaments to a finish.',
-    check: (s) => (s.hallOfFame || []).length >= 30,
+    how: 'Run thirty of your own tournaments to a finish.',
+    check: (s) => yours(s).length >= 30,
   },
   {
     key: 'a-real-field', icon: '🎟', name: 'A real field',
     unlock: 'bandwidth-2', unlockLabel: '+25 bandwidth — a busier calendar', points: 0,
-    // Thirty-two entrants means thirty-two people who all turned up on the
-    // same night, which is a bigger ask of the room than of the bracket.
-    how: 'Fill a 32-entrant bracket.',
-    check: (s) => (s.hallOfFame || []).some((r) => (r.entrantCount || 0) >= 32),
+    // Thirty-two entrants means thirty-two people who all turned up to YOUR
+    // arcade on the same night, which is a bigger ask of the room than of the
+    // bracket. EVO is a 64-player major and is emphatically not your doing.
+    how: 'Fill a 32-entrant bracket at your own arcade.',
+    check: (s) => yours(s).some((r) => (r.entrantCount || 0) >= 32),
   },
   {
     key: 'all-day-affair', icon: '⏳', name: 'An all-day affair',
@@ -257,7 +266,7 @@ export const ACHIEVEMENTS = [
     // A round robin of eight is twenty-eight sets. Running one to a finish is
     // the proof that this arcade can hold a room for a whole day.
     how: 'Run a round robin of eight or more to a finish.',
-    check: (s) => (s.hallOfFame || []).some((r) => r.format === 'roundrobin' && (r.entrantCount || 0) >= 8),
+    check: (s) => yours(s).some((r) => r.format === 'roundrobin' && (r.entrantCount || 0) >= 8),
   },
 
   // ---------- The long haul ----------

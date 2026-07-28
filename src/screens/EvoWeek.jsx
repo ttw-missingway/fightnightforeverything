@@ -49,7 +49,7 @@ export default function EvoWeek({ record, onFinish }) {
       {step === 'chatter' && <Chatter record={record} onNext={next} />}
       {step === 'expo' && <Exhibition record={record} byId={byId} onNext={next} />}
       {step === 'expoTalk' && <Interviews record={record} onNext={next} />}
-      {step === 'bracket' && <Bracket record={record} onNext={next} />}
+      {step === 'bracket' && <Bracket record={record} state={state} set={set} onNext={next} />}
       {step === 'champion' && <Champion record={record} onNext={next} />}
       {step === 'end' && <TheEnd record={record} onFinish={() => { set({ step: 'done' }); onFinish() }} />}
     </div>
@@ -183,7 +183,8 @@ function PoolDetail({ pool, round, byId, back }) {
     return (
       <div>
         <button onClick={() => setWatching(null)}>← Back to Pool {pool.letter}</button>
-        <MatchPlayback m={m} spoil footer={<p className="dim small">Pool {pool.letter}</p>} />
+        <MatchPlayback m={m} autoStart startLabel="Play the set"
+          footer={<p className="dim small">Pool {pool.letter}</p>} />
       </div>
     )
   }
@@ -292,6 +293,7 @@ function Chatter({ record, onNext }) {
 }
 
 function Exhibition({ record, byId, onNext }) {
+  const [done, setDone] = useState(false)
   const m = record.expo ? byId[record.expo.matchId] : null
   if (!m) {
     return <div className="evo-beat"><h2>No exhibition this year</h2>
@@ -301,8 +303,15 @@ function Exhibition({ record, byId, onNext }) {
     <div>
       <h2>Media Day · The Exhibition</h2>
       <p className="dim small">Nothing on the line but pride, which is usually enough.</p>
-      <MatchPlayback m={m} spoil />
-      <button className="primary" onClick={onNext}>Get their reaction →</button>
+      {/* autoStart, NOT spoil: spoil renders the finished match in one go,
+          which skipped the exhibition straight to its own ending. */}
+      <MatchPlayback m={m} autoStart startLabel="Play the exhibition" onComplete={() => setDone(true)} />
+      {/* Never disabled: the complaint was that this match skipped itself, and
+          forcing someone to sit through it is the same mistake facing the
+          other way. */}
+      <button className={done ? 'primary' : ''} onClick={onNext}>
+        {done ? 'Get their reaction →' : 'Skip ahead →'}
+      </button>
     </div>
   )
 }
@@ -327,36 +336,91 @@ function Interviews({ record, onNext }) {
   )
 }
 
-function Bracket({ record, onNext }) {
+/**
+ * The bracket, revealed the way a broadcast reveals one: one set at a time.
+ *
+ * The record holds every result from the moment EVO simulates, so rendering
+ * the whole thing up front told you who won the tournament before the first
+ * match of it — and worse, a round-two card reading "Miracle vs …" gives away
+ * round one. Nothing past the cursor shows names at all.
+ */
+function Bracket({ record, state, set, onNext }) {
   const [watching, setWatching] = useState(null)
   const rounds = (record.rounds || []).filter((r) => r.phase === 'top16')
+  const flat = []
+  rounds.forEach((r, ri) => r.matches.forEach((m) => flat.push({ m, ri })))
+  const order = new Map(flat.map((f, i) => [f.m.id, i]))
+  // Byes never need watching, so they reveal themselves.
+  let revealed = Math.min(state.bracketRevealed || 0, flat.length)
+  while (revealed < flat.length && flat[revealed].m.bye) revealed++
+  const done = revealed >= flat.length
+  const nextMatch = done ? null : flat[revealed].m
+
+  const reveal = (id) => {
+    const i = order.get(id)
+    set({ bracketRevealed: Math.max(revealed, (i ?? revealed) + 1) })
+    setWatching(null)
+  }
+
   if (watching) {
     return (
       <div>
         <button onClick={() => setWatching(null)}>← Back to the bracket</button>
-        <MatchPlayback m={watching} spoil />
+        <MatchPlayback m={watching} autoStart startLabel="Play the set"
+          onComplete={() => reveal(watching.id)} />
+        <button className="primary" style={{ marginTop: 10 }} onClick={() => reveal(watching.id)}>
+          Skip to the result →
+        </button>
       </div>
     )
   }
+
   return (
     <div>
-      <h2>Top 16</h2>
-      <p className="dim small">Double elimination. Click any set to watch it.</p>
+      <div className="row spread">
+        <h2 style={{ margin: 0 }}>Top 16</h2>
+        <div className="row">
+          {!done && (
+            <button className="primary" onClick={() => setWatching(nextMatch)}>
+              ▶ Watch {nextMatch.aName} vs {nextMatch.bName}
+            </button>
+          )}
+          {!done && (
+            <button onClick={() => set({ bracketRevealed: flat.length })}>Skip to the result →</button>
+          )}
+        </div>
+      </div>
+      <p className="dim small">
+        Double elimination. {done
+          ? 'Click any set to watch it again.'
+          : 'Sets air in order — watch the next one, or skip ahead if you cannot wait.'}
+      </p>
       <div className="bracket">
         {rounds.map((r, ri) => (
           <div className="round" key={ri}>
             <h4 className="dim" style={{ margin: '0 0 6px' }}>{r.title}</h4>
-            {r.matches.map((m) => (
-              <div className="bmatch" key={m.id} onClick={() => setWatching(m)}>
-                <div className={m.winnerId === m.aId ? 'winner' : 'loser'}>{m.aName}</div>
-                <div className={m.winnerId === m.bId ? 'winner' : 'loser'}>{m.bName}</div>
-                <div className="dim small">{m.setScore}</div>
-              </div>
-            ))}
+            {r.matches.map((m) => {
+              const i = order.get(m.id)
+              const shown = i < revealed
+              const isNext = m.id === nextMatch?.id
+              if (!shown && !isNext) {
+                return <div className="bmatch unrevealed" key={m.id}><div className="dim">—</div><div className="dim">—</div></div>
+              }
+              return (
+                <div className={`bmatch${isNext ? ' up-next' : ''}`} key={m.id}
+                  onClick={() => setWatching(m)}>
+                  <div className={shown && m.winnerId === m.aId ? 'winner' : shown ? 'loser' : ''}>{m.aName}</div>
+                  <div className={shown && m.winnerId === m.bId ? 'winner' : shown ? 'loser' : ''}>{m.bName}</div>
+                  <div className="dim small">{shown ? m.setScore : isNext ? '▶ up next' : ''}</div>
+                </div>
+              )
+            })}
           </div>
         ))}
       </div>
-      <button className="primary" style={{ marginTop: 12 }} onClick={onNext}>The champion speaks →</button>
+      <button className="primary" style={{ marginTop: 12 }} disabled={!done} onClick={onNext}>
+        {done ? 'The champion speaks →' : 'Finish the bracket first'}
+      </button>
     </div>
   )
 }

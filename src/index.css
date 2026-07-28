@@ -1151,3 +1151,5 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 @media (max-width: 700px) { .seed-grid { grid-template-columns: 1fr; } }
 .seed-row { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--border); }
 .chirp { padding: 10px 14px; }
+.bmatch.unrevealed { opacity: 0.45; cursor: default; border-style: dashed; }
+.bmatch.up-next { border-color: var(--pink); box-shadow: 0 0 14px rgba(255, 45, 120, 0.28); }
