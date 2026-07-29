@@ -79,6 +79,12 @@ breakthroughs.
 | **Streaming** | weeks | low | who is visible; whose temperament infects the room; who becomes a fan favourite |
 | **Money** | a month-plus | medium | pot size (brings competition to you), travel funding (sends players to it), space, exposure |
 | **Patching** | immediate | high, unpredictable | the meta everywhere — the *only* lever that reaches the elites |
+| **Eureka** | opportunistic | free, but unrepeatable | one person, permanently — the only lever that is not environmental |
+
+Eureka is a lever and not merely character development: steering a toxic player's
+breakthrough into `politeness`, or a burning-out star's into `temperance`, is
+crisis management. Its constraint is what makes it fit a god rather than a
+manager — **you cannot call it, only answer it when it arrives.**
 
 Everything compounds. Actions land a month out more than they land today.
 Anything is fixable **if caught early enough**, and past a threshold nothing is.
@@ -234,6 +240,15 @@ the stat that, had it been higher, would have changed the outcome.
 Every row is causally legible, which is what lets the journal entry write
 itself — *"I had it. Game five, I had it."* This table must become exhaustive;
 it is the single highest-leverage content artefact in P1.
+
+**One stat needs redefining before this table is usable.** `sensitivity` is
+currently *"how much social interactions swing their mood"* — volatility, not
+empathy. As written, steering a toxic player's breakthrough into `sensitivity`
+would make them *more* explosive, which is the opposite of the intent in §2.6's
+counterplay. Redefine it as **attunement**: they read the room and are moved by
+it. That keeps both edges — considerate *and* fragile — which is already what the
+Dramatic social temperament implies ("feels everything, at volume"), and makes it
+the one deliberately double-edged stat on the sheet.
 
 **Edge — what keeps working.** Success pressures the stat that produced it.
 Won on a hard read → `analysis`. Outlasted someone over two hours → `stamina`.
@@ -540,10 +555,10 @@ blast radius before it is argued about.
 | 3 | **Eureka cadence** — breakthroughs per active player per year | is the spine paced | front-loaded, thinning, never zero for a focused player |
 | 4 | **Breakthrough : burnout** — of high-adversity players, share who break through vs retire | the wager must be a wager | neither near 0 nor near 1 |
 | 5 | **Retirement dispersion** — stddev of retirement day | the bulk-exodus bug | high; a flat distribution, not a spike |
-| 6 | **Attention cost** — decisions demanded per in-game week, by year | depth may grow, clicks may not | ~flat from year 1 to year 10 |
+| 6 | **Attention cost** — *mutating* decisions per in-game week, by year (§2.5) | depth may grow, clicks may not | ~flat from year 1 to year 10 |
 | 7 | **Journal volume** — entries per player per year | it must not become a log file | roughly 15–30 |
 | 8 | **Lever latency** — lag between each lever and its measurable effect | the compounding principle | stream ≈ weeks, money ≥ a month, patch ≈ now |
-| 9 | **Recoverability curve** — inject a crisis at day D, apply best counterplay at D+k, measure recovery vs k | the too-late threshold | a clean S-curve with a real cliff, not a straight line |
+| 9 | **Recoverability curve** — put a run into a crisis, apply best counterplay *k* days later, measure recovery vs *k* (§2.6) | the too-late threshold | a clean S-curve with a real cliff, not a straight line |
 | 10 | **Money's job** — share of spend on survival vs competition (pots + travel), by year | money must change job, not fade | inverts across the run |
 
 Metrics 9 and 6 do not exist in any form today and are the two that most
@@ -561,7 +576,7 @@ node tools/balance/fingerprint.mjs --diff         # vs committed baseline
 node tools/balance/separation.mjs 12 10 normal    # metric 1, ten years
 node tools/balance/eureka.mjs 12 normal           # metrics 3 and 4
 node tools/balance/latency.mjs stream|money|patch # metric 8
-node tools/balance/recovery.mjs toxicity|passion  # metric 9, the cliff
+node tools/balance/recovery.mjs toxicity|burnout|irrelevance|plateau  # metric 9
 node tools/balance/attention.mjs 8 normal         # metric 6
 node tools/balance/journal.mjs <playerIdx>        # dump one career, read it
 ```
@@ -569,6 +584,82 @@ node tools/balance/journal.mjs <playerIdx>        # dump one career, read it
 `journal.mjs` is a content tool, not a balance tool: the journal is the front of
 the game now, and prose quality decides whether the eureka system sings or
 embarrasses. It must be readable without playing.
+
+---
+
+### 2.5 Attention cost, defined
+
+**Decided 2026-07-29.** Attention is **mutating** interactions only —
+write/update/delete. Reads are free.
+
+Choosing to stream a player counts. Allocating a point counts. Spending money to
+enlarge the arcade counts. Switching tabs does not. Clicking into a match to
+watch it does not. Opening a profile does not.
+
+The virtue of this definition is that it is **derivable from the store boundary
+rather than judged per button**: instrument the mutation path in
+`state/store.jsx` once, and every future feature is measured automatically
+without anyone remembering to tag it. Headlessly, `policy.mjs` counts the
+mutating decisions it makes as it makes them.
+
+Two rulings that follow:
+
+- **Acknowledgements do not count.** Dismissing a toast, closing a banner and
+  advancing the day all write to the save but are not choices. They are excluded
+  by an explicit list, and that list is reviewed whenever it grows.
+- **Report two numbers.** Total, and *steady-state* excluding creation and run
+  setup. Point-buy at creation is a legitimate one-off spike that would
+  otherwise swamp a per-week average and hide the thing being measured.
+
+### 2.6 The four crises, and what recovery means
+
+**Decided 2026-07-29.** Metric 9 sweeps a lag: put a run into a crisis, wait *k*
+days, apply the best available counterplay, run 180 more days, ask whether it
+recovered. Sweep *k* over 0, 7, 14, 28, 56, 112 and plot recovery rate.
+
+The shape is the finding. An **S-curve** means §0's "fixable if caught early,
+hopeless past a point" is literally true and we know where the point is. A
+**straight line** means there is no threshold and catching it early was
+meaningless flavour. **Flat zero** means there is no counterplay at all.
+
+| crisis | recovered when | counterplay the harness plays |
+|---|---|---|
+| **Toxicity** | room chemistry back above its pre-signal level **and** nobody left over the window | remove the spotlight — never reward toxicity with attention; buy more setups; nerf the dominant player's character; steer breakthroughs into `sensitivity`, `politeness`, `community`; banish only if necessary. *If they cannot be kept out of the spotlight, sabotage them.* |
+| **Burnout** | that specific player still active a year later | more spotlight, not less; buff their character; fund every opportunity that arises for them; steer breakthroughs into `temperance`; last-ditch, into `mojo` or `xfactor` and hope a spike buys a win |
+| **Irrelevance** | attendance back above where it stood when the signal fired | patch to address what the community is complaining about, *even when the community has it wrong and the patch destabilises*; a new attraction as a temporary kick-start; ensure a fresh wave of interesting players is ready to take over |
+| **Plateau** | a player past 1700 elo **and/or** community average elo up substantially | raise the pot; fund travel; stream for popularity, since fan-favourite seats are access without results; recruit upward so §1.6 radiance raises the room's standards; patch to destroy the solved matchup state |
+
+**Separation is not in that table.** It is deprecated in §4. But the *baseline*
+measures with today's tools, warts included — warn, separate, banish — because
+the point of the baseline is the game the playtests actually complained about.
+
+#### Injection for the curve, detection for validity
+
+Both are needed and they answer different questions. **Injection** starts every
+run at identical crisis severity, so lag is the only variable and the curve is
+clean. **Detection** lets runs play until a crisis arises naturally, then checks
+that natural crises resemble injected ones. Without detection the curve may be
+measuring a synthetic problem that never actually occurs.
+
+#### Plateau is not the same kind of crisis as the other three
+
+Toxicity, burnout and irrelevance are *events*. Plateau is the game's current
+**equilibrium** — it is the disease of §0, not an accident.
+
+The diagnosis is topological rather than numerical: elo among eight players who
+mostly play each other is zero-sum, so the community average cannot rise; and
+under §1.7 losing to a *peer* generates almost no adversity, so the room
+produces almost no eureka either. The room is sealed, and every counterplay above
+is a way of opening it.
+
+Which means plateau needs **two** numbers, not one: recoverability *and*
+incidence. A healthy recoverability curve on a game that still plateaus every
+run means only that a good escape hatch was built for a problem that should not
+exist. **Metric 1 remains the real test.**
+
+Note also that the success criterion is well chosen for a structural reason:
+community average elo can only rise by importing elo from outside, so it measures
+*openness* directly rather than a number going up.
 
 ---
 
@@ -823,6 +914,11 @@ not quality-of-life, and should be built properly rather than patched.
 
 The fix for "prices and maintenance feel random" is not better numbers on
 amenities; it is fewer amenities to get wrong.
+
+**Frozen is not removed.** Attractions stay *usable* — a new one is the
+kick-start response to irrelevance in §2.6's counterplay table, and the
+recoverability curve for irrelevance depends on it existing. The layer stops
+growing; it does not go to zero.
 
 ### Cut
 - **Exhibition showcase.** Streaming already showcases; the new calendar
