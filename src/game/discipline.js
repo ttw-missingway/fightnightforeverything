@@ -7,7 +7,7 @@
 // temperamental star is a genuine gamble — and doing nothing lets toxicity
 // spiral. Pure engine, node-runnable.
 
-import { clamp, displayName } from './util.js'
+import { clamp, displayName, rand } from './util.js'
 import { absDayOf, statLevel } from './constants.js'
 import { chronicle } from './model.js'
 import { getRel, shiftRel } from './social.js'
@@ -82,7 +82,7 @@ export function warnPlayer(save, player, behavior) {
   const priorSame = player.warnings.filter((w) => w.behavior === behavior).length
   const reformChance = clamp(0.6 * receptiveness(player) - priorSame * 0.12, 0.05, 0.85)
   const backfireChance = clamp(0.45 * pride(player) + priorSame * 0.12, 0.03, 0.85)
-  const roll = Math.random()
+  const roll = rand()
   let outcome
   if (roll < reformChance) outcome = 'reform'
   else if (roll > 1 - backfireChance) outcome = 'backfire'

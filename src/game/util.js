@@ -1,22 +1,29 @@
 // Small shared helpers for the simulation.
 
-let idCounter = 0
+import { nextRand } from './rng.js'
+
+// Ids are drawn ENTIRELY from the bound stream (see rng.js), so a seeded run
+// mints the same ids every time — hash01(pairKey(a, b)) and lexical id
+// comparisons feed real outcomes, so ids ARE simulation state. No wall clock
+// and no session counter: either one made every run unique. Two 32-bit draws
+// give 64 bits of id, which is collision-proof at this game's scale.
 export function uid(prefix = 'id') {
-  idCounter += 1
-  return `${prefix}_${Date.now().toString(36)}_${idCounter}_${Math.floor(Math.random() * 1e6).toString(36)}`
+  const a = Math.floor(nextRand() * 0x100000000).toString(36)
+  const b = Math.floor(nextRand() * 0x100000000).toString(36)
+  return `${prefix}_${a}${b}`
 }
 
 export const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n))
 
-export const rand = () => Math.random()
-export const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1))
-export const choice = (arr) => arr[Math.floor(Math.random() * arr.length)]
-export const chance = (p) => Math.random() < p
+export const rand = () => nextRand()
+export const randInt = (lo, hi) => lo + Math.floor(nextRand() * (hi - lo + 1))
+export const choice = (arr) => arr[Math.floor(nextRand() * arr.length)]
+export const chance = (p) => nextRand() < p
 
 export function shuffle(arr) {
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
+    const j = Math.floor(nextRand() * (i + 1))
     ;[a[i], a[j]] = [a[j], a[i]]
   }
   return a

@@ -13,6 +13,8 @@
 // without a dedicated pool borrow the nearest one — approximation beats a
 // random name from the wrong continent every time.
 
+import { rand } from './util.js'
+
 // [code, name, weight, cluster] — cluster may be a NAME_MIX key or a pool key.
 const T = [
   // ---- The powerhouses ----
@@ -102,8 +104,8 @@ const TOTAL_WEIGHT = WORLD_COUNTRIES.reduce((s, c) => s + c.weight, 0)
 export const countryName = (code) => BY_CODE.get(code)?.name || code
 export const countryCluster = (code) => BY_CODE.get(code)?.cluster || 'US'
 
-/** Weighted roll over the whole planet. `rng` defaults to Math.random-shaped. */
-export function rollCountry(rng = Math.random) {
+/** Weighted roll over the whole planet. `rng` defaults to the seeded stream. */
+export function rollCountry(rng = rand) {
   let r = rng() * TOTAL_WEIGHT
   for (const c of WORLD_COUNTRIES) {
     r -= c.weight
@@ -124,7 +126,7 @@ const LEGACY_SPLIT = {
   AF: [['ZA', 2], ['NG', 2], ['KE', 1], ['GH', 1], ['EG', 1]],
   ME: [['SA', 3], ['AE', 2], ['KW', 1], ['BH', 1], ['QA', 1]],
 }
-export function migrateRegion(region, rng = Math.random, { legacy = false } = {}) {
+export function migrateRegion(region, rng = rand, { legacy = false } = {}) {
   // ORDER MATTERS when the elite is from an old save: two legacy bloc keys
   // collide with real ISO codes — AF was "Africa" then and is Afghanistan
   // now, ME was "the Middle East" and is Montenegro. An old elite carrying

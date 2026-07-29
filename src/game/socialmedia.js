@@ -2,7 +2,8 @@
 // board threads. Nobody posts about an arcade the internet hasn't heard
 // of — the feed wakes up as the stream channel gets traction.
 
-import { uid, choice, chance, randInt, shuffle, clamp } from './util.js'
+import { uid, choice, chance, randInt, shuffle, clamp, rand } from './util.js'
+import { bindRng } from './rng.js'
 import { CHAT_NAME_PARTS } from './names.js'
 import { upsetSeverityOf } from './match.js'
 import { formatDay, absDayOf, dateOfAbs, EVO_DAY, DAYS_PER_YEAR } from './constants.js'
@@ -44,7 +45,7 @@ function post(save, { platform, text, title = null, scope = 'arcade', agoDays = 
     board: platform === 'boards' ? `arcade/${gameSlug(save)}` : null,
     title,
     text,
-    likes: Math.max(1, randInt(1, 4) + Math.round(buzz * (0.3 + Math.random() * 1.2))),
+    likes: Math.max(1, randInt(1, 4) + Math.round(buzz * (0.3 + rand() * 1.2))),
     ...(() => {
       const when = agoDays > 0
         ? dateOfAbs(Math.max(1, absDayOf(save.day, save.year) - agoDays))
@@ -196,6 +197,7 @@ function evoBuzz(save, ctx, agoDays = 0, { buildup = false } = {}) {
  * did. These are backdated across the fortnight before opening night.
  */
 export function seedWorldFeed(save, count = 9) {
+  bindRng(save)
   if (!save.socialFeed) save.socialFeed = []
   // Spread across the month before opening night so the countdown beats
   // (a month out, two weeks, one week, three days...) actually land, and drop

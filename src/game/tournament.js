@@ -1,4 +1,5 @@
 import { uid, chance, rand, randInt, choice, displayName, clamp } from './util.js'
+import { bindRng } from './rng.js'
 import { formatDay, statLevel } from './constants.js'
 import { LIFE_EVENTS } from './names.js'
 import { performance as playerPerf, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
@@ -480,6 +481,7 @@ export function canStageExhibition(save) {
 }
 
 export function runExhibition(save) {
+  bindRng(save)
   const can = canStageExhibition(save)
   if (!can.ok) return { ok: false, reason: can.reason }
   if (!trySpend(save, EXHIBITION_COST, 'staged an exhibition night')) return { ok: false, reason: 'not enough cash' }
@@ -575,6 +577,7 @@ function fillBracket(save, ranked, size, storylines) {
 // ---------- Singles tournaments ----------
 
 export function runSinglesTournament(save, scheduleEntry) {
+  bindRng(save)
   const name = scheduleEntry?.name || 'Tournament'
   // Consequential worlds hold a real tournament to a minimum of 8 entrants —
   // no dinky 2- or 4-player brackets. Sandbox honors the scheduled size.
@@ -673,6 +676,7 @@ export function runSinglesTournament(save, scheduleEntry) {
 // ---------- Team battles ----------
 
 export function runTeamTournament(save, scheduleEntry) {
+  bindRng(save)
   const allSquads = Object.values(save.teams)
     .filter((t) => t.memberIds.length >= 4)
     .map((t) => ({
@@ -1053,6 +1057,7 @@ export const evoQualifiers = (save) => {
 }
 
 export function runEvo(save) {
+  bindRng(save)
   const qualified = evoQualifiers(save)
 
   // EVO WEEK. A 64-player field (your qualifiers + the world's elite) runs as:

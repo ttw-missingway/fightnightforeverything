@@ -1,4 +1,4 @@
-import { clamp, hash01, chance, choice } from './util.js'
+import { clamp, hash01, chance, choice, rand } from './util.js'
 import { newTeam, remember, chronicle, getMatchup } from './model.js'
 import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR, statLevel } from './constants.js'
@@ -79,7 +79,7 @@ export function socialDelta(a, b, context = {}) {
     // b beat a recently; b's sportsmanship decides how it lands.
     delta += (b.social.sportsmanship - SOCIAL_NEUTRAL) * 0.6
   }
-  delta += (Math.random() - 0.45) * 2 // day-to-day noise
+  delta += (rand() - 0.45) * 2 // day-to-day noise
   return delta
 }
 

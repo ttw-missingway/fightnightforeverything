@@ -7,7 +7,7 @@
 // ("loId|hiId" -> win% for the lower-sorted id), so everything downstream
 // (win probability, charPower, patch diffs) works unchanged.
 
-import { clamp, hash01, uid, choice, randInt } from './util.js'
+import { clamp, hash01, uid, choice, randInt, rand } from './util.js'
 import { comboDamage, healthMultOf, sizeModOf } from './design.js'
 import { defaultRules } from './rules.js'
 import { reachableForms, selectableChars } from './forms.js'
@@ -433,7 +433,7 @@ export function generateTierList(save) {
   const scored = chars.map((c) => ({
     id: c.id,
     perception: avgPower(chars, c, save.game)
-      + (Math.random() - 0.5) * 3            // discourse noise
+      + (rand() - 0.5) * 3            // discourse noise
       + Math.min(mains[c.id] || 0, 4) * 0.8  // popularity reads as strength
       + Math.min(titles[c.id] || 0, 3) * 0.7, // "it wins tournaments, it's top tier"
   })).sort((a, b) => b.perception - a.perception)

@@ -1,4 +1,5 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
+import { bindRng } from './rng.js'
 import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, runAge, seasonOf, seasonFactor, statusOf, difficultyOf, statLevel } from './constants.js'
 import { driftEvoRoster, topUpNpcs, worldMatchesDaily, gravitateElites } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup, bumpPeak } from './model.js'
@@ -1194,6 +1195,7 @@ function runInteraction(save, group, where, events, results = {}) {
  * Populates save.dayInProgress; hours are then simulated one at a time.
  */
 export function startDay(save) {
+  bindRng(save)
   const events = []
 
   // A scheduled patch ships the morning its date arrives — whatever the
@@ -1341,6 +1343,7 @@ export function startDay(save) {
  * Simulates one hour of arcade time. Requires startDay to have run.
  */
 export function simHour(save) {
+  bindRng(save)
   const dip = save.dayInProgress
   if (!dip || save.hour >= HOURS_PER_DAY) return
   dip.results ??= {} // days started before this field existed
@@ -1695,6 +1698,7 @@ export function checkSceneCollapse(save, attendanceToday, events = null) {
 }
 
 export function endDay(save) {
+  bindRng(save)
   const dip = save.dayInProgress
   if (!dip) return
   const events = []
@@ -1940,6 +1944,7 @@ export function whatHappensToday(save) {
 }
 
 export function advanceDay(save) {
+  bindRng(save)
   // Settle recurring bills AND drift national relevance for the day now
   // closing — BEFORE the calendar ticks. This is the one path every day flows
   // through (normal, tournament, EVO, idle catch-up), so neither can be skipped

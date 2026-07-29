@@ -2,7 +2,7 @@
 // patch commits it, generates patch notes from the real diff, and the
 // community reacts — to balance, to content, to boredom, and to cadence.
 
-import { uid, clamp, hash01, displayName } from './util.js'
+import { uid, clamp, hash01, displayName, rand } from './util.js'
 import { getMatchup, chronicle, bumpPeak } from './model.js'
 import { bumpPassion } from './career.js'
 import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance.js'
@@ -601,7 +601,7 @@ export function releasePatch(save) {
   // The community needs about a week of games before the tier list drops.
   save.pendingTierList = {
     version,
-    dueAbs: (save.year - 1) * DAYS_PER_YEAR + save.day + 5 + Math.floor(Math.random() * 5),
+    dueAbs: (save.year - 1) * DAYS_PER_YEAR + save.day + 5 + Math.floor(rand() * 5),
   }
   return patch
 }

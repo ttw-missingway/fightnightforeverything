@@ -11,23 +11,30 @@
 // not optimal. It is competent, which is the baseline every balance question
 // in Phase 7 is actually about.
 
-const SRC = new URL('../../src/game', import.meta.url).pathname
-const { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild } = await import(`${SRC}/model.js`)
-const { generateCharacter, populateRoster, generateEvoRoster, randomIdentity, randomPreferences } = await import(`${SRC}/generate.js`)
-const { TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS, AD_CHANNELS } = await import(`${SRC}/constants.js`)
-const { computeMatchups } = await import(`${SRC}/balance.js`)
-const { startDay, simHour, endDay, advanceDay, whatHappensToday } = await import(`${SRC}/sim.js`)
-const { runSinglesTournament, runTeamTournament, runEvo, canStageExhibition, runExhibition, EXHIBITION_COST } = await import(`${SRC}/tournament.js`)
-const { audienceMix, hasFreeInstall, claimFreeInstall } = await import(`${SRC}/catalog.js`)
-const { ATTRACTION_PACKS } = await import(`${SRC}/names.js`)
-const { HOURS_PER_DAY, runAge, difficultyOf, seasonOf } = await import(`${SRC}/constants.js`)
-const eco = await import(`${SRC}/economy.js`)
-const { buildStreamForPlayers, pickAutoStreamSetup, STREAM_RIG_COST } = await import(`${SRC}/stream.js`)
-const { fitsBandwidth } = await import(`${SRC}/bandwidth.js`)
-const { releasePatch, daysSincePatch, charPower } = await import(`${SRC}/patch.js`)
-const { applyMoveDescriptors, DAMAGE_TIERS } = await import(`${SRC}/design.js`)
-const { isUnlocked } = await import(`${SRC}/achievements.js`)
-const { selectableChars } = await import(`${SRC}/forms.js`)
+// Static imports on purpose: the old `await import(`${SRC}/…`)` pattern was
+// invisible to every bundler and static check, so a file move broke the
+// harness silently — and Vite can now load this module for the dev suite's
+// fast-forward, which a computed import path would forbid.
+import { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild } from '../../src/game/model.js'
+import { generateCharacter, populateRoster, generateEvoRoster, randomIdentity, randomPreferences } from '../../src/game/generate.js'
+import {
+  TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS, AD_CHANNELS,
+  HOURS_PER_DAY, runAge, difficultyOf,
+} from '../../src/game/constants.js'
+import { computeMatchups } from '../../src/game/balance.js'
+import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../../src/game/sim.js'
+import { runSinglesTournament, runTeamTournament, runEvo, canStageExhibition, runExhibition, EXHIBITION_COST } from '../../src/game/tournament.js'
+import { audienceMix, hasFreeInstall, claimFreeInstall } from '../../src/game/catalog.js'
+import { ATTRACTION_PACKS } from '../../src/game/names.js'
+import * as eco from '../../src/game/economy.js'
+import { buildStreamForPlayers, pickAutoStreamSetup, STREAM_RIG_COST } from '../../src/game/stream.js'
+import { fitsBandwidth } from '../../src/game/bandwidth.js'
+import { releasePatch, daysSincePatch, charPower } from '../../src/game/patch.js'
+import { applyMoveDescriptors, DAMAGE_TIERS } from '../../src/game/design.js'
+import { isUnlocked } from '../../src/game/achievements.js'
+import { selectableChars } from '../../src/game/forms.js'
+import { bindStream, newRngState } from '../../src/game/rng.js'
+
 const { startingBudget, arcadeBuildCost } = eco
 
 export const DEFAULT_POLICY = {
@@ -63,9 +70,17 @@ export const DEFAULT_POLICY = {
   attractions: false,
 }
 
-/** Build a world the way the setup wizard would, then apply the policy's opening. */
-export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POLICY, seedTweak = null, prestige = null } = {}) {
-  const save = newSave({ saveName: 'P7' })
+/**
+ * Build a world the way the setup wizard would, then apply the policy's
+ * opening. Pass `seed` for a reproducible run: the save's whole stream —
+ * characters, cast, roster, every day after — replays identically from it.
+ */
+export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POLICY, seedTweak = null, prestige = null, seed = null } = {}) {
+  // Bind BEFORE newSave so even the save's own ids come off the seeded
+  // stream — and so back-to-back makeRun calls can't draw from each other.
+  const stream = newRngState(seed ?? undefined)
+  bindStream(stream)
+  const save = newSave({ saveName: 'P7', rng: stream })
   save.settings.difficulty = difficulty
   if (prestige) save.prestige = structuredClone(prestige)
   const used = new Set()

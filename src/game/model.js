@@ -1,4 +1,5 @@
 import { uid, clamp } from './util.js'
+import { newRngState } from './rng.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, OPENING_DAY, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
@@ -505,6 +506,10 @@ export function newSave(partial = {}) {
     saveName: 'New Save',
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    // The save-scoped random stream (see rng.js). Every engine draw advances
+    // this state in place, so a run replays identically from any point. The
+    // harness passes a fixed seed; the browser seeds from entropy at creation.
+    rng: newRngState(),
     day: OPENING_DAY, // day of year, 1..336 — a run opens in mid-June
     year: 1,
     // The absolute day the doors opened. Everything asking "how old is this
@@ -848,6 +853,9 @@ export function chronicle(save, icon, text) {
 
 // Fill in fields added after a save was created, so old saves keep working.
 export function migrateSave(save) {
+  // Saves from before seeded randomness get a stream now; their past is not
+  // reproducible, but everything from here on is.
+  if (!save.rng || typeof save.rng.state !== 'number') save.rng = newRngState()
   save.hour ??= 0
   save.dayInProgress ??= null
   // A save written while the arcade was OPEN carries a live day whose shape is

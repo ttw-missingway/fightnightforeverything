@@ -1,4 +1,5 @@
 import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
+import { bindRng } from './rng.js'
 import { newPlayer, newCharacter } from './model.js'
 import { seedTakes } from './takes.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
@@ -275,6 +276,7 @@ export function generatePlayer(save, overrides = {}) {
 // topUpNpcs). Kept as a no-op-ish shim so sandbox saves that lean on a fixed
 // generated pool still work.
 export function populateRoster(save) {
+  bindRng(save)
   const sandbox = save.settings.mode === 'sandbox'
   if (sandbox && save.settings.allowGeneratedPlayers) {
     const cpuCount = () => Object.values(save.players).filter((p) => p.createdBy === 'cpu').length
@@ -457,6 +459,7 @@ const ELITE_BUILD_BUDGET = {
 }
 
 export function generateEvoRoster(save, count = EVO_ROSTER_SIZE) {
+  bindRng(save)
   const roster = []
   const usedAliases = new Set()
   for (let i = 0; i < count; i++) {
@@ -475,6 +478,7 @@ export function generateEvoRoster(save, count = EVO_ROSTER_SIZE) {
  * the parts a player would notice — alias, elo, skill and titles all stay.
  */
 export function repairEvoRoster(save) {
+  bindRng(save)
   if (!save.evoRoster) return
   // Players from before heritage existed pick the face pool their arcade's
   // country would have rolled them — names stay untouched.

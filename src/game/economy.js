@@ -5,6 +5,7 @@
 // now: stay in the red long enough and the landlord takes the keys.
 
 import { clamp, chance, choice, randInt, uid, hash01 } from './util.js'
+import { bindRng } from './rng.js'
 import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
 import { difficultyOf, absDayOf, runAge, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
 import { chronicle, bump, bumpPeak } from './model.js'
@@ -254,6 +255,7 @@ export const FAMILY_CREW = [
 ]
 
 export function seedFamilyCrew(save) {
+  bindRng(save)
   if (!isUnlocked(save, 'family')) return
   save.staffing ??= newStaffing()
   if (save.staffing.staff.some((s) => s.family)) return
