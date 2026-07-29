@@ -41,9 +41,16 @@ Breakthroughs raise the **temperament stats**, not skill. Skill then climbs
 toward a ceiling derived from those stats. Practice fills toward the ceiling;
 eureka raises it. Two currencies, one direction of causation.
 
-Talent is **breadth, not height** — a generational talent gets three or four
-stats glowing per eureka, a journeyman gets one and it is the obvious one. No
-hidden caps, no fatalism, and scouting still matters.
+Potential comes from a third temperament layer, **spirit** — six choose-ones
+that are the complete set of orderings of three axes (skill, love, mana), set in
+stone, one per player. Three hidden values on 75–100 are rolled and assigned
+highest-to-lowest in that order, ceiling the player's skill, `community` and
+`popularity` respectively, and each also *radiating* an effect onto everyone
+around them. **The player chooses the shape of their potential; the game rolls
+the magnitude.** Nobody rolls a dud, so there is no fatalism — what you discover
+over a career is the shape, and the ceilings *steer* development rather than
+merely capping it. Talent **breadth** — how many stats glow at once — comes from
+how lopsided the roll is, not how high. Fully specified in §1.6.
 
 **3. Eureka and burnout share an input.** Adversity fills the breakthrough
 meter *and* drives passion decay toward retirement. Pushing a player is a
@@ -285,7 +292,128 @@ Accumulate enough cross-row breakthroughs and their **temperament changes**.
 Rare, expensive, and among the largest things that can happen to a person in
 this game.
 
-### 1.6 The conversion formula — where the three levers enter
+### 1.6 Spirit — the third temperament layer, and where potential comes from
+
+Creation gains a third choose-one alongside the competitive and social rows.
+Six **spirit temperaments**, and six is not an arbitrary count: it is the
+complete set of orderings of three axes, so nothing is missing and nothing is
+redundant.
+
+| spirit | order |
+|---|---|
+| The Guru | love · skill · mana |
+| The Fool | mana · love · skill |
+| The King | mana · skill · love |
+| The Hero | skill · love · mana |
+| The Outlaw | skill · mana · love |
+| The Healer | love · mana · skill |
+
+Spirit is **set in stone**. It does not grow, it is never rerolled, and each
+player has exactly one. It gives creation a clean three-layer shape:
+**competitive temperament is how they play, social temperament is how they
+relate, spirit is what they could become.**
+
+#### The three axes: a cap and a radiance each
+
+Every axis ceilings one of the player's own quantities *and* radiates an effect
+onto everyone around them. Keep both, and keep them symmetric — the effects were
+implicit in the original sketch for love and mana only, and skill needs one for
+the same reason the others have one.
+
+| axis | caps | radiates |
+|---|---|---|
+| **skill** | skill ceiling | *standards* — proximity raises what the room believes normal is |
+| **love** | `community` ceiling | *cohesion* — suppresses hatred and burnout in others |
+| **mana** | `popularity` ceiling | *attention* — people want to be like them |
+
+**Radiance is the influence channel of §1.2.** "People want to be like them" is
+precisely the mechanic by which a high-mana player's stats become glow-eligible
+for everyone nearby; skill radiating standards is how one great player in a room
+makes everyone else's sheet start glowing. The spirit layer is therefore not a
+separate system bolted on — it is what decides *who teaches whom*, which the
+eureka spine already depends on.
+
+Caps and radiances must be tuned on separate knobs. Conflated, tuning one
+silently breaks the other.
+
+#### The rolls
+
+Three hidden values, each uniform on **75–100**, assigned highest to lowest in
+the spirit's order. So the player chooses the *shape* of their potential and the
+game rolls the *magnitude* — which is the whole reason this layer works.
+
+In expectation, from the order statistics: **primary ≈ 94, secondary ≈ 87.5,
+tertiary ≈ 81**, with a best-to-worst spread near 12.5.
+
+Whether that spread is tight or enormous is entirely a function of where the
+elite band sits. If world champions measure ~95 and the world top 64 begins
+around ~85, then primary ≈ 94 can be world number one, secondary ≈ 87 is top
+twenty, and tertiary ≈ 81 is the fringe of the top 64 — meaning **a Healer can
+make the world leaderboard and will never win EVO**, permanently and legibly.
+That is the shape to aim for.
+
+**The range must therefore be calibrated against measured elite skill, not
+chosen in isolation.** It is a claim about the elite band, and it is a
+`fingerprint.mjs` question.
+
+#### Caps do not merely limit — they steer
+
+This is the most important consequence and it is not obvious. Under §1.1, a
+player who stops converting adversity into skill gains has hit their skill
+ceiling, and **that plateau generates pressure on their other axes.** A Healer
+keeps running into a competitive wall, so their breakthroughs get pushed toward
+love and mana instead. They *become* a community pillar — not by script, but
+because their ceiling redirected them there.
+
+The spirit temperament is a **narrative attractor**, not a limit. The Fool
+becomes beloved and mediocre. The Outlaw becomes great and isolated. The King
+becomes famous first and good second. The dice set the magnitude, the ordering
+sets the destiny, and the eureka spine walks them there unaided.
+
+#### This answers talent breadth: breadth is flatness, not height
+
+Glow breadth (§1.1's *K*) derives from **how lopsided the roll is, not how high
+it is.** A lopsided player (94/85/76) is a specialist and gets few, focused
+glows. A flat player (90/88/86) is a generalist and gets wide ones.
+
+That uses information already present in the dice, it is orthogonal to power so
+there is no rich-get-richer loop, and it makes roll *variance* do real work
+instead of sitting there as noise.
+
+#### Reconciling this with §0
+
+An earlier draft of §0 committed to "no hidden caps, no fatalism," on the
+grounds that a hidden ceiling means most players cap at 50, you cannot tell, and
+nothing you do matters. This layer is not that, for three reasons: the player
+chooses the shape, the range sits entirely in the upper band so **nobody rolls a
+dud**, and the ceiling is on *potential* while realisation remains the eureka
+spine's job. Everyone here is capable; what you discover is the shape.
+
+#### Two obligations this creates
+
+**The price is the tertiary slot, and nothing is to be added to it.** Being a
+Healer costs a competitive ceiling; being an Outlaw costs a room. That is a real
+cost, carried entirely by the ordering. No axis gets an additional penalty — the
+layer stays clean, and the only lever on how much the third slot bites is the
+range.
+
+**Immutability obligates the journal.** A hidden, permanent ceiling is
+infuriating unless the game says so in fiction. Hitting a cap must arrive as
+*"I don't think I'm getting any better at this"* — never a revealed number and
+never silence. And it means a topped-out competitor is genuinely finished as a
+competitor, which is exactly what veteran-tier eureka (§1.9) and the coaching
+handoff (P5) exist to catch. Immutability is what makes the discovery worth
+anything, so it stays — but it is a promise about the late game, not only a
+creation rule.
+
+#### Where it lives
+
+`constants.js` gains `SPIRITS` (the six orderings and the three axis
+definitions). `model.js` gains the spirit key plus the three rolled ceilings on
+the player, stored but never surfaced. `generate.js` assigns spirit and rolls to
+NPCs and elites. `PlayerForm.jsx` gains the third choose-one at creation.
+
+### 1.7 The conversion formula — where the three levers enter
 
 The most important equation in the design. An adversity event does not go
 straight into the meter. It is **split** between eureka and passion drain:
@@ -309,7 +437,7 @@ It compounds in the right direction, too: early breakthroughs into resilience
 stats make all *later* adversity more productive. Investing in `determination`
 early is a genuine strategy with a real payoff curve.
 
-### 1.7 Belief is the amplifier, and it explains why NPCs stall
+### 1.8 Belief is the amplifier, and it explains why NPCs stall
 
 Adversity is a function of **expected result minus actual result**, and belief
 sets the expectation. A player who does not think they can win does not suffer
@@ -324,7 +452,11 @@ engine.** That is not asserted flavour — it falls out of the mechanics.
 It is self-limiting rather than a degenerate maximise-belief loop, because high
 belief also means a larger burnout hit on failure. Belief is the risk dial.
 
-### 1.8 The cap performs the late-game phase transition
+### 1.9 The point cap performs the late-game phase transition
+
+Two different caps are now in play and must not be confused. The **spirit
+ceilings** of §1.6 bound the outcomes — skill, community, popularity. The
+**point cap** here bounds the sheet itself.
 
 `STAT_MAX_POINTS = 5` means a stat can break through five times. As a career
 runs on, candidates thin — which forces breadth late and eventually leaves a
@@ -339,7 +471,7 @@ career of 10–12 breakthroughs. A great player finishes around 30–35 of 120.
 There is no risk of running out of sheet; the risk is running out of
 *pressured, unfilled* stats, which is the point.
 
-### 1.9 Numbers, as a starting hypothesis
+### 1.10 Numbers, as a starting hypothesis
 
 Stated only so the harness has something to shoot at:
 
@@ -352,7 +484,7 @@ Stated only so the harness has something to shoot at:
   and becomes expensive
 - Forced-resolution threshold ≈ 2.5× the normal one
 
-### 1.10 What settles it
+### 1.11 What settles it
 
 `tools/balance/eureka.mjs` must report, per run:
 
@@ -362,6 +494,13 @@ Stated only so the harness has something to shoot at:
 - cross-row breakthrough frequency, and temperament-change rate
 - forced-resolution rate (§1.4)
 - the breakthrough : burnout split (metric 4)
+- **cap realisation** — the share of players who reach each spirit ceiling, and
+  how long it takes. If most players top out, the ceilings are too low or the
+  spine too generous; if almost none do, the spirit layer is invisible and
+  §1.6's steering never happens
+- the distribution of *which* axis a player tops out on first, against their
+  spirit ordering — the narrative attractor of §1.6 either shows up here or is
+  not real
 
 Metric 1 — separation — is downstream of every one of these.
 
@@ -468,9 +607,14 @@ Dead systems must stop constraining refactors of `sim.js`, `tournament.js` and
 
 **Mechanism.** `src/game/deprecated/` plus a registry at
 `docs/DEPRECATED.md`, and `scripts/check-deprecated.mjs` wired into
-`npm run lint` so live code importing from the lane fails the build. Save
-migration in `migrateSave()` strips deprecated fields rather than preserving
-them.
+`npm run lint` so live code importing from the lane fails the build.
+
+**Old saves break.** Decided 2026-07-29: `migrateSave()` does not carry pre-
+revision saves forward. The schema version bumps and older saves are refused
+rather than migrated. Migrating through a change this size would mean holding
+dead shapes in `model.js` indefinitely, which is the exact thing the lane exists
+to prevent. Playtest *identities* can still be salvaged through the existing
+roster export path — but that has to happen before P0 lands.
 
 **What moves, and what survives:**
 
@@ -494,14 +638,35 @@ Each phase ends by running `fingerprint.mjs --diff` and recording the result in
 `BALANCE.md`. A phase that moves a metric the wrong way is not finished.
 
 ### P0 — Instrument and isolate
-No gameplay change. Seeded RNG through every call site. Fingerprint plus
-committed baseline of the game *as it stands*, so the revision can be measured
-against the thing it is replacing. New metric scripts. Dev-suite fast-forward,
-fixtures, timeline. Deprecation lane created and all six systems above moved
-into it.
 
-*Exit:* a ten-year run measured in seconds, a baseline in git, and no live
-imports from `deprecated/`.
+No gameplay change. **The order is a hard constraint, not a preference:**
+
+1. **Seeded RNG** through every call site. Goes first because it does not change
+   the distribution, only makes it reproducible — and nothing downstream is
+   trustworthy until runs replay.
+2. **Metric scripts.** Requires two operational definitions settled first: what
+   counts as *a decision* (metric 6), and the shape of the crisis-injection API
+   (metric 9).
+3. **Capture the baseline** of the game *as it stands*, so the revision can be
+   measured against the thing it is replacing.
+4. **Deprecation lane**, and all six systems of §4 moved into it.
+5. **Dev suite** — fast-forward, fixtures, journal viewer, eureka inspector,
+   timeline.
+
+**3 must precede 4.** Cut exhibitions and discipline first and the baseline
+measures a game nobody played, destroying the only chance to compare against
+what the playtests actually complained about. This matters most for metric 9:
+the current game's only counterplay to a toxic room *is* discipline, so
+recoverability has to be measured with discipline still in place. That number —
+almost certainly a flat zero at every lag — is what P3's levers get held
+against.
+
+The baseline must also include the **elite skill distribution**: where world
+champions and the world top 64 actually measure today. §1.6's 75–100 roll range
+is a claim about that band and cannot be set until it is known.
+
+*Exit:* a ten-year run measured in seconds, a baseline in git covering all ten
+metrics and the elite band, and no live imports from `deprecated/`.
 
 ### P1 — The eureka spine
 **Specified in full in §1.** New `src/game/eureka.js` carrying per-stat
@@ -509,11 +674,13 @@ pressure, the three channels, the conversion split, deceleration, forced
 resolution, and temperament inertia. Skill ceiling becomes derived from the
 stat sheet rather than set independently.
 
-Touches `model.js` (player fields: pressure map, meter, breakthrough log),
-`constants.js` (the wound→stat mapping, thresholds), `sim.js` (event emission),
-`social.js` (company channel), `match.js`/`tournament.js` (wound and edge
-emission at the point of the result), `career.js`, `interest.js` (character
-channel).
+Touches `model.js` (player fields: pressure map, meter, breakthrough log, spirit
+key and the three hidden ceilings), `constants.js` (the wound→stat mapping,
+thresholds, and `SPIRITS`), `sim.js` (event emission), `social.js` (company
+channel and radiance), `match.js`/`tournament.js` (wound and edge emission at
+the point of the result), `career.js`, `interest.js` (character channel),
+`generate.js` (spirit and rolls for NPCs and elites), `PlayerForm.jsx` (the
+third choose-one at creation).
 
 *Exit:* metrics 1, 3, 4 in range; the wound : edge selection ratio is genuinely
 split; separation widens across ten years. **This is the phase that either
@@ -674,10 +841,11 @@ The most-requested item. Its own phase.
    the real table needs to cover every way a player can fail. It is what makes
    journal entries write themselves, so a gap in it is a gap in the prose, not
    just the mechanics. Highest-leverage content work in P1.
-2. **Where talent breadth comes from.** A generational talent gets 3–4 glows, a
-   journeyman 1. Is that fixed at creation, derived from the sheet, or itself
-   movable by breakthroughs? Deriving it risks a rich-get-richer loop; fixing
-   it reintroduces the hidden dice roll §0 rejected. Unresolved.
+2. **The spirit roll range (§1.6).** 75–100 is a *claim about where the elite
+   band sits* — it only produces the intended shape (primary can win EVO,
+   tertiary is fringe top-64) if elites measure around 85–95. Must be calibrated
+   against measured elite skill in P0's baseline, never set by feel. Talent
+   breadth is now answered — it is roll flatness — but the range is not.
 3. **Eureka fill rate and the deceleration curve.** §1.9 is a hypothesis, not a
    finding. Target is 10–12 breakthroughs over a 6–7 year career, front-loaded.
 4. **How much adversity is too much.** The breakthrough : burnout ratio decides
