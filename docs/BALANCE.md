@@ -549,19 +549,234 @@ the lab killed (dear food, cabinet walls, over-staffing, bargain food).
 Year one is level, and the three-year ordering matches each style's stated
 risk — but the magnitudes still separate: **OPEN (top item): community-first
 dies in year 1.5 every time, and competition-first barely dies at all by year
-three.** Their attendance is equal; the whole difference is the relevance
-flywheel. If this needs a mechanism rather than a number, the natural one is
-letting what community-first uniquely builds — teams, mentorships, beloved
-regulars — argue relevance in `relevanceDaily`'s sustain, which currently
-hears only hype, headcount, and opinion. Economy-first's move from
-dead-at-day-340 to 63%-at-day-794 came from exactly such an identity payoff
-(attractions + exhibitions funded by its margin).
+three.** Economy-first's move from dead-at-day-340 to 63%-at-day-794 came from
+an identity payoff being wired up (attractions + exhibitions funded by its
+margin); community-first has not had its equivalent.
+
+**Do not act on this without reading §13.** An earlier draft of this section
+claimed the two styles run equal attendance and that the whole difference is
+the relevance flywheel. That is **false** — the table above shows 15.7 vs 17.8
+at year one — and the diagnosis built on it (that relevance is blind to what
+community-first uniquely builds) is an unverified hypothesis with a live
+confound underneath it.
 
 ### Remaining OPEN, ranked
 
 1. Year-2+ viability of economy- and community-first (§1) — the one goal this
-   pass measured but did not close.
+   pass measured but did not close. **§13 is the plan for it.**
 2. Absences of killer, stoic, gracious, dramatic are not felt (§2).
 3. Monoculture residual: natural and puttogether survive-strictly-worse (§2).
 4. Nobody retires; money has no late sink (inherited from Phase 7 notes).
 5. The teams gate still never opens for ~1/7 difficult runs.
+
+---
+
+## 13. The next pass: why the community route fades
+
+**Status: a plan, deliberately not executed (2026-07-28). Nothing in this
+section has been built or measured.** It is written to be picked up cold.
+
+Read §11 before starting. This section is structured as two decision gates
+precisely because the obvious fix here is the kind of invented-target tuning
+§11 forbids — **there is a real chance the correct outcome of this pass is
+"change nothing," and the gates are there to find that out cheaply.**
+
+### The observation
+
+At three years (n=16, normal, §12's table) community-first dies 100% of the
+time around day 417 while competition-first dies 6% and reaches day 955. The
+relevance gap is visible from year one: 51 vs 89.
+
+### Why the obvious diagnosis is suspect
+
+The tempting story is that `relevanceDaily`'s `sustain` term
+([relevance.js:86](../src/game/relevance.js)) is blind to what the community
+route uniquely builds. It reads exactly three inputs — stream hype, active
+regulars, and `communityGameOpinion`.
+
+**Be precise about what is and is not wired, because it is easy to get this
+wrong.** Arcade opinion is NOT ignored by the sim: `arcadeOpinionOf(save,
+player)` drives attendance directly and hard in `attendChance`
+([sim.js:381](../src/game/sim.js)) as `clamp(0.15 + reputation * 0.16, 0.15,
+1.55)` — a ~10× swing on whether someone turns up. A beloved room genuinely
+fills. Only the aggregate rollup `communityArcadeOpinion(save)` is unconsumed
+by the sim (Feed.jsx reads it for display), and that is a reporting
+convenience, not a missing feedback loop.
+
+**The sharper problem is saturation.** The headcount term is
+`Math.min(1, activeRegulars / 40) * 0.03`, which caps at 40 regulars. All
+three playstyles measured 49–66 regulars (§12's table), so **every style is
+pinned at that cap and the term contributes an identical 0.03/day to each.**
+It discriminates between playstyles not at all, leaving stream hype and game
+opinion as the only inputs to `sustain` that vary by how you play.
+
+**But do not "fix" it by raising the cap — that is a trap, worked through
+below so nobody re-derives it.** The `0.03` is the maximum; the `40` only sets
+how fast you reach it. Moving 40 → 80 leaves the ceiling untouched and simply
+lowers everyone underneath:
+
+| style | regulars | now | at cap 80 | change |
+|---|---|---|---|---|
+| community-first | 49 | 0.0300 | 0.0184 | **−0.0116/day** |
+| economy-first | 63 | 0.0300 | 0.0236 | −0.0064/day |
+| competition-first | 66 | 0.0300 | 0.0248 | −0.0053/day |
+
+Nobody gains, and the style that loses most is the one the pass is trying to
+help. Raising the coefficient instead (e.g. `min(1, regs/80) * 0.06`) would at
+least be a buff — but it would still be **a reward for ROOM SIZE, and
+community-first runs the smallest room of the three.** No shaping of a
+headcount curve can favour it. Rule this lever out.
+
+**But two facts undercut the story, and both must be cleared first.**
+
+*The confound* — a second difference between the arms, large enough to
+explain the result on its own, that was never controlled for. The two
+playstyle specs do not differ only in identity. In playstyles.mjs,
+community-first runs `patchEvery: 100` with no monthly; competition-first runs
+`patchEvery: 70` with a 16-player monthly. Patch cadence resets the staleness
+clock and majors generate hype — both feed relevance directly and hard.
+
+Priced out (integrating `staleness` over one patch cycle at patience 1.0 and
+multiplying by normal's `relevanceDecayMult` of 1.32):
+
+| game age | patch/70 | patch/100 | gap |
+|---|---|---|---|
+| 1 yr | 0.0090/day | 0.0595/day | **0.0505** |
+| 2 yr | 0.0111/day | 0.0732/day | **0.0621** |
+| 3 yr | 0.0132/day | 0.0869/day | **0.0737** |
+
+**The entire headcount term in `sustain` maxes at 0.0300/day.** The cadence
+difference is worth about double the mechanism this section proposes, and it
+points the same direction as the observed gap. The relevance difference may
+therefore be a patch-cadence difference wearing an identity costume — and
+those cadence numbers are harness definitions someone typed, not properties
+of the game.
+
+*The framing that matters.* Patching less may legitimately BE part of the
+community identity (the spec describes competition-first as having "a designer
+who keeps the meta moving"). The Studio is available to every style, so
+cadence is a player choice. If a community-first owner who patches every 70
+days survives, the game is teaching "whatever room you run, you still ship
+patches" — a fine lesson, not a balance bug.
+
+*...but cadence is probably NOT the main suspect.* **Economy-first and
+community-first run identical `patchEvery: 100`, and their relevance is 92
+against 51.** Cadence cannot explain that pair at all. What separates them is
+that economy-first runs a 16-player monthly and community-first runs none —
+and both high-relevance styles (economy 92, competition 89) have a monthly
+while the only style without one sits at 51. **The missing marquee event is
+the better-supported suspect.**
+
+*And the arm itself is mis-specified.* Diffed against `DEFAULT_POLICY`,
+community-first changes exactly two things: the price ($0.75 vs $1.50) and two
+extra food lines. It is not a community-building strategy, it is DISCOUNT
+PRICING with a misleading name — and $0.75 sits in the band the price sweep
+independently measured at 50% lethal, which the "cheap play needs floor" venue
+tip already exists to teach. Its deaths may be a pricing result the game
+already models correctly and warns about.
+
+**Revised ranking of suspects, before any mechanism is considered:**
+
+1. The missing monthly major (economy vs community isolates it).
+2. The price — $0.75/play is independently measured as ~50% lethal.
+3. Patch cadence (still worth controlling; see the table above).
+4. The saturated headcount term — possibly not a factor, and per the
+   trap above, not fixable by moving the cap regardless.
+
+*The premise may be backwards.* The blind-spot story assumes community-first
+builds more social structure. The measured teams column says otherwise: 0.9
+teams at three years against economy-first's 2.5 and competition-first's 3.4.
+That reading is circular (it dies earlier, so it accumulates less), which is
+exactly why gate 2 below normalises per day alive. **If community-first does
+not lead on social structure per unit time, wiring teams into `sustain` helps
+competition-first most and widens the gap.**
+
+### Gate 1 — is this a design gap at all, or my spec?
+
+Cheapest experiment, run it first. Take community-first exactly as specified
+and vary only the levers it is confounded on, n≥32, 1008d, normal. The monthly
+and the price arms matter most — see the revised ranking above:
+
+| arm | patchEvery | monthly | $/play |
+|---|---|---|---|
+| A (as specified) | 100 | 0 | 0.75 |
+| B — add the marquee | 100 | 16 | 0.75 |
+| C — cadence parity | 70 | 0 | 0.75 |
+| D — honest price | 100 | 0 | 1.50 |
+| E — all three | 70 | 16 | 1.50 |
+
+Report deaths, day lasted, and relevance at 336/672/1008. Arm E should
+converge on competition-first; if it does not, something genuinely
+identity-linked is left over and that residue is the real subject.
+
+- **If B or C closes most of the relevance gap:** there is no mechanism to
+  build. The styles differ in patch cadence, which is a legitimate player
+  choice, and community-first's stated risk ("you patch less, you fade") is
+  working as designed. Re-specify the style honestly, record it in §1, and
+  **stop.** This is the outcome I consider most likely.
+- **If the gap survives cadence parity:** proceed to gate 2.
+
+### Gate 2 — does the community route actually build more?
+
+Instrument social structure *per 100 days alive*, so early death cannot
+flatter or damn a style: teams founded, mentorships started, mean
+`communityArcadeOpinion`, and count of regulars at "beloved" standing
+(`standingOf` ≥ 28, see social.js). All three styles, n≥16, 1008d.
+
+- **If community-first does not lead on these:** the blind-spot hypothesis is
+  dead. The real question becomes why the cheap-play route runs a smaller room
+  than competition-first at all (attendance 15.7 vs 17.8 at year one) — a
+  different investigation, starting at `attendChance` and the cheap-play
+  awareness bonus rather than at relevance.
+- **If it does lead:** the mechanism below is justified, and gate 2's output
+  doubles as the calibration data for it.
+
+### Only then: the mechanism
+
+**Not a headcount lever** — that is ruled out above. The only form worth
+building is a term keyed to something the community route actually leads on,
+which is exactly what gate 2 exists to identify. If gate 2 finds it leads on
+bonds rather than bodies, add a fourth `sustain` term over
+`communityArcadeOpinion` (the rollup that already exists and is currently
+display-only) or over teams and active mentorships, saturating fast so it
+cannot become a late-game stacking engine.
+
+**If gate 2 finds it leads on nothing, build nothing.** Re-specify the style
+into something that genuinely expresses community-building — and note that no
+such spec exists yet, so writing one is itself the work.
+
+Second form, only if gate 2 shows teams and mentorships specifically are the
+distinguishing output: a bonded-room term over team count and active
+mentorships, saturating fast (2–3 teams should reach most of it) so it cannot
+become a stacking engine late.
+
+Whichever is chosen, it goes **inside** `sustain`, above the age-fade line —
+so it is subject to `sustain *= 1 / (1 + max(0, age - 1.5) * 0.5)` like every
+other argument the scene makes. It must not be added after the fade, and it
+must not touch `timeDecay`.
+
+### Guardrails — what must not regress
+
+The tenet is that relevance decay is inevitable; this pass is the single most
+likely way to break it, exactly as the flat exhibition pump did (§12).
+
+1. **Five-year check is mandatory.** Any new sustain term must be measured at
+   1680d, not 336d. The exhibition bug was invisible at one year and made runs
+   immortal at three.
+2. **Compare against maximum decay.** Old-age `timeDecay` reaches ~0.34/day.
+   If a well-run scene's total sustain can exceed that indefinitely, the death
+   march is gone and the change is wrong regardless of what the death rates
+   say.
+3. **Competition-first must not improve.** It already survives at 6%. If the
+   change lifts the strongest style, it is the wrong lever.
+4. **Re-run the ladder (n≥32) and monoculture arms.** Scene variety and this
+   term both key off the room's social composition and could interact.
+5. **n≥32 for anything expressed as a death rate** (§9 trap 0).
+
+### Practical note
+
+The harnesses this needs do not exist in the repo. `playstyles.mjs` covers the
+gate-1 arms if you add the variants; gate 2 needs a new script, as the
+per-100-days instrumentation is not in `playRun`'s metrics bundle. The
+scratchpad scripts from the 2026-07-28 pass were session-temporary and are
+gone — do not go looking for them.

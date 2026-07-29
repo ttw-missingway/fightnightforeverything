@@ -29,11 +29,19 @@ const STYLES = {
     attractions: true,
     ads: ['flyers', 'radio'], weekly: 0, monthly: 16, patchEvery: 100 },
   'community-first': { ...DEFAULT_POLICY,
-    // The room is the product. Three quarters a match, the money made at the
-    // concession counter, one friendly weekly. BENEFIT: the fullest, warmest
-    // room — teams and regulars. SACRIFICE: margin — cheap play caps revenue.
-    // RISK: the economy pit; the thinnest buffer of the three (the
-    // cheap-needs-floor venue tip is aimed at exactly this run).
+    // Three quarters a match, the money made at the concession counter, one
+    // friendly weekly.
+    //
+    // THIS SPEC IS KNOWN-WRONG AND IS THE SUBJECT OF BALANCE.md §13. It
+    // claimed "BENEFIT: the fullest, warmest room — teams and regulars," and
+    // the measurement says the opposite: it runs the SMALLEST room of the
+    // three (49 regulars against 63 and 66, attendance 15.7 against 19.5 and
+    // 17.8) and the lowest relevance (51 against 92 and 89). Diffed against
+    // DEFAULT_POLICY it changes exactly two things — the price and two extra
+    // food lines — so what it actually measures is DISCOUNT PRICING, not
+    // community-building, and $0.75 sits in the band the price sweep measured
+    // at 50% lethal. Do not read its deaths as evidence about the community
+    // route until it has been re-specified to express one.
     tokenPrice: 0.25, playTokens: 3, foodPrice: 3, foods: 5, cabinets: 2, maxEmployees: 2, manager: false,
     ads: ['flyers'], weekly: 8, monthly: 0, patchEvery: 100 },
   'competition-first': { ...DEFAULT_POLICY,
