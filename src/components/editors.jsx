@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { Field, NumField, StringListEditor, PillPicker, Portrait } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
-import { canStageExhibition, runExhibition, EXHIBITION_COST } from '../game/tournament.js'
+import { canStageExhibition, runExhibition, EXHIBITION_COST, EXHIBITION_MIN_FOLLOWERS } from '../game/tournament.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import {
   generateCharacter, generateGameTitle, generateArcadeName,
@@ -48,7 +48,7 @@ import {
   startingBudget, arcadeBuildCost, foodPriceOf, gameTokensOf,
   FOOD_CATALOG, GAME_CATALOG, adWeeklyCost, adEffectiveness,
   FAIR_WAGE, HIRE_COST, newStaffMember, staffCounts, managementQuality, isStaffed,
-  playerStaffAppeal,
+  playerStaffAppeal, playTokensOf, costPerPlay,
 } from '../game/economy.js'
 import { SpritePicker, StagePicker } from './SpritePicker.jsx'
 import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArt, charArtFor, stageArt, FACE_PALETTES, playerArtFor } from './art.js'
@@ -345,7 +345,8 @@ export function ExhibitionCard({ save, update }) {
       <p className="dim small">
         ${EXHIBITION_COST} books the night. Your four biggest names run a bracket under the lights,
         the whole card streams, and the buzz scales with your channel — a packed broadcast puts
-        the scene back in the national conversation.
+        the scene back in the national conversation. Needs {EXHIBITION_MIN_FOLLOWERS} followers
+        first: a showcase is only a showcase if somebody is watching.
       </p>
       <div className="row">
         <button className="primary" disabled={!can.ok}
@@ -1691,18 +1692,39 @@ export function BudgetBar({ save }) {
 // side game, and a per-item dollar price for every food.
 export function PricesEditor({ save, update }) {
   const token = save.arcade.prices?.token ?? 1
+  const play = playTokensOf(save)
+  const perPlay = costPerPlay(save)
+  // What the room actually judges is the two multiplied, so say it out loud —
+  // otherwise "25c a token" reads as generous while quietly charging $2.
+  const verdict = perPlay <= 0.55 ? ['pocket change', 'var(--green)']
+    : perPlay <= 1.15 ? ['what an arcade costs', 'var(--green)']
+    : perPlay <= 1.75 ? ['steep — they will notice', 'var(--gold)']
+    : perPlay <= 2.5 ? ['expensive; the machines will sit quiet', 'var(--red)']
+    : ['nobody pays this for one match', 'var(--red)']
   return (
     <div className="card">
       <h3>💲 Prices</h3>
       <p className="dim small">
-        A token costs the price below; the main game is a token a match. Each side cabinet costs a
-        set number of tokens to play, and each food has its own dollar price. Price anything too high
-        and players play less, snack less, and grumble on the way out — high-income players barely notice.
+        A token costs the price below, and a match on the main game takes however many tokens you
+        set. What players judge is the two multiplied — a 25¢ token at 4 a match is the same dollar
+        as a $1 token at 1. Price a match too high and the machines sit quiet; price it low and the
+        room fills up with people who play all night and spend at the counter instead.
       </p>
-      <div style={{ maxWidth: 260 }}>
-        <NumField label="Token price ($ per token)" value={token} min={0.25} max={10} step={0.25}
-          onChange={(v) => update((s) => { s.arcade.prices = { ...(s.arcade.prices || {}), token: v } })} />
+      <div className="row" style={{ gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: 240 }}>
+          <NumField label="Token price ($ per token)" value={token} min={0.25} max={5} step={0.25}
+            onChange={(v) => update((s) => { s.arcade.prices = { ...(s.arcade.prices || {}), token: v } })} />
+        </div>
+        <div style={{ maxWidth: 240 }}>
+          <NumField label="Tokens per match" value={play} min={1} max={8} step={1}
+            onChange={(v) => update((s) => { s.arcade.prices = { ...(s.arcade.prices || {}), play: Math.max(1, Math.round(v)) } })} />
+        </div>
       </div>
+      <p className="small" style={{ margin: '2px 0 0' }}>
+        <span className="dim">A match costs </span>
+        <strong style={{ color: verdict[1] }}>${perPlay.toFixed(2)}</strong>
+        <span style={{ color: verdict[1] }}> — {verdict[0]}</span>
+      </p>
 
       <div className="grid2" style={{ marginTop: 8 }}>
         <div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
+import { tabOpen } from '../game/tabs.js'
 
 export default function Tournament() {
   const { save, screen, nav, mutate } = useStore()
@@ -80,7 +81,10 @@ export default function Tournament() {
         </div>
         <div className="row">
           {!done && <button onClick={skipAll}>⏭ Skip to results</button>}
-          <button onClick={() => nav('halloffame')}>Hall of Fame</button>
+          {/* The Hall of Fame is locked until the first EVO, and a local
+              tournament can finish long before then — so this shortcut has to
+              respect the same gate or it lands on a blank screen. */}
+          {tabOpen(save, 'halloffame') && <button onClick={() => nav('halloffame')}>Hall of Fame</button>}
           {vodId
             ? <button onClick={() => nav('vods')}>Back to VODs →</button>
             : <button onClick={() => nav('arcade')}>Back to arcade →</button>}

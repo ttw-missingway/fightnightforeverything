@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useStore, useIdleLoop } from './state/store.jsx'
 import MainMenu from './screens/MainMenu.jsx'
 import Setup from './screens/Setup.jsx'
@@ -9,26 +10,56 @@ import HallOfFame from './screens/HallOfFame.jsx'
 import Codex from './screens/Codex.jsx'
 import Feed from './screens/Feed.jsx'
 import GameStudio from './screens/GameStudio.jsx'
-import TierList from './screens/TierList.jsx'
 import Manage from './screens/Manage.jsx'
 import Vods from './screens/Vods.jsx'
 import { formatDay } from './game/constants.js'
 import { isVodWatched } from './game/model.js'
 import DangerBanner from './components/dangers.jsx'
 import EvoWeek from './screens/EvoWeek.jsx'
+import GrandOpening from './screens/GrandOpening.jsx'
+import DevSuite from './screens/DevSuite.jsx'
 import World from './screens/World.jsx'
 import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
+import { TAB_GATES, tabOpen, tabHint } from './game/tabs.js'
 import { setFacePalette } from './components/art.js'
 
 export default function App() {
-  const { save, screen, nav, closeSave } = useStore()
+  const { save, screen, nav, closeSave, mutate } = useStore()
   useIdleLoop() // drives idle mode when it's running (no-op otherwise)
+  // Tracked in state, not read straight off `window`, so typing #dev into an
+  // already-open tab works. Changing the hash doesn't reload the page and
+  // nothing else here would re-render, so without this the suite only ever
+  // appeared on a cold load — which is exactly when you don't want to have to
+  // remember it.
+  const [hash, setHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   // The portrait palette is a per-save cosmetic; art.js holds it as module
   // state (it can't reach the store). Set before anything renders a Portrait.
   setFacePalette(save?.settings?.facePalette)
 
+  // The dev suite, at /#dev. `import.meta.env.DEV` is a COMPILE-TIME constant:
+  // in a production build this folds to false, the branch is dropped, and
+  // DevSuite stops being imported at all — so it cannot ship by accident and
+  // cannot be reached by guessing the URL on a live build.
+  //
+  // Before the save check on purpose: the cinematics don't need a world to run
+  // in, so they can be inspected with nothing loaded.
+  if (import.meta.env.DEV && hash.startsWith('#dev')) {
+    return <DevSuite />
+  }
+
   if (!save) {
     return screen.name === 'setup' ? <Setup /> : <MainMenu />
+  }
+
+  // Opening night, before anything else — including the tab bar. A world's
+  // first screen should be the door being unlocked, not a nav row.
+  if (save.grandOpening) {
+    return <GrandOpening onDone={() => mutate((s) => { s.grandOpening = false })} />
   }
 
   const newVods = (save.vods || []).filter((v) => !isVodWatched(v)).length
@@ -49,46 +80,50 @@ export default function App() {
   // The Tournament screen lost its tab (VODs cover replays) but still shows
   // live events — reached from the Arcade on event days, and from VODs.
   //
-  // TWO of these are earned — Tiers and Studio (see achievements.js). A locked
-  // tab still renders, greyed and unclickable, with what opens it in the
-  // tooltip: a first-time owner should be able to see there is a Studio to
-  // earn, and an invisible tab teaches nobody anything.
-  //
-  // The Feed and VODs used to be locked too and are not any more, for the same
-  // reason in both cases: they are the things that make you WANT the goal, and
-  // an archive you unlock after the fact has already lost what it was archiving.
+  // Two kinds of gate live here. Tiers and Studio are LINEAGE unlocks from
+  // achievements.js — proved once, kept forever. World, Hall of Fame, VODs and
+  // Teams are gated per-RUN by tabs.js, on the run having actually done the
+  // thing the tab is about. Either way a locked tab still renders, greyed and
+  // unclickable, with what opens it in the tooltip: a first-time owner should
+  // be able to see there is a Studio to earn, and an invisible tab teaches
+  // nobody anything.
   const tabs = [
     ['arcade', '🕹 Arcade', null],
     ['players', '👥 Players', null],
-    // Never gated. Its entire job is to be the thing a new lineage is aiming
-    // at, and a locked ladder motivates nobody.
-    ['world', '🌍 World', null],
-    ['teams', '🛡 Teams', null],
-    // NOT gated, for the same reason the Feed isn't: it's an archive, and
-    // locking it means the tournaments you run before earning it can never be
-    // rewatched at all. A replay you can't reach isn't a reward, it's a loss.
-    ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs', null],
-    ['halloffame', '🏛 Hall of Fame', null],
-    ['codex', '📖 Codex', null],
-    ['tiers', '📊 Tiers', 'tiers'],
-    // NOT gated. The feed is mostly about the wider world, and watching the
-    // top players from the outside is precisely what builds the appetite to
-    // get your own arcade into that conversation. Locking it hides the goal.
-    ['feed', '📱 Feed', null],
+    ['world', '🌍 World', 'world'],
+    ['teams', '🛡 Teams', 'teams'],
+    ['vods', newVods > 0 ? `📼 VODs (${newVods})` : '📼 VODs', 'vods'],
+    ['halloffame', '🏛 Hall of Fame', 'halloffame'],
+    // Tier lists live INSIDE the Codex now (its own sub-tab, still gated on the
+    // same achievement) rather than owning a header slot. They are reference
+    // material about the cast, which is what the Codex is.
+    ['codex', '📖 Codex', 'codex'],
     ['studio', '🛠 Studio', 'studio'],
     ['manage', '🏪 Manage', null],
+    // Last in the row, past Manage. NOT gated: the feed is mostly about the
+    // wider world, and watching the top players from the outside is precisely
+    // what builds the appetite to get your own arcade into that conversation.
+    // Locking it hides the goal.
+    ['feed', '📱 Feed', null],
   ]
+  // Everything you can actually press, in authored order, then everything you
+  // can't. Locks drifting through the middle of the bar make the row you use
+  // every day jump around as the run earns things; parked on the end they read
+  // as a list of what is still to come. Stable partition, so the authored order
+  // survives inside each half.
+  const gateShut = (gate) => !!gate && !(TAB_GATES[gate] ? tabOpen(save, gate) : isUnlocked(save, gate))
+  const ordered = [...tabs.filter(([, , g]) => !gateShut(g)), ...tabs.filter(([, , g]) => gateShut(g))]
   const activeTab = screen.name === 'tournament' ? (screen.vodId ? 'vods' : 'arcade') : screen.name
 
   return (
     <div>
       <div className="topnav">
         <span className="brand">FIGHT NIGHT</span>
-        {tabs.map(([k, label, gate]) => {
-          const locked = gate && !isUnlocked(save, gate)
+        {ordered.map(([k, label, gate]) => {
+          const locked = gateShut(gate)
           return (
             <button key={k} disabled={!!locked}
-              title={locked ? `Locked — earned by: ${howToUnlock(gate)}` : undefined}
+              title={locked ? `Locked — earned by: ${TAB_GATES[gate] ? tabHint(gate) : howToUnlock(gate)}` : undefined}
               style={activeTab === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' } : {}}
               onClick={() => { if (!locked) nav(k) }}>
               {locked ? `🔒 ${label.replace(/^\S+\s/, '')}` : label}
@@ -114,14 +149,15 @@ export default function App() {
 
       {screen.name === 'arcade' && <Arcade />}
       {screen.name === 'players' && <Players />}
-      {screen.name === 'world' && <World />}
-      {screen.name === 'teams' && <Teams />}
+      {/* Gated screens check the gate again rather than trusting the nav — a
+          deep link from anywhere else must not walk through a locked door. */}
+      {screen.name === 'world' && tabOpen(save, 'world') && <World />}
+      {screen.name === 'teams' && tabOpen(save, 'teams') && <Teams />}
       {screen.name === 'tournament' && <Tournament />}
-      {screen.name === 'vods' && <Vods />}
-      {screen.name === 'halloffame' && <HallOfFame />}
-      {screen.name === 'codex' && <Codex />}
+      {screen.name === 'vods' && tabOpen(save, 'vods') && <Vods />}
+      {screen.name === 'halloffame' && tabOpen(save, 'halloffame') && <HallOfFame />}
+      {screen.name === 'codex' && tabOpen(save, 'codex') && <Codex />}
       {screen.name === 'feed' && <Feed />}
-      {screen.name === 'tiers' && isUnlocked(save, 'tiers') && <TierList />}
       {screen.name === 'studio' && isUnlocked(save, 'studio') && <GameStudio />}
       {screen.name === 'manage' && <Manage />}
 

@@ -188,8 +188,9 @@ export const seasonFactor = (dayOfYear) => seasonOf(dayOfYear).factor
 // How long a brand-new arcade still feels brand new. For this long the floor
 // talk is mostly ABOUT the room — first impressions, what everyone played
 // before, whether the food's any good — because nobody has any history here
-// yet to talk about instead. Measured in absolute days, so it covers the
-// opening of every fresh run rather than every January.
+// yet to talk about instead. Measured in RUN AGE (`runAge`), never absDayOf:
+// a run opens on day 155, so a calendar comparison is false on opening night
+// and the whole opening-weeks vocabulary goes unreachable.
 export const OPENING_DAYS = 24
 
 export const MONTH_NAMES = [

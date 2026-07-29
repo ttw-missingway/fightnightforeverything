@@ -11,10 +11,11 @@ import { selectableChars } from './forms.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
 import { narrateSet } from './fight.js'
-import { buildStream, personalityOf, applyStageReps } from './stream.js'
+import { buildStream, canStream, personalityOf, applyStageReps } from './stream.js'
+import { attractionDrawFactor } from './catalog.js'
 import {
   staffDaily, playerSpending, settleRecurring, staffCounts,
-  landlordDaily, tokenDeterrence, arcadeClosed, isStaffed,
+  landlordDaily, tokenPlayShift, arcadeClosed, isStaffed,
   adAwarenessBoost, adHypePerDay, playerStaffAppeal,
 } from './economy.js'
 import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommunityDemand, worldFeedDaily, postWorldUpset } from './socialmedia.js'
@@ -344,7 +345,20 @@ function attendChance(save, player) {
   // A brand-new arcade nobody's heard of is hard to DISCOVER: first-timers
   // barely trickle in until word spreads. Once someone's a regular, they come
   // regardless — so those early discoverers are what seeds the whole scene.
-  if (!player.isRegular) p *= 0.55 * awarenessFactor(save)
+  // A one-note room converts almost none of them: scene variety gates
+  // discovery (see sceneVariety in social.js — this is how the community pit
+  // punishes a personality monoculture without inventing a fourth funnel).
+  // The hinge is calibrated to the measured bands: a healthy world reads
+  // 0.97–0.99 (×1.0, untouched), a world missing one whole row ~0.89 (×0.96,
+  // felt but survivable), a monoculture 0.5 (×0.07 — the room simply stops
+  // growing). A gentler ×(0.35+0.65v) was measured first and monocultures
+  // shrugged it off: 2-year survival matched the full world, some at
+  // relevance 98+.
+  if (!player.isRegular) {
+    const variety = save.scene?.variety ?? 1
+    const oneNote = clamp(Math.pow((variety - 0.35) / 0.55, 2), 0.06, 1)
+    p *= 0.55 * awarenessFactor(save) * oneNote
+  }
   // THE SCHOOL YEAR. The cast are students, so the calendar they live on is
   // the one that decides how much of the week is theirs. Summer fills the
   // room; September empties it overnight. This is a straight multiplier
@@ -366,6 +380,13 @@ function attendChance(save, player) {
   // is where nobody wants to hang out.
   const reputation = arcadeOpinionOf(save, player) // 0..10
   p *= clamp(0.15 + reputation * 0.16, 0.15, 1.55)
+  // WHAT ELSE IS IN THE BUILDING. A bowling alley or a laser tag arena is a
+  // reason to come that has nothing to do with the fighting game, and it pulls
+  // a crowd the fighting game never reaches — which is the entire argument for
+  // spending rent money on floor space. Buying a SECOND room aimed at people
+  // you already serve barely moves this (see audienceMix), so the question is
+  // never "can I afford a room", it is "whose room is this".
+  p *= attractionDrawFactor(save)
   // FRESHNESS — is the game still worth showing up for? A hot, evolving scene
   // packs the room; one the world has moved on from empties it. Patches and a
   // living competitive scene keep this up; a stale build bleeds it away, and the
@@ -390,9 +411,21 @@ function awarenessFactor(save) {
   const daysOpen = runAge(save) - 1
   const followers = save.stream?.followers || 0
   const hype = save.stream?.hype || 0
-  // Advertising is the deliberate lever here — the main way to fill the room
-  // early, before there's a scene or a following to speak of.
-  return clamp(0.3 + daysOpen / 30 + followers / 1000 + hype / 100 + adAwarenessBoost(save), 0.3, 1)
+  // CHEAP PLAY IS ITS OWN ADVERTISING. "A quarter a game" is the thing people
+  // actually tell each other about a room, and it is how every arcade the
+  // player is picturing filled up. Without this the low end of the price curve
+  // had no way to GROW a crowd — the goodwill it earned only made the regulars
+  // it already had marginally fonder, which never outran the thinner margin,
+  // so undercutting stayed a slow death no matter how the numbers were tuned.
+  //
+  // Deliberately placed in AWARENESS rather than in the loyalty term: it pulls
+  // in people who have not been yet. That is what makes it a volume strategy —
+  // more heads through the door, each spending less — and it is why the money
+  // has to come back at the concession counter instead of the change machine.
+  const price = save.arcade.prices?.token ?? 1
+  const wordOfMouth = clamp((1.6 - price) * 0.42, 0, 0.55)
+  return clamp(0.3 + daysOpen / 30 + followers / 1000 + hype / 100
+    + adAwarenessBoost(save) + wordOfMouth, 0.3, 1.35)
 }
 
 // ---------- Innovations & techniques ----------
@@ -533,12 +566,13 @@ function maybeLearnInnovation(save, learner, teacher, events, viaWatching = fals
 /**
  * Is the arcade still new enough that the room itself is the subject?
  *
- * Absolute days, so this covers the opening of every fresh run rather than
- * every January — a reset starts the clock again, which is right: the next
- * run is a different arcade.
+ * RUN AGE, not the calendar. A run opens on day 155, so `absDayOf` already
+ * reads 155 on opening night and this was false from the very first hour —
+ * every opening-weeks line in the game was unreachable. Anything asking "how
+ * old is this arcade" wants runAge(); see the note on it in constants.js.
  */
 function isOpeningWeeks(save) {
-  return absDayOf(save.day, save.year) <= OPENING_DAYS
+  return runAge(save) <= OPENING_DAYS
 }
 
 /**
@@ -592,33 +626,18 @@ function makeBeats(save, group, where, results) {
     if (text) beats.push({ speaker: pName(save, p), text, note })
   }
 
-  // A WRITTEN SCENE, if the room can cast one. This is the good stuff: an
-  // exchange authored as a unit, so each turn actually answers the one before
-  // it rather than being a line that happens to come next. It replaces the
-  // whole rest of the chatter — a scene followed by three unrelated one-liners
-  // reads worse than either alone.
-  //
-  // It goes BEFORE introductions on purpose. The corpus has real first-meeting
-  // material (`rel:stranger` on both roles), and it is better than the generic
-  // intro/greet pair; if introductions ran first they would consume every
-  // stranger in the room and that material could never play.
-  if (chance(SCENE_CHANCE)) {
-    const scene = castScene(save, group, results, { tournamentToday: !!whatHappensToday(save) })
-    if (scene) {
-      for (const beat of sceneBeats(scene, (p) => pName(save, p))) beats.push(beat)
-      if (beats.length) {
-        // Talking to someone counts as meeting them, same as every other path.
-        const cast = Object.values(scene.cast)
-        for (const a of cast) for (const b of cast) if (a !== b) noteMeeting(a, b, absDayOf(save.day, save.year))
-        return beats.slice(0, 4)
-      }
-    }
-  }
-
   // Before anything else: has anyone in this circle never met before? People
   // introduce themselves ONCE, and it has to happen before any other line —
   // speak() records the meeting, so a joke firing first would quietly consume
   // the introduction.
+  //
+  // This is why it also outranks the scene corpus below. An introduction is
+  // once per pair for the life of the run; a scene passed over tonight plays
+  // another night. Casting first didn't DELAY the introduction, it deleted it —
+  // scenes mark their whole cast as met. Measured on opening night: four people
+  // who had never met, and the first thing any of them said was an authored
+  // callback to a set they had never played together.
+  let introduced = false
   if (group.length >= 2) {
     outer: for (const a of group) {
       for (const b of group) {
@@ -636,8 +655,31 @@ function makeBeats(save, group, where, results) {
             self: pName(save, b), t: pName(save, a), to: a, absDay: absDayOf(save.day, save.year),
           })
           if (reply) beats.push({ speaker: pName(save, b), text: reply })
+          introduced = true
           break outer
         }
+      }
+    }
+  }
+
+  // A WRITTEN SCENE, if the room can cast one. This is the good stuff: an
+  // exchange authored as a unit, so each turn actually answers the one before
+  // it rather than being a line that happens to come next. It replaces the
+  // whole rest of the chatter — a scene followed by three unrelated one-liners
+  // reads worse than either alone.
+  //
+  // Not when somebody just introduced themselves, though: the corpus is written
+  // for people who know each other, and a callback landing one beat after "I
+  // don't think we've met" is the exact break this ordering exists to stop.
+  if (!introduced && chance(SCENE_CHANCE)) {
+    const scene = castScene(save, group, results, { tournamentToday: !!whatHappensToday(save) })
+    if (scene) {
+      for (const beat of sceneBeats(scene, (p) => pName(save, p))) beats.push(beat)
+      if (beats.length) {
+        // Talking to someone counts as meeting them, same as every other path.
+        const cast = Object.values(scene.cast)
+        for (const a of cast) for (const b of cast) if (a !== b) noteMeeting(a, b, absDayOf(save.day, save.year))
+        return beats.slice(0, 4)
       }
     }
   }
@@ -1332,8 +1374,10 @@ export function simHour(save) {
     const wantsToPlay = present.filter((p) => {
       const played = dip.gamesToday[p.id] || 0
       const fatigue = played * Math.max(0.015, 0.12 - p.personal.stamina * 0.0105)
-      const priceHesitation = tokenDeterrence(save, p)
-      return chance(clamp(0.38 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue - priceHesitation, 0.02, 0.9))
+      // SIGNED: a dear token makes them sit one out, a cheap one buys "go on
+      // then, one more". The volume half is why a quarter arcade can work.
+      const priceShift = tokenPlayShift(save, p)
+      return chance(clamp(0.38 + p.personal.spark * 0.012 + p.personal.dominance * 0.012 - fatigue + priceShift, 0.02, 0.9))
     })
     const matches = []
     const pool = [...wantsToPlay]
@@ -1787,7 +1831,21 @@ export function endDay(save) {
       if (v < -30) p.relationships[id] = Math.min(v + 0.22, -30)
     }
   }
-  if (save.stream) {
+  // NO RIG, NO CHANNEL — hype or followers.
+  //
+  // This block used to run unconditionally, and ad spend feeds `adHypePerDay`
+  // whether or not you own a camera. So an arcade with no rig quietly climbed
+  // past the hype > 8 line and then accrued followers every single night for a
+  // channel that does not exist: measured at 129 followers over one year with
+  // the rig never bought, and 291 on easy. That contradicted the gate outright
+  // and made the 150-follower exhibition requirement reachable without ever
+  // buying the thing it is supposed to reward.
+  //
+  // The store card is the spec here — "Without one there is no channel this
+  // run — no followers, no hype" — so both are gated, not just followers.
+  // Advertising still pulls people through the door: attendance reads
+  // `adAwarenessBoost` separately from hype (see discoveryChance above).
+  if (save.stream && canStream(save)) {
     // Audience fatigue recovers overnight — yesterday's overexposure fades, so
     // the follower penalty only bites while you're actively flooding the channel.
     save.stream.fatigue = (save.stream.fatigue || 0) * 0.5

@@ -199,6 +199,23 @@ export function endInvasion(save) {
       if (v.elo < elite.elo) beaten += 1
       elite.elo = Math.round(v.elo)
     }
+    // A visitor can get ENTANGLED — recruited into a team, taken on as a
+    // student — and deleting them without unwinding that leaves ghost ids in
+    // memberIds that crash the first relationship scan to touch them
+    // (measured: a 19-year master lineage died on exactly this in
+    // checkFallingOut).
+    if (v.teamId) {
+      const team = save.teams?.[v.teamId]
+      if (team) {
+        team.memberIds = team.memberIds.filter((m) => m !== id)
+        // Inlined teamLog (social.js would be a new import cycle risk here).
+        if (!team.history) team.history = []
+        team.history.push({ day: save.day, year: save.year, text: `${v.alias || v.firstName} went home with ${crewName(inv.region)}` })
+      }
+    }
+    if (save.mentorships?.length) {
+      save.mentorships = save.mentorships.filter((m) => m.mentorId !== id && m.studentId !== id)
+    }
     delete save.players[id]
   }
   const flag = regionFlag(inv.region)

@@ -6,6 +6,7 @@ import { uid, clamp, hash01, displayName } from './util.js'
 import { getMatchup, chronicle, bumpPeak } from './model.js'
 import { bumpPassion } from './career.js'
 import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance.js'
+import { addHype } from './stream.js'
 import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf } from './constants.js'
 import { postPatchReaction, postPatchAnnouncement } from './socialmedia.js'
 import { computeMatchups, observedPower } from './balance.js'
@@ -551,9 +552,10 @@ export function releasePatch(save) {
   const consequential = consequentialRun
   if (consequential) {
     save.patchMorale = clamp(score / 4, -10, 10)
-    save.stream.hype = clamp(save.stream.hype + score / 10, 0, 100)
+    // Channel hype needs a channel — addHype is a no-op without a rig.
+    addHype(save, score / 10)
     // Controversy is still engagement — everyone tunes in to argue.
-    if (divisive) save.stream.hype = clamp(save.stream.hype + 3, 0, 100)
+    if (divisive) addHype(save, 3)
     // Fresh content is a shot of life for a scene grinding the same build for
     // months — it rekindles passion (and keeps veterans from burning out).
     const contentRefresh = clamp(diff.added.length * 5 + diff.stageAdds * 2 + diff.moveChanges * 0.6

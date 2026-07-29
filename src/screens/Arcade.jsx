@@ -9,11 +9,47 @@ import VenueStrip, { DayLedger } from '../components/VenueStrip.jsx'
 import MatchHud from '../components/MatchHud.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
 import { displayName } from '../game/util.js'
-import { buildStreamForPlayers, hypeLabel } from '../game/stream.js'
+import { buildStreamForPlayers, canStream, hypeLabel } from '../game/stream.js'
 import { revealState } from '../game/tournament.js'
-import { relevanceLabel } from '../game/relevance.js'
 import { gatherRumors, allRumors, rumorHeatLabel } from '../game/rumors.js'
 import { isUnlocked, howToUnlock } from '../game/achievements.js'
+import { rosterOpen } from '../game/model.js'
+
+/**
+ * "Spend the points before you open the doors."
+ *
+ * A run-back hands you everything the lineage earned and then drops you here,
+ * on the one screen with a button that spends the window. The notice line does
+ * say so, but a notice is one line at the top of a busy page that vanishes on
+ * the next navigation — and the cost of missing it is a whole run played
+ * without the points you spent the last run earning.
+ *
+ * So it sits here, in the danger rail, for as long as it is true: `rosterOpen`
+ * closes the moment the first day is banked, and the banner closes with it.
+ */
+function LegacyPointsBanner() {
+  const { save, nav } = useStore()
+  const points = save?.prestige?.points || 0
+  if (!points || !rosterOpen(save) || save.settings?.mode === 'sandbox') return null
+  return (
+    <div className="dangers">
+      <div className="danger unlock">
+        <span className="d-icon">🎖</span>
+        <div>
+          <div className="d-title">
+            {points} legacy point{points === 1 ? '' : 's'} still unspent
+          </div>
+          <div className="d-detail">
+            Your last run earned these. They go into the players you take into this one —
+            open anyone on the Players tab and rebuild them.
+          </div>
+          <div className="d-fix">Spend them before you open the arcade. The window shuts on the first day.</div>
+        </div>
+        <button className="d-go" onClick={() => nav('players')}>Spend them →</button>
+      </div>
+    </div>
+  )
+}
 
 export default function Arcade() {
   const { save, screen, advance, skipDay, nav, enableIdle } = useStore()
@@ -40,6 +76,7 @@ export default function Arcade() {
   return (
     <div>
       {screen.notice && <div className="notice">{screen.notice}</div>}
+      <LegacyPointsBanner />
 
       <div className="card">
         <div className="row spread">
@@ -63,19 +100,22 @@ export default function Arcade() {
                 </div>
               )
             })()}
-            {save.relevance != null && (
+            {/* National interest is deliberately NOT here. Sat under the
+                arcade's own name it read as this arcade's standing, which is
+                the opposite of what it measures — it's how much the wider
+                scene cares about the GAME. It's already reported where that
+                reading is unambiguous (the World tab and the relevance
+                danger rows), so this line was only ever a confusing duplicate. */}
+            {/* No rig, no channel. The stat line used to read out a name and
+                0 followers on opening night, which announced a channel the run
+                does not have and quietly undersold the rig as a purchase. */}
+            {canStream(save) && (
               <div className="small" style={{ marginTop: 2 }}>
-                <span className="dim">🌐 national interest: </span>
-                <span style={{ color: save.relevance >= 62 ? 'var(--green)' : save.relevance >= 24 ? 'var(--gold)' : 'var(--red)' }}>
-                  {relevanceLabel(save.relevance)} ({Math.round(save.relevance)}/100)
-                </span>
+                <span className="pink">📡 {save.stream.channelName}</span>
+                <span className="dim"> · {save.stream.followers} followers · {hypeLabel(save.stream.hype)}</span>
+                {save.stream.peakViewers > 0 && <span className="dim"> · peak {save.stream.peakViewers} viewers</span>}
               </div>
             )}
-            <div className="small" style={{ marginTop: 2 }}>
-              <span className="pink">📡 {save.stream.channelName}</span>
-              <span className="dim"> · {save.stream.followers} followers · {hypeLabel(save.stream.hype)}</span>
-              {save.stream.peakViewers > 0 && <span className="dim"> · peak {save.stream.peakViewers} viewers</span>}
-            </div>
             <MoneyMatchBanner save={save} />
             {dip && (
               <div className="row" style={{ marginTop: 8 }}>
@@ -369,6 +409,11 @@ function LiveDay({ save, nav }) {
 
   // Put one match per hour on the arcade's stream channel.
   const streamMatch = (setupIndex) => mutate((s) => {
+    // The rig is the whole gate. buildStreamForPlayers already refuses without
+    // one, but it refuses by returning null AFTER the hour's single stream slot
+    // has been marked used — so an ungated click spent the slot and produced no
+    // broadcast. The button is hidden below; this is the belt to that braces.
+    if (!canStream(s)) return
     const d = s.dayInProgress
     if (!d) return
     const h = d.hours[hourIdx]
@@ -466,7 +511,7 @@ function LiveDay({ save, nav }) {
           gameName={save.game.name}
           channelName={save.stream.channelName}
           streamedSetup={hour.streamedSetup}
-          onStream={isCurrent ? streamMatch : null}
+          onStream={isCurrent && canStream(save) ? streamMatch : null}
           back={() => setZone(null)}
         />
       )}
@@ -491,7 +536,9 @@ function ZoneView({ meta, zone, save, nav, hourIdx, isCurrent, gameName, channel
       <div className="row">
         <button onClick={back}>← Back to the floor plan</button>
         <h3 style={{ color: meta.accent, margin: 0 }}>{meta.icon} {meta.title}</h3>
-        {zone === 'setups' && isCurrent && streamedSetup == null && (
+        {/* onStream is null when there's no rig, so the prompt to pick a match
+            for the channel doesn't appear for a channel that doesn't exist. */}
+        {zone === 'setups' && isCurrent && onStream && streamedSetup == null && (
           <span className="dim small">pick one match to put on {channelName} this hour</span>
         )}
       </div>

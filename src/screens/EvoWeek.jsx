@@ -14,19 +14,27 @@ import MatchPlayback from '../components/MatchPlayback.jsx'
  * Every step is skippable and the position is stored on the save, so closing
  * the tab mid-pools puts you back in pools.
  */
-const STEPS = ['intro', 'pools', 'seeded', 'chatter', 'expo', 'expoTalk', 'bracket', 'champion', 'end']
+// `ours` is conditional — it only exists in a year one of your players actually
+// won the thing. See `steps` below: it is filtered out entirely otherwise, so
+// `next()` can't land on a beat with nothing to celebrate.
+const STEPS = ['intro', 'pools', 'seeded', 'chatter', 'expo', 'expoTalk', 'bracket', 'champion', 'ours', 'end']
 
 export default function EvoWeek({ record, onFinish }) {
   const { save, mutate } = useStore()
   const state = save.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }
-  const step = STEPS.includes(state.step) ? state.step : 'intro'
+
+  // Did somebody from this arcade win EVO? `arcadeResults` is your players'
+  // placements, so place 1 is the whole question.
+  const ourChampion = (record.arcadeResults || []).find((a) => a.place === 1)
+  const steps = STEPS.filter((s) => s !== 'ours' || ourChampion)
+  const step = steps.includes(state.step) ? state.step : 'intro'
 
   const set = (patch) => mutate((s) => {
     s.evoWeek = { ...(s.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }), ...patch }
   })
   const go = (next) => set({ step: next, openPool: null })
-  const idx = STEPS.indexOf(step)
-  const next = () => go(STEPS[Math.min(STEPS.length - 1, idx + 1)])
+  const idx = steps.indexOf(step)
+  const next = () => go(steps[Math.min(steps.length - 1, idx + 1)])
 
   // Every match in the record, by id — pools and bracket alike.
   const byId = {}
@@ -34,7 +42,9 @@ export default function EvoWeek({ record, onFinish }) {
 
   return (
     <div className="evo">
-      {step !== 'intro' && step !== 'end' && (
+      {/* No chrome over a cinematic beat. `ours` joins the intro in this: a
+          skip button sitting on top of the celebration undercuts it. */}
+      {step !== 'intro' && step !== 'ours' && step !== 'end' && (
         <div className="row spread evo-chrome">
           <span className="dim small">EVO {record.year} · {record.entrantCount} entrants</span>
           <button className="small" onClick={() => go('end')}>Skip to the end →</button>
@@ -51,6 +61,7 @@ export default function EvoWeek({ record, onFinish }) {
       {step === 'expoTalk' && <Interviews record={record} onNext={next} />}
       {step === 'bracket' && <Bracket record={record} state={state} set={set} onNext={next} />}
       {step === 'champion' && <Champion record={record} onNext={next} />}
+      {step === 'ours' && ourChampion && <ArcadeChampion name={ourChampion.name} onDone={next} />}
       {step === 'end' && <TheEnd record={record} onFinish={() => { set({ step: 'done' }); onFinish() }} />}
     </div>
   )
@@ -456,6 +467,68 @@ function Champion({ record, onNext }) {
         </div>
       )}
       <button className="primary" onClick={onNext}>Continue →</button>
+    </div>
+  )
+}
+
+/**
+ * One of yours won it.
+ *
+ * The third cinematic in the game and deliberately the third KIND of motion:
+ * EVO's intro parts curtains sideways, the grand opening lifts a shutter
+ * upward, and this one throws light outward from a point. Same grammar — a
+ * held black frame, one sentence, click to continue — different gesture, so
+ * the three don't blur into each other in memory.
+ *
+ * The bursts are authored rather than random: `Math.random()` in a render body
+ * re-rolls every paint, which makes a firework twitch instead of fly. Angles
+ * come from the spark's index and the spread from a cheap hash of it, so a
+ * burst looks scattered and is actually the same every frame.
+ */
+const BURSTS = [
+  { x: 26, y: 34, hue: 'gold', delay: 0 },
+  { x: 72, y: 26, hue: 'pink', delay: 0.9 },
+  { x: 48, y: 18, hue: 'cyan', delay: 1.7 },
+  { x: 16, y: 58, hue: 'pink', delay: 2.6 },
+  { x: 84, y: 54, hue: 'gold', delay: 3.2 },
+]
+const SPARKS = 16
+
+function Firework({ x, y, hue, delay }) {
+  return (
+    <div className={`fw fw-${hue}`} style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${delay}s` }}>
+      {Array.from({ length: SPARKS }, (_, i) => {
+        const angle = (i / SPARKS) * Math.PI * 2
+        // Cheap deterministic jitter so the ring isn't a perfect circle.
+        const wobble = ((i * 2654435761) % 41) / 100 // 0 .. 0.40
+        const dist = 62 + wobble * 90
+        return (
+          <span key={i} className="fw-spark" style={{
+            '--tx': `${Math.cos(angle) * dist}px`,
+            '--ty': `${Math.sin(angle) * dist}px`,
+            animationDelay: `${delay + wobble * 0.12}s`,
+          }} />
+        )
+      })}
+    </div>
+  )
+}
+
+export function ArcadeChampion({ name, onDone }) {
+  const [lit, setLit] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setLit(true), 350)
+    return () => clearTimeout(t)
+  }, [])
+  return (
+    <div className={`fwk-stage${lit ? ' lit' : ''}`} onClick={onDone}>
+      {BURSTS.map((b, i) => <Firework key={i} {...b} />)}
+      <div className="fwk-copy">
+        <div className="fwk-congrats">Congratulations!</div>
+        <div className="fwk-name">{name}</div>
+        <div className="fwk-title">is an EVO champion!</div>
+      </div>
+      <div className="fwk-skip small dim">click to continue</div>
     </div>
   )
 }

@@ -12,7 +12,7 @@ import { econLog, trySpend } from './economy.js'
 import { regionFlag, arcadeFlag } from './flags.js'
 import { rankedWorld } from './world.js'
 import { tournamentMess } from './bandwidth.js'
-import { buildStream, personalityOf, elitePersonality, applyStageReps } from './stream.js'
+import { buildStream, personalityOf, elitePersonality, applyStageReps, addHype } from './stream.js'
 import { speak } from './dialogue.js'
 
 const pName = (save, p) => displayName(p, save)
@@ -426,8 +426,49 @@ export function invitationScore(p) {
 export const EXHIBITION_COST = 140
 export const EXHIBITION_COOLDOWN = 28
 
+/**
+ * THE POT. Staging a bracket costs the house real money — somebody pays for
+ * the trophies, the pot, and the night. Before this, a bracket was strictly
+ * free upside (hype, opinion, glory, relevance) and the styles that lived on
+ * events had no sacrifice anywhere on the books: measured at n=8/336d/normal,
+ * competition-first banked $3,727 while the two styles that skip events banked
+ * under $300 — running MORE events was also the best way to hold money, which
+ * is backwards. A pot puts the sacrifice where the identity is: an event-heavy
+ * calendar is now a real line item, and skipping events is what it always
+ * claimed to be — thrift.
+ *
+ * SIZED LIKE THE REAL THING. A weekly's pot is mostly entry fees; the house
+ * tops it up a dollar a head (a $3/head house stake measured ~$1,150/yr on the
+ * default weekly-8 — a third of a healthy normal run's annual banking, and the
+ * ladder regressed to 50% deaths). Monthlies and yearly majors are the events
+ * a venue genuinely stakes, which is where the event-heavy identity pays.
+ */
+export const TOURNAMENT_POT_PER_HEAD = { weekly: 1, monthly: 4, yearly: 6 }
+export const tournamentPot = (entrants, cadence) =>
+  Math.round(entrants * (TOURNAMENT_POT_PER_HEAD[cadence] ?? 4))
+
+/**
+ * An audience to put the card in front of.
+ *
+ * A showcase is a broadcast — the payoff below is literally scaled by who tuned
+ * in — so staging one into an empty channel isn't an event, it's four people
+ * playing on a Tuesday for $140. The number is MEASURED against a run that
+ * buys the rig and streams: followers read 20 at run day 30, 143 at day 60 and
+ * 403 at day 90, so 150 lands in the second month. Early-mid, a thing you grow
+ * into rather than a wall — and it means the streaming rig has a second payoff
+ * beyond the one it advertises.
+ */
+export const EXHIBITION_MIN_FOLLOWERS = 150
+
 export function canStageExhibition(save) {
   if (save.settings.mode === 'sandbox') return { ok: true }
+  const followers = save.stream?.followers || 0
+  if (followers < EXHIBITION_MIN_FOLLOWERS) {
+    return {
+      ok: false,
+      reason: `nobody would tune in yet — a showcase needs ${EXHIBITION_MIN_FOLLOWERS} followers on the channel (you have ${followers})`,
+    }
+  }
   const abs = (save.year - 1) * 336 + save.day
   const since = abs - (save.lastExhibitionAbs || 0)
   if (since < EXHIBITION_COOLDOWN) return { ok: false, reason: `the scene needs ${EXHIBITION_COOLDOWN - since} more days between showcases` }
@@ -462,9 +503,19 @@ export function runExhibition(save) {
   // game; it can't substitute for one, so the showrunner still needs patches.
   const staleDays = (save.year - save.lastPatch.year) * 336 + (save.day - save.lastPatch.day)
   const freshness = clamp(1 - Math.max(0, staleDays - 70) / 180, 0.4, 1)
-  const relGain = Math.round(clamp(2 + viewers / 110, 2, 7) * freshness)
-  save.relevance = clamp((save.relevance ?? 55) + relGain, 0, 100)
-  save.stream.hype = clamp(save.stream.hype + 5, 0, 100)
+  // Scaled by HEADROOM, same shape as the champion dividend and for the same
+  // reason: a showcase REVIVES a conversation, it cannot pin one at the top.
+  // Flat, this was the one relevance pump with no age fade and no ceiling —
+  // measured (n=16, 1008d, normal), an event-heavy style held relevance 98 for
+  // three straight years and the death march simply never arrived: its pumps
+  // (~0.46/day with monthly showcases) outran maximum old-age decay
+  // (~0.34/day) forever. Decline must stay inevitable; a showcase buys WHEN,
+  // not WHETHER.
+  const rel0 = save.relevance ?? 55
+  const headroom = 0.25 + 0.75 * (100 - rel0) / 100
+  const relGain = Math.round(clamp(2 + viewers / 110, 2, 7) * freshness * headroom)
+  save.relevance = clamp(rel0 + relGain, 0, 100)
+  addHype(save, 5)
   champ.ref.glory += 6
   champ.ref.respect += 4
   save.lastExhibitionAbs = (save.year - 1) * 336 + save.day
@@ -540,6 +591,15 @@ export function runSinglesTournament(save, scheduleEntry) {
   if (!field) {
     return { ok: false, reason: `${name} cancelled — too many dropouts left the bracket short of ${size}.` }
   }
+  // The house stakes the pot before a single game is played. A bracket the
+  // venue can't fund doesn't run — which also stops a dying room from hyping
+  // itself further into the hole with events it can't pay for.
+  const potCadence = scheduleEntry?.cadence || 'yearly'
+  const pot = tournamentPot(size, potCadence)
+  if (pot > 0 && !trySpend(save, pot, `${name} — pot & trophies`)) {
+    return { ok: false, reason: `${name} cancelled — the house couldn't put up the $${pot} pot.` }
+  }
+  storylines.push(`$${pot} on the line, staked by the house.`)
   const entrants = field.map((p) => arcadeEntrant(save, p))
   const format = scheduleEntry?.format || 'single'
   const { rounds, placements, champion } = runFormat(save, entrants, format)
@@ -641,6 +701,13 @@ export function runTeamTournament(save, scheduleEntry) {
   let fieldSize = 2
   while (fieldSize * 2 <= allSquads.length) fieldSize *= 2
   const squads = allSquads.slice(0, fieldSize)
+
+  // Same pot rule as singles: the house pays for the night, per player on the
+  // floor (four to a squad).
+  const teamPot = tournamentPot(fieldSize * 4, scheduleEntry?.cadence || 'monthly')
+  if (teamPot > 0 && !trySpend(save, teamPot, `${scheduleEntry?.name || 'Team battle'} — pot & trophies`)) {
+    return { ok: false, reason: `${scheduleEntry?.name || 'Team battle'} cancelled — the house couldn't put up the $${teamPot} pot.` }
+  }
 
   // Team bracket: each "entrant" wraps a squad; team elo = average.
   const entrants = squads.map((s) => ({

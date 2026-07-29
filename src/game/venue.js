@@ -20,6 +20,7 @@
 import { DAYS_PER_MONTH, absDayOf } from './constants.js'
 import {
   monthlyRent, weeklyUpkeep, staffCounts, FAIR_WAGE, managementQuality,
+  costPerPlay,
 } from './economy.js'
 import { runDangers } from './danger.js'
 
@@ -167,13 +168,36 @@ export function venueTips(save) {
     })
   }
 
+  // CHEAP PLAY IS A VOLUME GAME, and volume needs floor. Measured (n=8, 336d,
+  // normal, competent policy): $0.50–$0.75 a match dies 50–100% of the time on
+  // a starter floor — not because the price is wrong but because a small room
+  // cannot turn a cheap crowd into enough plays and snacks to cover the nut.
+  // The quarter arcade is a real strategy now (costPerPlay = token × tokens
+  // per match); this is the tip that says what it takes. It outranks the
+  // generic bleed tip below because it names the SHAPE of the mistake, not
+  // just the arithmetic.
+  const broke = v.cash <= 0
+  const perPlay = costPerPlay(save)
+  let cheapTip = false
+  if (!loud.has('economy') && perPlay < 0.9 && v.trend != null && v.trend < -1) {
+    cheapTip = true
+    out.push({
+      key: 'cheap-needs-floor',
+      icon: '🕹️',
+      weight: broke || (v.runwayDays != null && v.runwayDays < 20) ? 3 : 2,
+      title: `$${perPlay.toFixed(2)} a match is a volume game`,
+      detail: `Cheap play only pays when the room can turn a crowd into plays: more setups, side cabinets, and a stocked counter. Right now the takings don't cover the $${Math.round(v.nut.total)}/day nut — add floor, or raise the price (per-play = token price × tokens per match).`,
+      cta: 'Review the floor',
+      to: 'manage', tab: 'arcade',
+    })
+  }
+
   // Bleeding money. This is the window BEFORE the landlord starts counting,
   // and the whole reason tips exist. Note the second arm: once cash has gone
   // negative there IS no runway figure, and danger.js stays quiet until 30% of
   // the foreclosure grace has burned — which was a silent gap at exactly the
   // moment the owner most needed telling.
-  const broke = v.cash <= 0
-  if (!loud.has('economy') && v.trend != null && v.trend < -1 &&
+  if (!cheapTip && !loud.has('economy') && v.trend != null && v.trend < -1 &&
       (broke || (v.runwayDays != null && v.runwayDays < 45))) {
     const nut = `The nut is $${Math.round(v.nut.total)}/day — rent $${Math.round(v.nut.rent)}, upkeep $${Math.round(v.nut.upkeep)}, payroll $${Math.round(v.nut.payroll)}.`
     out.push({

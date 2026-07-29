@@ -6,13 +6,21 @@ import { Portrait } from '../components/ui.jsx'
 import { charArt } from '../components/art.js'
 import { selectableChars, formsOf, originOf } from '../game/forms.js'
 import { guidesFor } from '../game/guides.js'
+import TierList from './TierList.jsx'
 
-// The Codex: an index of every discovered technique (who found it, which
-// character it belongs to) and every character (milestones, mains, tech).
+// The Codex: everything the scene knows about the cast in one place — the
+// techniques it has discovered, the character index (with the guides written
+// about each one), and what it currently believes the tier list is.
+//
+// Tier lists used to own a header tab, gated on an achievement. They are
+// reference material about the same cast the rest of this screen documents, so
+// they live here now — and they open when the community has actually made one,
+// which is the only thing that ever made the tab worth opening.
 export default function Codex() {
   const { save } = useStore()
   const [tab, setTab] = useState('techniques')
   const archives = (save.archives || []).filter((a) => (a.innovations || []).length)
+  const tiersOpen = (save.tierLists || []).length > 0
 
   return (
     <div>
@@ -21,6 +29,12 @@ export default function Codex() {
         <div className="tabs" style={{ margin: 0 }}>
           <button className={`small ${tab === 'techniques' ? 'active' : ''}`} onClick={() => setTab('techniques')}>Technique Index</button>
           <button className={`small ${tab === 'characters' ? 'active' : ''}`} onClick={() => setTab('characters')}>Character Index</button>
+          <button className={`small ${tab === 'tiers' ? 'active' : ''}`}
+            disabled={!tiersOpen}
+            title={tiersOpen ? undefined : 'Locked — the community has not ranked anything yet'}
+            onClick={() => { if (tiersOpen) setTab('tiers') }}>
+            {tiersOpen ? '📊 Tier Lists' : '🔒 Tier Lists'}
+          </button>
           {archives.length > 0 && (
             <button className={`small ${tab === 'archive' ? 'active' : ''}`} onClick={() => setTab('archive')}>🗄 Archives</button>
           )}
@@ -28,6 +42,7 @@ export default function Codex() {
       </div>
       {tab === 'techniques' && <TechniqueIndex save={save} />}
       {tab === 'characters' && <CharacterIndex save={save} />}
+      {tab === 'tiers' && tiersOpen && <TierList />}
       {tab === 'archive' && <ArchiveIndex save={save} archives={archives} />}
     </div>
   )

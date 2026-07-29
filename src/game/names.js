@@ -253,50 +253,69 @@ export const STARTER_GAMES = [
  * crowd that isn't your fighting-game roster, so it earns whether or not any
  * simulated player walks over to it. See attractionIncome in economy.js.
  *
- * `draw` is what the room pulls per day at full popularity; `demographic` is
- * who it pulls, which is flavour today and matchmaking for the ages of the
- * scene later. Each pack is earned by an achievement (`key` matches `unlock`).
+ * THREE FIELDS DECIDE WHETHER A PACK IS WORTH BUYING, and they are meant to be
+ * read together — the whole point is that the same purchase is shrewd for one
+ * arcade and idiotic for another.
+ *
+ * `audience` — WHO it brings in. This is the real currency. An audience you do
+ *   not already serve is a whole new crowd through the door; a second pack
+ *   aimed at people you already have is mostly just more rent. Buying the
+ *   pinball collection when the classics wall already owns the old heads is
+ *   the mistake this field exists to let you make.
+ * `footprint` — what the landlord charges a month for the SPACE. Lanes and
+ *   courts are enormous; a row of pin tables is not.
+ * `pull` — how hard it draws its audience once installed.
+ *
+ * `demographic` is the same fact as `audience`, written for a human to read.
+ * Each pack is earned by an achievement (`key` matches `unlock`).
  */
 export const ATTRACTION_PACKS = [
   {
     key: 'attr-pinball', label: 'The Pinball Collection', icon: '🎱',
     demographic: 'the old heads',
+    audience: 'oldheads', footprint: 26, pull: 1.0,
     blurb: 'A row of real tables along the back wall. Quiet money, and it never breaks a sweat.',
     items: ['Silverball Row', 'Gothic Manor Pin', 'Cosmic Drift Pin', 'Diner Deluxe Pin'],
   },
   {
     key: 'attr-bowling', label: 'The Bowling Alley', icon: '🎳',
     demographic: 'families',
+    audience: 'families', footprint: 95, pull: 1.35,
     blurb: 'Four lanes and a shoe counter. Turns an afternoon into an outing.',
     items: ['Lanes 1–2', 'Lanes 3–4', 'The Shoe Counter'],
   },
   {
     key: 'attr-classics', label: 'Classic Cabinets', icon: '👾',
     demographic: 'everyone',
+    audience: 'oldheads', footprint: 30, pull: 1.0,
     blurb: 'The wall of originals. Half nostalgia, half the reason anyone calls this an arcade.',
     items: ['Asteroid Field', 'Ladder Kong', 'Maze Muncher', 'Tank Battalion', 'Frog Crossing'],
   },
   {
     key: 'attr-lasertag', label: 'Laser Tag Arena', icon: '🔫',
     demographic: 'groups and birthdays',
+    audience: 'groups', footprint: 85, pull: 1.3,
     blurb: 'Nobody plays this alone. Books out for parties and empties your counter of food.',
     items: ['The Arena', 'Vest Rack', 'Briefing Room'],
   },
   {
     key: 'attr-vr', label: 'VR Bay', icon: '🥽',
     demographic: 'the curious',
+    audience: 'curious', footprint: 40, pull: 1.15,
     blurb: 'Expensive, temperamental, and the thing every first-timer asks about.',
     items: ['VR Rig A', 'VR Rig B', 'The Treadmill'],
   },
   {
     key: 'attr-touchscreen', label: 'Touch-Screen Bar Games', icon: '📱',
     demographic: 'the after-work crowd',
+    audience: 'afterwork', footprint: 20, pull: 0.9,
     blurb: 'Trivia, photo hunt, quick-fire quizzes. Nobody comes for these and everybody plays them.',
     items: ['Quiz Countertop', 'Photo Hunt Deluxe', 'Trivia Tower'],
   },
   {
     key: 'attr-pickleball', label: 'Pickleball Courts', icon: '🥒',
     demographic: 'the neighbourhood',
+    audience: 'locals', footprint: 90, pull: 1.2,
     blurb: "Two courts out back. Nothing to do with fighting games, and that's the point.",
     items: ['Court 1', 'Court 2'],
   },

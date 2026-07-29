@@ -3,6 +3,7 @@ import { newTeam, remember, chronicle, getMatchup } from './model.js'
 import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
+import { tokenFeel } from './economy.js'
 
 export function getRel(a, b) {
   return a.relationships[b.id] || 0
@@ -168,7 +169,10 @@ export function tryJoinTeam(save, team, player, inviter, events) {
 export function checkFallingOut(save, player, events) {
   const team = teamOf(save, player)
   if (!team || team.memberIds.length <= 1) return
-  const others = team.memberIds.filter((id) => id !== player.id)
+  // Ghost-proof: a departed visitor may linger in memberIds on saves made
+  // before invasion departures unwound team membership.
+  const others = team.memberIds.filter((id) => id !== player.id && save.players[id])
+  if (!others.length) return
   const avg = others.reduce((s, id) => s + getRel(player, save.players[id]), 0) / others.length
   if (avg < -15 && chance(0.3)) {
     team.memberIds = team.memberIds.filter((id) => id !== player.id)
@@ -391,8 +395,20 @@ export function arcadeOpinionOf(save, p) {
   // for" is exactly the reputation a too-concentrated stock list earns.
   score -= (save.arcade.letdowns || 0) * 5
   score += ((save.staffing?.morale ?? 70) - 60) * 0.012
-  const tokenPrice = save.arcade.prices?.token ?? 1
-  score -= Math.max(0, tokenPrice - (0.9 + statLevel(p.social?.income) * 0.18)) * 0.8
+  // PRICE, BOTH WAYS. This was `-Math.max(0, over)` — a penalty for charging
+  // too much and nothing at all for charging little, so every price under a
+  // player's comfort read identically and undercutting bought you precisely
+  // nothing. "A quarter a game, like arcades ought to be" was a strictly worse
+  // way to play, which is the wrong answer to the most natural instinct a new
+  // owner has.
+  //
+  // Cheap is now real affection — the thing people actually say about a room
+  // that doesn't gouge them. Capped at a dollar under comfort so free play
+  // can't buy infinite love, and weighted below the penalty side: goodwill is
+  // slower to earn than resentment is to provoke.
+  const feel = tokenFeel(save, p)
+  if (feel > 0) score -= feel * 0.8
+  else score += Math.min(-feel, 1.5) * 1.1
   // A room full of bad blood is miserable to be in — a toxic scene poisons how
   // everyone feels about the ARCADE itself, not just each other. This is what
   // makes the internet stop loving your place when the vibe curdles.
@@ -512,7 +528,47 @@ export function sceneHealth(save) {
     toxicity: clamp((inFeud.size / n) * 1.4, 0, 1), // share of the room caught in real bad blood
     rivalIds: [...inRivalry], // who currently has an active rival — read by skillCeiling (cheap lookup)
     feudIds: [...inFeud], // who's caught in real bad blood — read by discipline/reputation
+    variety: sceneVariety(regs), // personality spread — a one-note room converts nobody (read by attendChance)
   }
+}
+
+/**
+ * PERSONALITY SPREAD, 0..1 — how many kinds of person are actually in this
+ * room. Entropy over the temperament rows of the regulars (personal and
+ * social averaged), normalized so a full four-row spread reads 1 and a
+ * monoculture reads 0.
+ *
+ * This exists because nothing else punishes a one-note room. Measured (n=8,
+ * 336d, normal): every single-temperament world SURVIVED year one, and some
+ * thrived — a room of identical personalities generates almost no conflict
+ * (toxicity 0.01–0.07 vs 0.14 full-world), and the community pit fires on
+ * conflict, so monoculture read as PEACE. The design says the opposite: the
+ * community pit punishes prioritising one kind of personality over a
+ * diversity of them, and a scene where everyone is the same person should
+ * quietly stop converting first-timers — "everyone here is the same guy" is a
+ * real reason people bounce off a room. Routed through discovery so the death
+ * arrives down the dynamics funnel (the community pit), not a new one.
+ */
+export function sceneVariety(regs) {
+  if (regs.length < 8) return 1 // too small to be one-note — it's just small
+  const H = (counts) => {
+    const total = Object.values(counts).reduce((a, b) => a + b, 0)
+    if (!total) return 0
+    let h = 0
+    for (const c of Object.values(counts)) {
+      if (!c) continue
+      const p = c / total
+      h -= p * Math.log(p)
+    }
+    return h / Math.log(4) // four rows on each side = 1.0
+  }
+  const per = {}
+  const soc = {}
+  for (const p of regs) {
+    if (p.temperament) per[p.temperament] = (per[p.temperament] || 0) + 1
+    if (p.socialTemperament) soc[p.socialTemperament] = (soc[p.socialTemperament] || 0) + 1
+  }
+  return clamp((H(per) + H(soc)) / 2, 0, 1)
 }
 
 export function sceneVerdict(scene) {

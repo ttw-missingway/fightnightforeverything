@@ -152,6 +152,11 @@ export function resetSaveById(id) {
     settings: structuredClone(save.settings),
     game,
     arcade,
+    // Opening night plays again. A run-back IS an opening — same room, new
+    // arcade, and the shutter going up is the cue that the last one is over.
+    // (newSave defaults this to true; it is named here so a future edit to the
+    // carry-over list can't quietly drop it.)
+    grandOpening: true,
     evoRoster: structuredClone(save.evoRoster || []),
     // `rungPoints` is how much of the one-time early-rung allowance this
     // lineage has already spent. It has to survive the reset that ends a run,
@@ -493,7 +498,12 @@ export function StoreProvider({ children }) {
     seedWorldFeed(next)
     persistSave(next)
     setSave(next)
-    setScreen({ name: 'arcade' })
+    // A NEW run opens on the Feed, not the Arcade. The feed is already years
+    // deep in somebody else's scene (seedWorldFeed, just above) — so the first
+    // thing a new owner sees is the world they are trying to get into, rather
+    // than an empty room with the shutters still down. Reopening an existing
+    // save still lands on the Arcade: mid-run, the floor is the job.
+    setScreen({ name: 'feed' })
   }, [setSave])
 
   const openSave = useCallback((id) => {

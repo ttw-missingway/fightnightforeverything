@@ -10,6 +10,7 @@ import { absDayOf, difficultyOf } from './constants.js'
 import { chronicle } from './model.js'
 import { econLog } from './economy.js'
 import { bumpPassion } from './career.js'
+import { canStream, addHype, addFollowers } from './stream.js'
 
 // Weighted deck. `bad` decides which way the difficulty thumb presses the
 // scale. Durations are absolute-day windows stored on save.worldEffects and
@@ -39,14 +40,21 @@ const EVENTS = [
     },
   },
   {
-    key: 'viral_clip', bad: false, weight: 3,
+    // Needs a camera. A clip cannot go viral off an arcade that isn't
+    // broadcasting, so this one is dealt out of the deck entirely rather than
+    // firing and quietly doing nothing — see `when` in maybeWorldEvent.
+    // `when` is wrapped rather than passed as `canStream` directly: this array
+    // is built at module-evaluation time and stream.js is upstream of a cycle
+    // through economy/model, so the bare reference is still in its temporal
+    // dead zone here. Vite's bundle happened to tolerate it; Node ESM did not.
+    key: 'viral_clip', bad: false, weight: 3, when: (save) => canStream(save),
     run(save) {
       const gain = randInt(7, 13)
       save.relevance = clamp((save.relevance ?? 55) + gain, 0, 100)
       const newFollowers = Math.round((save.stream.followers || 0) * (0.06 + rand() * 0.08)) + randInt(10, 40)
-      save.stream.followers += newFollowers
-      save.stream.hype = clamp(save.stream.hype + 6, 0, 100)
-      chronicle(save, '📈', `A clip from the arcade went viral overnight — +${newFollowers} followers and the whole scene is suddenly on people's feeds.`)
+      const got = addFollowers(save, newFollowers)
+      addHype(save, 6)
+      chronicle(save, '📈', `A clip from the arcade went viral overnight — +${got} followers and the whole scene is suddenly on people's feeds.`)
     },
   },
   {
@@ -57,7 +65,8 @@ const EVENTS = [
         bumpPassion(p, 6)
         if (chance(0.4)) p.belief = clamp((p.belief ?? 0) + 2, 0, 100)
       }
-      save.stream.hype = clamp(save.stream.hype + 5, 0, 100)
+      // The room buzzes either way; the CHANNEL only gains if there is one.
+      addHype(save, 5)
       chronicle(save, '✈️', `A touring pro dropped in unannounced and ran sets all night. The whole room is buzzing for weeks.`)
     },
   },
@@ -65,7 +74,7 @@ const EVENTS = [
     key: 'press_feature', bad: false, weight: 2,
     run(save) {
       save.relevance = clamp((save.relevance ?? 55) + randInt(4, 8), 0, 100)
-      save.stream.hype = clamp(save.stream.hype + 10, 0, 100)
+      addHype(save, 10)
       chronicle(save, '📰', `A gaming outlet ran a feature on ${save.arcade.name} — "the last real arcade scene." The comments are surprisingly kind.`)
     },
   },
@@ -94,7 +103,8 @@ export function maybeWorldEvent(save) {
     const w = ev.weight * (ev.bad ? badTilt : 1 / badTilt)
     for (let i = 0; i < Math.max(1, Math.round(w * 2)); i++) deck.push(ev)
   }
-  const ev = choice(deck)
+  const ev = choice(deck.filter((e) => !e.when || e.when(save)))
+  if (!ev) return
   // Don't stack the same lingering effect on itself.
   if (save.worldEffects.some((fx) => fx.key === ev.key)) return
   ev.run(save, abs)

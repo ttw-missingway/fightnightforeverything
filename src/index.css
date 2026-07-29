@@ -1127,6 +1127,157 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   .evo-stage.open .evo-neon { animation: none; }
 }
 
+/* ---------- Grand opening ----------
+   The counterpart to the EVO curtains, and pointedly a different move: a
+   roller shutter goes UP off a lit room. See screens/GrandOpening.jsx. */
+.go-stage {
+  position: relative; height: 380px; margin: 24px 0; overflow: hidden;
+  border-radius: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(120% 80% at 50% 120%, rgba(255, 45, 120, 0.18), transparent 60%),
+    #05050c;
+}
+/* Light spilling out across the floor as the shutter clears it. */
+.go-spill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 46%; z-index: 1;
+  background: linear-gradient(0deg, rgba(255, 206, 79, 0.22), transparent 70%);
+  opacity: 0; transition: opacity 1.5s ease 0.7s;
+}
+.go-stage.open .go-spill { opacity: 1; }
+
+.go-shutter {
+  position: absolute; left: 0; right: 0; top: 0; height: 100%; z-index: 3;
+  transition: transform 1.9s cubic-bezier(0.62, 0.03, 0.28, 1);
+}
+.go-stage.open .go-shutter { transform: translateY(-100%); }
+/* Slats. The corrugation is the whole read — a flat panel rising is a wipe. */
+.go-slats {
+  position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(180deg,
+      #23262f 0px, #2b2f39 5px, #171a21 11px, #14161c 13px),
+    #1a1d24;
+  box-shadow: inset 0 -30px 50px rgba(0, 0, 0, 0.55), inset 0 0 90px rgba(0, 0, 0, 0.5);
+}
+/* The weighted bottom edge, so it reads as a shutter and not a texture. */
+.go-rail {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 14px;
+  background: linear-gradient(180deg, #3a3f4b, #0d0f14);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8);
+}
+
+.go-sign { position: relative; z-index: 2; text-align: center; padding: 0 20px; }
+.go-eyebrow {
+  font-size: 15px; letter-spacing: 6px; text-transform: uppercase;
+  color: var(--cyan); opacity: 0;
+  transition: opacity 0.9s ease 1.5s;
+}
+.go-name {
+  font-family: 'Futura', 'Avenir Next Condensed', system-ui, sans-serif;
+  font-size: 68px; font-weight: 800; letter-spacing: 4px; line-height: 1.05;
+  color: #fff; margin-top: 6px; opacity: 0;
+}
+.go-where {
+  font-size: 13px; letter-spacing: 3px; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45); margin-top: 10px; opacity: 0;
+  transition: opacity 0.9s ease 2.5s;
+}
+.go-stage.open .go-eyebrow, .go-stage.open .go-where { opacity: 1; }
+/* A tube striking rather than EVO's occasional flicker: it stutters trying to
+   catch, then holds. Different rhythm, different fixture, same building. */
+.go-stage.open .go-name { animation: gostrike 2.2s ease-out 1.2s forwards; }
+@keyframes gostrike {
+  0% { opacity: 0; text-shadow: none; }
+  12% { opacity: 0.85; text-shadow: 0 0 6px #fff, 0 0 18px var(--pink); }
+  18% { opacity: 0.1; text-shadow: none; }
+  30% { opacity: 0.9; text-shadow: 0 0 6px #fff, 0 0 22px var(--pink); }
+  36% { opacity: 0.2; text-shadow: none; }
+  48% { opacity: 1; text-shadow: 0 0 8px #fff, 0 0 26px var(--pink), 0 0 60px var(--pink); }
+  54% { opacity: 0.6; }
+  100% {
+    opacity: 1;
+    text-shadow:
+      0 0 8px #fff, 0 0 22px var(--pink), 0 0 44px var(--pink),
+      0 0 88px var(--pink), 0 0 130px rgba(255, 45, 120, 0.55);
+  }
+}
+.go-skip { position: absolute; bottom: 14px; z-index: 4; opacity: 0; transition: opacity 0.6s ease 3s; }
+.go-stage.open .go-skip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .go-shutter, .go-spill, .go-eyebrow, .go-where { transition: none; }
+  .go-stage.open .go-name { animation: none; opacity: 1; text-shadow: 0 0 8px #fff, 0 0 30px var(--pink); }
+}
+@media (max-width: 700px) {
+  .go-stage { height: 300px; }
+  .go-name { font-size: 40px; letter-spacing: 2px; }
+  .go-eyebrow { font-size: 12px; letter-spacing: 4px; }
+}
+
+/* ---------- One of yours won EVO ----------
+   The third cinematic, and the third gesture: light thrown OUTWARD from a
+   point, where EVO parts sideways and the shutter lifts up. See EvoWeek.jsx. */
+.fwk-stage {
+  position: relative; height: 400px; margin: 24px 0; overflow: hidden;
+  border-radius: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(120% 90% at 50% 40%, #0b0a1a, #04040a 70%);
+}
+.fw { position: absolute; width: 0; height: 0; opacity: 0; }
+.fwk-stage.lit .fw { animation: fwlaunch 4.2s ease-out infinite; }
+@keyframes fwlaunch { 0%, 82%, 100% { opacity: 1; } }
+.fw-spark {
+  position: absolute; left: 0; top: 0; width: 4px; height: 4px;
+  border-radius: 50%; opacity: 0;
+  /* The flight itself. Sparks slow and sag as they go, like real ones. */
+}
+.fwk-stage.lit .fw-spark { animation: fwspark 4.2s cubic-bezier(0.12, 0.72, 0.3, 1) infinite; }
+@keyframes fwspark {
+  0% { transform: translate(0, 0) scale(1.4); opacity: 1; }
+  55% { opacity: 1; }
+  80% { transform: translate(var(--tx), calc(var(--ty) + 34px)) scale(0.5); opacity: 0; }
+  100% { transform: translate(var(--tx), calc(var(--ty) + 34px)) scale(0.5); opacity: 0; }
+}
+.fw-gold .fw-spark { background: var(--gold); box-shadow: 0 0 8px 2px rgba(255, 206, 79, 0.85); }
+.fw-pink .fw-spark { background: var(--pink); box-shadow: 0 0 8px 2px rgba(255, 45, 120, 0.85); }
+.fw-cyan .fw-spark { background: var(--cyan); box-shadow: 0 0 8px 2px rgba(80, 230, 255, 0.8); }
+
+.fwk-copy { position: relative; z-index: 2; text-align: center; padding: 0 20px; }
+.fwk-congrats {
+  font-size: 20px; letter-spacing: 8px; text-transform: uppercase;
+  color: var(--cyan); opacity: 0; transition: opacity 0.9s ease 0.5s;
+}
+.fwk-name {
+  font-family: 'Futura', 'Avenir Next Condensed', system-ui, sans-serif;
+  font-size: 72px; font-weight: 800; letter-spacing: 3px; line-height: 1.05;
+  color: #fff; margin: 8px 0 4px;
+  opacity: 0; transform: scale(0.86);
+  transition: opacity 0.7s ease 1s, transform 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) 1s;
+  text-shadow:
+    0 0 10px #fff, 0 0 26px var(--gold), 0 0 60px var(--gold),
+    0 0 110px rgba(255, 206, 79, 0.55);
+}
+.fwk-title {
+  font-size: 24px; letter-spacing: 3px; color: var(--gold);
+  opacity: 0; transition: opacity 0.9s ease 1.7s;
+}
+.fwk-stage.lit .fwk-congrats, .fwk-stage.lit .fwk-title { opacity: 1; }
+.fwk-stage.lit .fwk-name { opacity: 1; transform: scale(1); }
+.fwk-skip { position: absolute; bottom: 14px; z-index: 3; opacity: 0; transition: opacity 0.6s ease 2.6s; }
+.fwk-stage.lit .fwk-skip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .fwk-stage.lit .fw, .fwk-stage.lit .fw-spark { animation: none; }
+  .fwk-stage.lit .fw { opacity: 1; }
+  .fwk-stage.lit .fw-spark { opacity: 0.9; transform: translate(var(--tx), var(--ty)); }
+  .fwk-congrats, .fwk-name, .fwk-title { transition: none; }
+}
+@media (max-width: 700px) {
+  .fwk-stage { height: 320px; }
+  .fwk-name { font-size: 42px; }
+  .fwk-congrats { font-size: 15px; letter-spacing: 5px; }
+  .fwk-title { font-size: 17px; }
+}
+
 .evo-beat { max-width: 720px; }
 .evo-headline {
   font-size: 34px; margin: 18px 0 10px;

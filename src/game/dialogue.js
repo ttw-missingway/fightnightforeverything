@@ -1024,17 +1024,34 @@ function decap(line, names) {
   return line.charAt(0).toLowerCase() + line.slice(1)
 }
 
-function applyVoice(line, v, tier, names = []) {
+/**
+ * Kinds that are somebody saying their own name for the first time.
+ *
+ * A hedge is what you put in front of a REMARK — an opinion, a joke, a read on
+ * how somebody plays — to take the edge off it. In front of an introduction it
+ * is nonsense: "No offence, I'm GrappleFan" apologises for having a name. These
+ * kinds are also all stranger-tier by definition, which is exactly when the
+ * hedge fires, so every introduction in the game was getting one.
+ */
+const NO_HEDGE = new Set(['intro', 'openingIntro', 'greet', 'openingGreet'])
+
+function applyVoice(line, v, tier, names = [], kind = null) {
   let out = line
 
   // A signature filler. Same person, same tic — that's what makes it theirs.
+  let opener = false
   if (chance(0.18)) {
     const pool = TICS[v.energy] || TICS.neutral
     out = `${choice(pool)} ${decap(out, names)}`
+    opener = true
   }
 
-  // Talking to someone you've just met takes the edge off.
-  if (tier === 'stranger' && chance(0.35)) {
+  // Talking to someone you've just met takes the edge off — but only when
+  // there's something to take the edge OFF (see NO_HEDGE). One opener at a
+  // time, too: stacked on a tic it reads as a stutter ("Sorry— look, I'm
+  // GrappleFan"), and in the opening weeks every line in the building is
+  // stranger-tier, so those all landed in the same fortnight.
+  if (!opener && !NO_HEDGE.has(kind) && tier === 'stranger' && chance(0.35)) {
     out = `${choice(HEDGES)} ${decap(out, names)}`
   } else if (tier === 'close' && chance(0.25) && /[.!?]$/.test(out)) {
     out = out.replace(/[.!?]$/, choice(CLOSE_TAGS))
@@ -1131,7 +1148,7 @@ export function speak(player, kind, ctx = {}) {
   // {x} is a proper noun too — a character, a player, a food. Without it in
   // the guard list, a chill-voice decap turns "Piper is the reason I come
   // here" into "piper is the reason I come here".
-  return applyVoice(filled, v, tier, [ctx.t, ctx.self, ctx.x])
+  return applyVoice(filled, v, tier, [ctx.t, ctx.self, ctx.x], kind)
 }
 
 export function voiceSummary(voice) {

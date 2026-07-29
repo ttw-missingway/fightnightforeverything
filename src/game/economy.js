@@ -9,7 +9,7 @@ import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
 import { difficultyOf, absDayOf, runAge, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
 import { chronicle, bump, bumpPeak } from './model.js'
 import { worldRentMult } from './worldevents.js'
-import { attractionIncome } from './catalog.js'
+import { attractionIncome, attractionFootprint } from './catalog.js'
 import { isUnlocked } from './achievements.js'
 
 export const foodPriceOf = (save, name) => save.arcade.foodPrices?.[name] ?? DEFAULT_FOOD_PRICE
@@ -108,8 +108,21 @@ export function monthlyRent(save) {
   // filling the room, which takes actually running the place. The flat floor
   // (not the per-cabinet part) is what makes low attendance fatal — so it
   // punishes coasting, not building.
+  // COSTS SCALE WITH WHAT YOU BUILT, not with the fact that you exist.
+  //
+  // The per-setup charge was $30/month against a cabinet that can only take
+  // ~12 matches a day — so at an honest arcade price (~$1 a match, see
+  // costPerPlay) a two-cabinet room paid more in rent for its floor than the
+  // floor could physically earn. That is what made "a quarter a game" a death
+  // sentence rather than a strategy: not the price, the overhead underneath
+  // it. A small room now carries a small room's nut.
+  //
+  // Attractions are the opposite case and are priced separately below: a
+  // bowling alley is FLOOR SPACE and the landlord charges for it.
   const diff = difficultyOf(save)
-  const base = (diff.rentBase ?? 220) + save.settings.setups * 30 + save.arcade.otherGames.length * 15
+  const base = (diff.rentBase ?? 220)
+    + save.settings.setups * 18
+    + attractionFootprint(save)
   // The lease gets renegotiated every year, and never in your favour. This is
   // what makes a hands-off arcade lose: an operation that was comfortably in
   // the black on day one is underwater by year three unless the owner has
@@ -138,13 +151,13 @@ const priceRoll = (seed, lo, hi) => Math.round(lo + hash01(seed) * (hi - lo))
 export const FOOD_CATALOG = FOODS.map((name) => ({
   name,
   stockCost: priceRoll(`${name}:stock`, 25, 55), // first stocking
-  restock: priceRoll(`${name}:restock`, 6, 14), // weekly resupply
+  restock: priceRoll(`${name}:restock`, 4, 10), // weekly resupply (was 6–14 pre-overhaul; see FAIR_WAGE note)
 }))
 
 export const GAME_CATALOG = OTHER_GAMES.map((name) => ({
   name,
   price: priceRoll(`${name}:price`, 180, 420), // buying the cabinet
-  upkeep: priceRoll(`${name}:upkeep`, 8, 18), // weekly maintenance
+  upkeep: priceRoll(`${name}:upkeep`, 6, 13), // weekly maintenance (was 8–18 pre-overhaul; see FAIR_WAGE note)
 }))
 
 // Legacy saves may hold custom items that predate the fixed catalogs —
@@ -194,7 +207,7 @@ export function budgetRemaining(save) {
 export function projectedMonthlyCost(save) {
   const rent = monthlyRent(save)
   const upkeep = weeklyUpkeep(save) * 4
-  const st = save.staffing || { employeeWage: 10, managerWage: 16 }
+  const st = save.staffing || { employeeWage: FAIR_WAGE.employee, managerWage: FAIR_WAGE.manager }
   const { employees, managers } = staffCounts(save)
   const payroll = (employees * st.employeeWage + managers * st.managerWage) * 28
   return Math.round(rent + upkeep + payroll)
@@ -202,7 +215,16 @@ export function projectedMonthlyCost(save) {
 
 // ---------- Staffing ----------
 
-export const FAIR_WAGE = { employee: 10, manager: 16 } // $/day the market expects
+// $/day the market expects. Counter work is part-time minimum-wage work; these
+// were 10/16 until the 2026-07-28 pricing overhaul anchored costPerPlay to
+// reality (~$1.20 comfort) and cut sustainable revenue by a third. At 10/16
+// payroll was ~$14/day of a ~$36/day nut and a competently-run NORMAL room
+// netted +$1.22/day — breakeven sat exactly on the attendance a competent
+// player reaches, so variance decided who lived (measured n=16: easy 50%,
+// normal 50%, difficult/master 100% deaths, all economy funnel). Every morale/
+// quit formula reads wage÷fair, so moving FAIR_WAGE and the newStaffing
+// defaults together changes only the dollars.
+export const FAIR_WAGE = { employee: 7, manager: 12 }
 export const HIRE_COST = 25 // posting the job, training the hire
 
 export function newStaffMember(role, playerId = null, name = null, family = false) {
@@ -400,17 +422,86 @@ export function arcadeClosed(save) {
 
 // ---------- Player wallets ----------
 
-// How much a token's price cools a player's urge to play this hour.
-// 0 = happily feeding the machine; up to ~0.35 = thinking real hard.
-export function tokenDeterrence(save, p) {
-  const price = save.arcade.prices?.token ?? 1
-  // Every player has a price they stop thinking about — and a broke regular
-  // thinks HARD about a $2 token. Pricing against your actual room's wallets
-  // is the early game: squeeze past what your crowd carries and the machines
-  // sit quiet no matter how much they love the place.
-  const comfort = 0.9 + statLevel(p.social?.income) * 0.18 // $/game they don't think about
-  return clamp((price - comfort) * 0.38, 0, 0.6)
+/**
+ * TOKENS PER MATCH on the main game. The other half of the price.
+ *
+ * A token price on its own was never the lever — an arcade sets a cheap token
+ * AND charges several of them per play, which is how "a quarter a game" and
+ * "solvent" were ever the same sentence. With this pinned at 1 the only way to
+ * charge a fair price was to make a token expensive, so 25c tokens meant 25c a
+ * match and the room starved. Nobody ran an arcade that way.
+ */
+export const playTokensOf = (save) => Math.max(1, save?.arcade?.prices?.play ?? 1)
+
+/**
+ * WHAT IT COSTS TO PLAY, in dollars. The only price the game should ever judge.
+ *
+ * Every "is this expensive?" question reads this, never the token price —
+ * 25c x 4 and $1 x 1 are the same deal and must feel identical, or the two
+ * levers just fight each other.
+ */
+export const costPerPlay = (save) => (save?.arcade?.prices?.token ?? 1) * playTokensOf(save)
+
+/**
+ * What this player thinks of your price, as one signed number.
+ *
+ * Negative means cheap — under what they'd think twice about. Positive means
+ * dear. Everything downstream reads this, so there is exactly one place that
+ * decides what "expensive" means to a given wallet.
+ *
+ * ANCHORED TO A REAL ARCADE. A dollar a game is ordinary, fifty cents is
+ * cheap, two dollars is steep, and three dollars a match is outrageous to
+ * everybody — the old curve let a rich regular shrug at $2.70, which is not a
+ * price any arcade on earth has ever charged for one match. The wallet term is
+ * now a modest tilt (±$0.45 across the whole income range) rather than the
+ * thing that decides what a fair price is.
+ */
+export function tokenFeel(save, p) {
+  const comfort = 0.75 + statLevel(p.social?.income) * 0.09 // 0.75 .. 1.65
+  return costPerPlay(save) - comfort
 }
+
+/**
+ * How the price moves this player's urge to play, per hour. SIGNED.
+ *
+ * This used to be `tokenDeterrence` — a one-sided penalty that bottomed out at
+ * zero, which made every price under ~$1.80 identical to the game and pricing
+ * cheap strictly dominated: less revenue, no upside anywhere in the model.
+ * A quarter arcade could not be built, which is the wrong answer to the most
+ * obvious thing a player will try.
+ *
+ * Now cheap play buys VOLUME — the thing quarter arcades actually ran on. A
+ * cheap token means one more game, and one more after that.
+ *
+ * The curve is deliberately ASYMMETRIC: hesitation bites harder than eagerness
+ * and reaches further, because people quit an expensive room faster than they
+ * binge a cheap one. Volume can soften a low price; it cannot make
+ * undercharging free.
+ *
+ * The dear side is PIECEWISE, and that shape is the point. A bit over the odds
+ * is a grumble — people still play, they just play less — so there is a real
+ * band between about 75c and $1.75 where an owner can make a living. Past
+ * that it turns vertical: at $3 a match this returns about −0.9 against a base
+ * urge of ~0.4, and the machines simply stop. Three dollars a game is not a
+ * pricing strategy, it is a closed arcade, and no wallet in the room excuses it.
+ *
+ * A single straight slope could not say both of those things at once — tuned
+ * steep enough to kill $3 it also killed $1.50, and tuned to spare $1.50 it
+ * let $3 trade.
+ */
+const DEAR_GRUMBLE = 0.55 // $ over comfort you can get away with
+
+export function tokenPlayShift(save, p) {
+  const feel = tokenFeel(save, p)
+  if (feel <= 0) return clamp(-feel * 0.16, 0, 0.24) // cheap: one more game
+  const grumble = Math.min(feel, DEAR_GRUMBLE) * 0.3
+  const gouge = Math.max(0, feel - DEAR_GRUMBLE) * 0.95
+  return -clamp(grumble + gouge, 0, 0.95)
+}
+
+// Kept as the positive-only reading for anything that only cares about the
+// penalty side (and so old call sites can't silently invert).
+export const tokenDeterrence = (save, p) => Math.max(0, -tokenPlayShift(save, p))
 
 /**
  * End-of-day register count: main-game tokens, side-cabinet tokens (each at
@@ -430,6 +521,7 @@ export const CABINET_SEATS_PER_DAY = 6
 export function playerSpending(save, attendees, gamesToday, events) {
   if (!save.economy) return 0
   const tokenPrice = save.arcade.prices?.token ?? 1
+  const playTokens = playTokensOf(save)
   let tokens = 0
   let foodRevenue = 0
   let foodSales = 0
@@ -448,8 +540,10 @@ export function playerSpending(save, attendees, gamesToday, events) {
     // three lines up was already doing this correctly; this one was missed in
     // the temperament rework.
     const wallet = statLevel(p.social?.income)
-    // Main-game matches: a token a game, paid at the change machine.
-    tokens += gamesToday[p.id] || 0
+    // Main-game matches, at whatever the machine is set to take. This is the
+    // half of the price that used to be hardcoded to one token — the reason a
+    // cheap token could only ever mean a cheap match.
+    tokens += (gamesToday[p.id] || 0) * playTokens
     // Their favorite cabinet: one machine only seats so many a night. Coming
     // in for Rhythm Storm and staring at a line all evening is a real letdown.
     const favGame = (p.otherGames || [])[0]
@@ -496,7 +590,13 @@ export function playerSpending(save, attendees, gamesToday, events) {
     // deterrent and charging more was strictly better. Pricing has to be a
     // trade-off — volume against margin — not a free lever.
     const priceFactor = price / (1.15 + wallet * 0.33)
-    const buyChance = clamp(appetite - Math.max(0, priceFactor - 1) * 0.85, 0.02, 0.9)
+    // Same trade the token price makes: dear costs you customers, cheap buys
+    // volume. Without the second half, underpricing food was pure donation —
+    // identical sales at a lower margin — so the counter had one correct price
+    // and no decision in it. A cheap snack is one more person at the counter.
+    const buyChance = clamp(
+      appetite - Math.max(0, priceFactor - 1) * 0.85 + Math.min(Math.max(0, 1 - priceFactor), 0.6) * 0.35,
+      0.02, 0.95)
     if (chance(buyChance)) {
       foodRevenue += price
       foodSales += 1

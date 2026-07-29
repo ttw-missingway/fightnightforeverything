@@ -125,6 +125,33 @@ const EVO_COUNTDOWN = [
   ] },
 ]
 
+/**
+ * EVO buildup that isn't pinned to an exact day.
+ *
+ * The countdown above only speaks on six specific mornings, which is right for
+ * a countdown and useless for filling the weeks between them — a month of
+ * timeline seeded from it comes back three-quarters ordinary world gossip, and
+ * a new owner's first screen never says what the year is FOR. These carry the
+ * same appetite without claiming a date, so any day in the run-up can use one.
+ */
+const EVO_BUILDUP = [
+  (c) => `${c.game} at EVO is the only thing on my calendar. everything else is a rehearsal`,
+  (c) => `the ${c.game} EVO entrant list is going to be absurd this year`,
+  (c) => `booked the flights for EVO. no plan beyond that. no plan needed`,
+  (c) => `every local from here to EVO is just seeding practice and we all know it`,
+  (c) => `if ${c.fav} doesn't at least top 8 at EVO i'm giving up analysis forever`,
+  (c) => `EVO brackets are where ${c.game} careers get made. one weekend. that's the whole thing`,
+  (c) => `the run-up to EVO is my favourite time of year. everyone thinks they're winning it`,
+  (c) => `people practising for EVO right now: everyone. people ready for EVO: nobody`,
+  (c) => `whoever takes ${c.game} at EVO decides what the next year looks like. no pressure`,
+  (c) => `my EVO prediction is ${c.fav} and my EVO prediction is always wrong`,
+  (c) => `the ${c.char} players are all going to EVO thinking this is their year. it never is`,
+  (c) => `nothing in this game means anything until EVO. then it all means everything`,
+]
+
+/** Close enough to EVO that the buildup pool is fair game. */
+const BUILDUP_WINDOW = 40
+
 const EVO_AFTERMATH = [
   (c) => `still thinking about ${c.champ} winning EVO. what a run`,
   (c) => `${c.champ} is the EVO champion and the whole meta just moved`,
@@ -145,10 +172,13 @@ export const daysToEvo = (save, agoDays = 0) => {
  * `agoDays` matters: a backdated post has to count down from the day it was
  * written, or a seeded fortnight of buildup reads "ONE WEEK" nine times.
  */
-function evoBuzz(save, ctx, agoDays = 0) {
+function evoBuzz(save, ctx, agoDays = 0, { buildup = false } = {}) {
   const left = daysToEvo(save, agoDays)
   const beat = EVO_COUNTDOWN.find((b) => b.at === left)
   if (beat) return choice(beat.lines)(ctx)
+  // Any other day in the run-up, when the caller wants the date pushed —
+  // seeding the opening timeline does, an ordinary Tuesday doesn't.
+  if (buildup && left <= BUILDUP_WINDOW) return choice(EVO_BUILDUP)(ctx)
   // The week after: everyone is still chewing on it.
   const since = (DAYS_PER_YEAR - left) % DAYS_PER_YEAR
   if (since >= 1 && since <= 6 && agoDays === 0) {
@@ -170,20 +200,33 @@ export function seedWorldFeed(save, count = 9) {
   // Spread across the month before opening night so the countdown beats
   // (a month out, two weeks, one week, three days...) actually land, and drop
   // anything that repeats a line already on the timeline.
+  //
+  // `buildup` is on for MOST of these. The opening feed is the one screen that
+  // has to answer "what is this run for?", and the answer is EVO — so the
+  // timeline a new owner scrolls is mostly a scene counting down to it, with
+  // enough ordinary gossip left in (every third post) that the world reads like
+  // it has other things going on too.
+  // Dedupe on the SHAPE of the post, not its text. The pools substitute names,
+  // so "the Ken Masters players are all going to EVO" and "the Sagat players
+  // are all going to EVO" are the same template twice and read as one — an
+  // exact-text check waves both through. Proper nouns collapse to a dot, which
+  // leaves the template as the key.
+  const shapeOf = (t) => t.replace(/\b[A-Z][\w'’]*(?:\s+[A-Z][\w'’]*)*/g, '·')
   const seen = new Set()
   for (let i = count; i > 0; i--) {
     const before = save.socialFeed.length
-    worldFeedDaily(save, { force: true, agoDays: Math.round(i * 3.5) + randInt(0, 2) })
+    worldFeedDaily(save, { force: true, buildup: i % 3 !== 0, agoDays: Math.round(i * 3.5) + randInt(0, 2) })
     const added = save.socialFeed.length > before ? save.socialFeed[0] : null
     if (!added) continue
-    if (seen.has(added.text)) save.socialFeed.shift()
-    else seen.add(added.text)
+    const key = shapeOf(added.text)
+    if (seen.has(key)) save.socialFeed.shift()
+    else seen.add(key)
   }
   // Opening night is EXACTLY the one-week mark (OPENING_DAY 155, EVO_DAY 162),
   // so guarantee that beat rather than leaving it to the daily roll. The first
   // thing a new owner reads should be the countdown to the thing they will
   // spend the next year trying to reach.
-  worldFeedDaily(save, { force: true })
+  worldFeedDaily(save, { force: true, buildup: true })
   // Newest first, like every other feed.
   save.socialFeed.sort((a, b) =>
     (b.year - a.year) || (b.day - a.day))
@@ -222,7 +265,7 @@ export function postWorldUpset(save, { winner, loser }) {
  * feed starts talking about you because your players got good, not because you
  * bought advertising.
  */
-export function worldFeedDaily(save, { force = false, agoDays = 0 } = {}) {
+export function worldFeedDaily(save, { force = false, agoDays = 0, buildup = false } = {}) {
   if (!save.socialFeed) return
   if (!force && !chance(0.42)) return
   const rows = worldRankings(save)
@@ -244,7 +287,7 @@ export function worldFeedDaily(save, { force = false, agoDays = 0 } = {}) {
   const aboutYou = best && chance(clamp(0.15 + (64 - best.rank) / 64 * 0.5, 0, 0.65))
   // EVO owns the conversation when it is close. Everything else is filler
   // next to the one date the whole year points at.
-  const evo = evoBuzz(save, { ...ctx, fav: ctx.top }, agoDays)
+  const evo = evoBuzz(save, { ...ctx, fav: ctx.top }, agoDays, { buildup })
   const line = evo && (force || chance(0.75))
     ? evo
     : aboutYou

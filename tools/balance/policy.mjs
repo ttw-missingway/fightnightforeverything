@@ -14,10 +14,12 @@
 const SRC = new URL('../../src/game', import.meta.url).pathname
 const { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild } = await import(`${SRC}/model.js`)
 const { generateCharacter, populateRoster, generateEvoRoster, randomIdentity, randomPreferences } = await import(`${SRC}/generate.js`)
-const { TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS } = await import(`${SRC}/constants.js`)
+const { TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS, AD_CHANNELS } = await import(`${SRC}/constants.js`)
 const { computeMatchups } = await import(`${SRC}/balance.js`)
 const { startDay, simHour, endDay, advanceDay, whatHappensToday } = await import(`${SRC}/sim.js`)
-const { runSinglesTournament, runTeamTournament, runEvo } = await import(`${SRC}/tournament.js`)
+const { runSinglesTournament, runTeamTournament, runEvo, canStageExhibition, runExhibition, EXHIBITION_COST } = await import(`${SRC}/tournament.js`)
+const { audienceMix, hasFreeInstall, claimFreeInstall } = await import(`${SRC}/catalog.js`)
+const { ATTRACTION_PACKS } = await import(`${SRC}/names.js`)
 const { HOURS_PER_DAY, runAge, difficultyOf, seasonOf } = await import(`${SRC}/constants.js`)
 const eco = await import(`${SRC}/economy.js`)
 const { buildStreamForPlayers, pickAutoStreamSetup, STREAM_RIG_COST } = await import(`${SRC}/stream.js`)
@@ -33,7 +35,14 @@ export const DEFAULT_POLICY = {
   stream: true,           // put a match on the channel every day
   foods: 3,               // how many lines to stock
   foodPrice: 3,
-  tokenPrice: 2,
+  // THE PRICE IS costPerPlay = tokenPrice × playTokens. The overhaul that
+  // split it (2026-07-28) also moved typical comfort to ~$1.20 a match, and
+  // this default sat at $2.00 — measured dies 5/5 — for a while afterwards,
+  // which made every default-policy number a measurement of an over-pricer.
+  // Post nut-cut sweep (n=8, 336d, normal): $1.50 and $1.75 die 0%, $1.25
+  // 13%, ≥$2.00 dies 100%. $1.50 banks the most ($3.4k median).
+  tokenPrice: 0.5,
+  playTokens: 3,          // tokens the main game takes per match — $1.50/play
   cabinets: 2,
   maxEmployees: 2,
   growSetups: true,       // add cabinets as the room fills
@@ -45,6 +54,13 @@ export const DEFAULT_POLICY = {
   monthly: 0,             // monthly bracket size (0 = none)
   hireAt: [600, 1400, 2600], // cash thresholds for employees 1..3
   managerAt: 2200,
+  // Stage a showcase whenever the channel can carry one. Exhibitions are the
+  // cash-out for followers/hype, and until 2026-07-28 NO harness ever staged
+  // one — the whole media payoff loop was unmeasured (trap #3).
+  exhibit: true,
+  // Buy into unlocked attraction packs (new audiences first) once the books
+  // can carry the build. Off by default: it is the room-builder's move.
+  attractions: false,
 }
 
 /** Build a world the way the setup wizard would, then apply the policy's opening. */
@@ -133,6 +149,7 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
   }
   for (const f of save.arcade.foods) save.arcade.foodPrices[f] = policy.foodPrice
   save.arcade.prices.token = policy.tokenPrice
+  save.arcade.prices.play = policy.playTokens ?? 1
   // 3. Side cabinets: expensive, and the first thing to skip when money is tight.
   const CABS = ['Puzzle Blitz', 'Rhythm Storm', 'Air Hockey', 'Crane Game']
   for (const g of CABS.slice(0, policy.cabinets)) {
@@ -199,8 +216,62 @@ function manage(save, policy) {
       && save.settings.setups < 8 && eco.trySpend(save, eco.SETUP_COST, 'new setup cabinet')) {
     save.settings.setups += 1
   }
-  // Advertising is a weekly bill — only run what the books can carry.
-  save.arcade.ads = runway > 30 ? policy.ads : runway > 15 ? policy.ads.slice(0, 1) : []
+  // THE RIG, IF IT COULDN'T BE AFFORDED ON DAY ONE.
+  //
+  // makeRun only tries at opening, out of the leftover float. That was fine
+  // while the rig cost $180 and every difficulty cleared the bar on night one
+  // — and it silently became a measurement bug the moment the price went up,
+  // because "can't afford it at open" turned into "never owns a channel for
+  // the entire run" and every follower/hype/exhibition number was quietly
+  // measuring a rigless arcade. A competent player saves up and buys it.
+  if (policy.rig && !save.arcade.streamRig && runway > 20
+      && eco.trySpend(save, STREAM_RIG_COST, 'streaming setup')) {
+    save.arcade.streamRig = true
+  }
+  // Advertising is a weekly bill — only run what the books can carry, and
+  // only channels this lineage has EARNED. The policy used to write
+  // `arcade.ads` directly, which quietly bought achievement-locked channels a
+  // real first-run player cannot have (radio is $44/week AND locked) — the
+  // harness was measuring a player who cannot exist.
+  const legalAds = policy.ads.filter((k) => {
+    const c = AD_CHANNELS.find((x) => x.key === k)
+    return c && (!c.unlock || isUnlocked(save, c.unlock))
+  })
+  save.arcade.ads = runway > 30 ? legalAds : runway > 15 ? legalAds.slice(0, 1) : []
+  // A showcase night when the channel can carry one — followers and hype
+  // cashing out through an event someone chose to stage. canStageExhibition
+  // gates on followers, cooldown, cash and a headline-worthy roster.
+  // A $140 night is a luxury, not a lifeline — stage it out of a real buffer,
+  // never out of the rent money.
+  if (policy.exhibit && runway > 12 && save.economy.money > EXHIBITION_COST * 3
+      && canStageExhibition(save).ok) {
+    runExhibition(save)
+  }
+  // AN ATTRACTION IS A CROWD YOU DO NOT HAVE YET, or it is furniture
+  // (catalog.js). The room-builder buys into a pack it has EARNED, one room at
+  // a time, preferring an audience the floor doesn't serve — and takes the
+  // earned free install even when money is tight, because that is what the
+  // free install is for.
+  if (policy.attractions) {
+    const owned = new Set(save.arcade.otherGames)
+    const mix = audienceMix(save)
+    const candidates = ATTRACTION_PACKS
+      .filter((p) => isUnlocked(save, p.key))
+      .map((p) => ({ p, missing: p.items.filter((i) => !owned.has(i)) }))
+      .filter((x) => x.missing.length)
+      .sort((a, b) => (mix.has(a.p.audience) ? 1 : 0) - (mix.has(b.p.audience) ? 1 : 0))
+    const item = candidates[0]?.missing[0]
+    if (item) {
+      const cost = eco.gameItem(item).price
+      const bought = hasFreeInstall(save, item)
+        ? claimFreeInstall(save, item)
+        : (runway > 30 && cash > cost * 2.5 && eco.trySpend(save, cost, `installed ${item}`))
+      if (bought) {
+        save.arcade.otherGames.push(item)
+        save.arcade.gameTokens[item] ??= 1
+      }
+    }
+  }
 }
 
 /**

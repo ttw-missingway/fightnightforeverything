@@ -511,6 +511,10 @@ export function newSave(partial = {}) {
     // arcade" reads runAge() against this, because day-of-year no longer
     // starts at 1. Old saves opened on January 1 and migrate to 1.
     openedAbs: OPENING_DAY,
+    // Opening night has not been shown yet. Cleared the first time it plays;
+    // old saves migrate to false rather than being handed a grand opening for
+    // an arcade that has been trading for a year.
+    grandOpening: true,
     hour: 0, // hours simulated so far in the current day
     dayInProgress: null, // live day state while the arcade is open
     settings: {
@@ -566,7 +570,10 @@ export function newSave(partial = {}) {
       foods: [],
       otherGames: [],
       schedule: [], // newTournamentEntry()
-      prices: { token: 1 }, // global $/token; players balk when too high for their income
+      // $/token and tokens-per-match. What players actually judge is the two
+      // MULTIPLIED (economy.costPerPlay) — a quarter token at 4 tokens a match
+      // is the same dollar as a $1 token at 1, and the game treats them alike.
+      prices: { token: 1, play: 1 },
       foodPrices: {}, // per-food $ price — set when stocked
       gameTokens: {}, // per-side-cabinet token cost to play — set when installed
       ads: [], // active advertising channel keys (constants.AD_CHANNELS) — weekly upkeep
@@ -648,8 +655,10 @@ export function newSave(partial = {}) {
 // (working players don't play; the register doesn't watch itself).
 export function newStaffing() {
   return {
-    employeeWage: 10, // $/day per employee
-    managerWage: 16, // $/day per manager
+    // Defaults track economy.FAIR_WAGE — the morale/quit formulas read the
+    // ratio, so these two pairs must move together (see FAIR_WAGE's note).
+    employeeWage: 7, // $/day per employee
+    managerWage: 12, // $/day per manager
     morale: 70, // 0-100 — pay and management coverage move it
     staff: [], // {id, name, role: 'employee'|'manager', playerId|null, hiredAbs}
   }
@@ -878,6 +887,8 @@ export function migrateSave(save) {
   save.settings.mode ??= 'consequential'
   save.settings.difficulty ??= 'normal'
   save.arcade.prices ??= { token: 1 }
+  // Old saves charged exactly one token a match, so that is what they keep.
+  save.arcade.prices.play ??= 1
   // Per-item pricing: migrate the old single food price to per-food, default
   // side-cabinet token costs, then retire the flat food price.
   save.arcade.foodPrices ??= {}
@@ -1098,6 +1109,7 @@ export function migrateSave(save) {
   }
   save.arcade.location ??= { city: '', state: '', country: '' }
   save.vods ??= []
+  save.grandOpening ??= false // a save that already exists has already opened
   trimVods(save) // existing saves may hold far more replay data than fits localStorage
   save.tournamentInProgress ??= null
   save.idle ??= newIdleState()

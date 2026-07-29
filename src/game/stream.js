@@ -371,14 +371,65 @@ export function generateComments({ viewers, narration, meta = [], aName, bName, 
  * Does this arcade have a channel at all?
  *
  * The streaming rig is bought PER RUN and never carries over — it is the one
- * thing on the whole board you re-buy every time, because the first hundred
- * dollars of a new run going on a camera instead of a cabinet is a real
- * decision, and streaming is the single strongest lever in the game (belief,
- * popularity, followers, and the only way a champion gets forged).
+ * thing on the whole board you re-buy every time, because streaming is the
+ * single strongest lever in the game (belief, popularity, followers, and the
+ * only way a champion gets forged).
  */
 export const canStream = (save) => !!save?.arcade?.streamRig
 
-export const STREAM_RIG_COST = 180
+/**
+ * The ONLY two ways channel numbers should ever move.
+ *
+ * `hype` is channel popularity and `followers` are channel followers, so
+ * neither can exist without a channel — the store card promises exactly that
+ * ("Without one there is no channel this run — no followers, no hype"). The
+ * gate used to live in `buildStream` alone, which covered broadcasts and
+ * nothing else, and five other places wrote to these fields directly: the
+ * nightly word-of-mouth tick, a viral-clip world event, a touring pro, a press
+ * feature, a shipped patch and an exhibition. A rigless arcade therefore
+ * climbed past the hype>8 line and accrued followers nightly for a channel it
+ * did not own — 129 of them over a measured year.
+ *
+ * Routing every write through here means the next person to add a "+5 hype"
+ * somewhere cannot reintroduce it by forgetting. Both are no-ops without a
+ * rig and both return what was actually applied, so callers can tell.
+ */
+export function addHype(save, amount) {
+  if (!save?.stream || !canStream(save) || !amount) return 0
+  const before = save.stream.hype
+  save.stream.hype = clamp(before + amount, 0, 100)
+  return save.stream.hype - before
+}
+
+export function addFollowers(save, count) {
+  if (!save?.stream || !canStream(save) || !count) return 0
+  const before = save.stream.followers
+  save.stream.followers = Math.max(0, before + Math.round(count))
+  return save.stream.followers - before
+}
+
+/**
+ * Priced to be a REAL early decision rather than a formality or a wall.
+ *
+ * MEASURED as the first run day a competent player can afford it — median of
+ * 7 runs each, `tools/balance` policy, one year:
+ *
+ *   opens with →   easy ~$1013 · normal ~$713 · difficult ~$466 · master ~$247
+ *   $900        →   day 1  ·  day 14  ·  day 68   ·  never (0/7)
+ *   $1800       →   day 43 ·  day 146 ·  day 315  ·  never (0/7)
+ *
+ * At $900 easy buys it out of the opening float and normal waits a fortnight,
+ * which is the intended shape: the first real thing you save for. Difficult
+ * waits about ten weeks. Master never gets there inside a year — see below.
+ *
+ * WHY THE CEILING MATTERS MORE THAN THE PRICE. Exhibitions need 150 followers,
+ * followers need this rig, and a champion cannot be forged without stage time.
+ * So a price the run cannot reach doesn't make streaming harder, it deletes
+ * three systems. At $1800 that happened on difficult (3/7 runs never afforded
+ * it). Anything raised here must be re-measured against difficult AND master,
+ * not just normal.
+ */
+export const STREAM_RIG_COST = 900
 
 export function buildStream(save, {
   level, personality, probA, aWins, narration, meta = [], aName, bName, winnerName, context,
