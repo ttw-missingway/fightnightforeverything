@@ -245,10 +245,26 @@ it is the single highest-leverage content artefact in P1.
 currently *"how much social interactions swing their mood"* — volatility, not
 empathy. As written, steering a toxic player's breakthrough into `sensitivity`
 would make them *more* explosive, which is the opposite of the intent in §2.6's
-counterplay. Redefine it as **attunement**: they read the room and are moved by
-it. That keeps both edges — considerate *and* fragile — which is already what the
-Dramatic social temperament implies ("feels everything, at volume"), and makes it
-the one deliberately double-edged stat on the sheet.
+counterplay.
+
+**Decided 2026-07-29: the stat keeps its key and its name.** It stays
+`sensitivity` in `SOCIAL_STATS` and stays "Sensitivity" on the sheet; only the
+*definition* broadens, to carry empathy alongside the volatility it already
+had — they read the room and are moved by it.
+
+```
+['sensitivity', 'Reads the room and is moved by it — considerate, and easily wounded']
+```
+
+That keeps both edges, which is already what the Dramatic social temperament
+promises ("feels everything, at volume"), and makes it the one deliberately
+double-edged stat on the sheet: the same number that lets someone de-escalate a
+room is the number that makes a bad night land twice as hard.
+
+Consequence for §1.2's wound channel: `sensitivity` can be implicated by *both*
+a social rupture the player caused (they did not read the room) and one they
+merely absorbed (the room got to them). The journal must distinguish those two,
+because they are different entries about different people.
 
 **Edge — what keeps working.** Success pressures the stat that produced it.
 Won on a hard read → `analysis`. Outlasted someone over two hours → `stamina`.
