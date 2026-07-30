@@ -432,12 +432,13 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
             </p>
           )}
 
-          {(p.memories || []).length > 0 && (
+          {(p.journal || []).length > 0 && (
             <>
-              <h3>Defining Moments</h3>
-              {[...p.memories].reverse().map((m, i) => (
-                <p key={i} className="small" style={{ margin: '3px 0' }}>
-                  <span className="gold">★</span> {m.text} <span className="dim">— Year {m.year}</span>
+              <h3>📔 Journal <span className="dim small">— their own words · {p.journalWritten || p.journal.length} entries</span></h3>
+              {[...p.journal].slice(-14).reverse().map((e, i) => (
+                <p key={i} className="small" style={{ margin: '4px 0', borderLeft: '2px solid var(--border)', paddingLeft: 8 }}>
+                  <span className="dim">{formatDay(e.day, e.year)}</span><br />
+                  {e.text}
                 </p>
               ))}
             </>

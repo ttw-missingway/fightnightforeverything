@@ -84,15 +84,22 @@ export function measureLatency(name, { difficulty = 'normal' } = {}) {
   if (!lever) throw new Error(`unknown lever ${name}`)
 
   const pullDay = lever.pullDay ?? LEVER_DAY
-  const diffs = [] // per-day mean(treated - control) across seeds
   const perSeed = SEEDS.map((seed) => ({
     control: armSeries(lever, seed, false),
     treated: armSeries(lever, seed, true),
   }))
   const fired = perSeed.filter((p) => p.treated.pullFired).length
-  const horizon = Math.min(...perSeed.flatMap((p) => [p.control.series.length, p.treated.series.length]))
+  // Average over the pairs still ALIVE each day rather than truncating to the
+  // shortest run — one early death used to erase the whole measurement window
+  // for a late-pull lever (the patch arm read "no effect" because a single
+  // seed died before the studio unlocked). Trust the mean only while at least
+  // half the pairs survive.
+  const horizon = Math.max(...perSeed.flatMap((p) => [p.control.series.length, p.treated.series.length]))
+  const diffs = [] // per-day mean(treated - control) across surviving pairs
   for (let d = 0; d < horizon; d++) {
-    diffs.push(mean(perSeed.map((p) => p.treated.series[d] - p.control.series[d])))
+    const live = perSeed.filter((p) => p.control.series.length > d && p.treated.series.length > d)
+    if (live.length < Math.ceil(SEEDS.length / 2)) break
+    diffs.push(mean(live.map((p) => p.treated.series[d] - p.control.series[d])))
   }
 
   // First post-pull day the gap clears the threshold and holds for 7 days.

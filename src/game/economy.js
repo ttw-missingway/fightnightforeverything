@@ -6,6 +6,7 @@
 
 import { clamp, chance, choice, randInt, uid, hash01 } from './util.js'
 import { bindRng } from './rng.js'
+import { pushToast } from './notify.js'
 import { FOODS, OTHER_GAMES, FIRST_NAMES, LAST_NAMES } from './names.js'
 import { difficultyOf, absDayOf, runAge, DAYS_PER_MONTH, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS, statLevel } from './constants.js'
 import { chronicle, bump, bumpPeak } from './model.js'
@@ -396,6 +397,7 @@ export function staffDaily(save, attendeeCount, gamesPlayed, events) {
       st.staff = st.staff.filter((x) => x.id !== s.id)
       const why = ratio < 0.9 ? ' — the pay was not worth it' : overm > 0 ? ' — too many bosses, not enough job' : ''
       events.push({ type: 'staff', text: `🧹 ${s.name} quit${why}.` })
+      pushToast(save, { icon: '🧹', text: `${s.name} quit${why}.`, see: { screen: 'manage' }, sticky: true })
     }
   }
 

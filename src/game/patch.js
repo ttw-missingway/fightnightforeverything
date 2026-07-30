@@ -3,6 +3,8 @@
 // community reacts — to balance, to content, to boredom, and to cadence.
 
 import { uid, clamp, hash01, displayName, rand } from './util.js'
+import { writeJournal } from './journal.js'
+import { eliteFragment } from './fragments.js'
 import { getMatchup, chronicle, bumpPeak } from './model.js'
 import { bumpPassion } from './career.js'
 import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance.js'
@@ -564,9 +566,16 @@ export function releasePatch(save) {
       if (!p.isRegular || p.retired || p.banished) continue
       p.mood = clamp(p.mood + clamp(score / 30, -1.5, 1.5), 0, 10)
       bumpPassion(p, contentRefresh)
-      // Your main getting gutted is personal.
-      if (diff.nerfed.some((n) => n.char.id === p.mainCharId)) { p.mood = clamp(p.mood - 1, 0, 10); bumpPassion(p, -4) }
-      if (diff.buffed.some((b) => b.char.id === p.mainCharId)) { p.mood = clamp(p.mood + 0.7, 0, 10); bumpPassion(p, 6) }
+      // Your main getting gutted is personal — personal enough for the diary.
+      const mainName = save.game.characters.find((c) => c.id === p.mainCharId)?.name
+      if (diff.nerfed.some((n) => n.char.id === p.mainCharId)) {
+        p.mood = clamp(p.mood - 1, 0, 10); bumpPassion(p, -4)
+        writeJournal(save, p, 'patchNerf', { char: mainName })
+      }
+      if (diff.buffed.some((b) => b.char.id === p.mainCharId)) {
+        p.mood = clamp(p.mood + 0.7, 0, 10); bumpPassion(p, 6)
+        writeJournal(save, p, 'patchBuff', { char: mainName })
+      }
       if (diff.removed.some((c) => c.id === p.mainCharId)) {
         p.mood = clamp(p.mood - 2, 0, 10)
         bumpPassion(p, -12) // your whole character, gone — some never come back
@@ -598,6 +607,10 @@ export function releasePatch(save) {
   }
   chronicle(save, '🛠', `Patch v${version} released — ${label}${why.length ? ` (${why[0]})` : ''}`)
   postPatchReaction(save, patch)
+  // The world weighs in: a couple of ranked names react in character.
+  for (const elite of (save.evoRoster || []).slice(0, 16).filter(() => rand() < 0.15)) {
+    eliteFragment(save, elite, 'patch')
+  }
   // The community needs about a week of games before the tier list drops.
   save.pendingTierList = {
     version,

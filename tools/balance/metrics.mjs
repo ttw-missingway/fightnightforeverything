@@ -160,9 +160,11 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
     castYearStart: new Set(activeCast(save).map((p) => p.id)),
     journalStart: journalTotal(save),
   })
+  // Metric 7 reads the JOURNAL now (P2) — the first-class feed, not the
+  // 12-slot memory shelf dialogue keeps.
   const journalTotal = (s) => Object.values(s.players)
     .filter((p) => !p.npc && p.createdBy === 'user')
-    .reduce((n, p) => n + (p.memoriesWritten || 0), 0)
+    .reduce((n, p) => n + (p.journalWritten || 0), 0)
 
   let ctx = newYearCtx()
   let year = save.year

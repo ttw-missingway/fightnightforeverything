@@ -11,6 +11,7 @@ import { difficultyOf, statLevel } from './constants.js'
 import { upsetSeverityOf } from './match.js'
 import { bumpPassion, noveltyOf } from './career.js'
 import { chronicle } from './model.js'
+import { writeJournal } from './journal.js'
 import { econLog } from './economy.js'
 import { perceivedTier } from './interest.js'
 
@@ -126,6 +127,8 @@ export function applyStageReps(save, players, stream, context = 'daily', weight 
       if (achieved.won) delta = Math.max(delta, base * viewerFactor * WIN_FLOOR * (100 - belief) / 100)
     }
     ref.belief = clamp(belief + delta, 0, 100)
+    // Crossing into real stage nerve is a career line, written once per climb.
+    if (belief < 50 && ref.belief >= 50) writeJournal(save, ref, 'belief', {})
     noteBeliefSwing(save, ref, delta, viewers)
     // Popularity climbs with eyeballs (fades slowly without them, in endDay).
     // The MANA CEILING (REVISION §1.6): the spirit roll bounds how famous this

@@ -8,6 +8,9 @@ import { getMatchup, remember, chronicle, pushVod, awardMilestone } from './mode
 import { updateFeedFromTournament } from './socialmedia.js'
 import { shiftRel, socialDelta, teamLog, getRel, areRivals } from './social.js'
 import { matchWound, matchEdge, eliminationWound } from './eureka.js'
+import { writeJournal, isJournaled } from './journal.js'
+import { pushToast } from './notify.js'
+import { eliteFragment } from './fragments.js'
 import { bumpPassion } from './career.js'
 import { applyChampionDividend } from './relevance.js'
 import { econLog, trySpend } from './economy.js'
@@ -141,6 +144,23 @@ export function resolveEntrantMatch(save, a, b, { long = true, context = 'tourna
       probSelf: aWins ? probA : 1 - probA, stage: context,
       rivals: bothArcade && areRivals(save, winner.ref, loser.ref),
     })
+    // THE MOMENT the whole game is built around: one of yours takes a set off
+    // a world-ranked player. The first one ever gets a page whatever the
+    // week looked like; the toast tells the room.
+    if (loser.kind === 'elite' && isJournaled(winner.ref)) {
+      const first = !winner.ref.eureka.eliteBeatenAbs
+      winner.ref.eureka.eliteBeatenAbs ??= (save.year - 1) * 336 + save.day
+      writeJournal(save, winner.ref, 'eliteWin', { opp: loser.ref.alias, always: first })
+      if (first) {
+        pushToast(save, { icon: '🌍', text: `${winner.name} just beat ${loser.name}. A name off the world list. It happened here.`, see: { screen: 'players' } })
+      }
+      // A genuine rivalry with one of yours is one of the two keys to an
+      // elite's eventual journal (§0.4). P5 writes the journal; this turns
+      // the lock.
+      const beaten = (loser.ref.beatenBy ??= {})
+      beaten[winner.ref.id] = (beaten[winner.ref.id] || 0) + 1
+      if (beaten[winner.ref.id] >= 2) loser.ref.journalUnlockedAbs ??= (save.year - 1) * 336 + save.day
+    }
   }
 
   const charA = save.game.characters.find((c) => c.id === a.charId)
@@ -550,6 +570,11 @@ export function runSinglesTournament(save, scheduleEntry) {
       } else if (size >= 16 || cadence === 'yearly') {
         chronicle(save, '🏆', `${entrant.name} won ${name} (${size} entrants${finalsViewers ? `, ${finalsViewers} watching the finals` : ''})`)
       }
+      // The journal keeps the wins that mean something; the weekly grind is
+      // what the budget is for.
+      if (p.tournamentWins === 1 || size >= 16 || cadence !== 'weekly') {
+        writeJournal(save, p, 'title', { event: name })
+      }
     }
     else if (place === 2) { p.glory += Math.ceil(baseGlory / 2) + Math.ceil(impact / 2); p.respect += Math.ceil(baseGlory / 3) }
     else if (place <= 4) { p.glory += Math.ceil(baseGlory / 4); p.respect += 2 }
@@ -562,6 +587,7 @@ export function runSinglesTournament(save, scheduleEntry) {
         late: size >= 16 && place <= Math.max(4, size / 4),
         favored: (p.belief ?? 0) >= 60 && place > 4,
       })
+      writeJournal(save, p, 'elimination', { event: name })
     }
   }
   if (champion.charId && save.charMilestones) {
@@ -1065,14 +1091,34 @@ export function runEvo(save) {
         stage: 'evo',
       })
     }
+    // Everyone who touched the EVO stage writes it down, whatever the week
+    // already cost the budget — this is the page a career is judged by.
+    writeJournal(save, p, 'evoRun', { place, always: true })
   }
   if (champion.kind === 'elite') {
     champion.ref.titles = (champion.ref.titles || 0) + 1
+    eliteFragment(save, champion.ref, 'champion', {
+      char: save.game.characters.find((c) => c.id === champion.charId)?.name || 'my character',
+      n: champion.ref.titles,
+    })
   }
+  // The runner-up's fragment — the world's best, in one line of cope or class.
+  const second = placements.find((pl) => pl.place === 2 && pl.entrant.kind === 'elite')
+  if (second) eliteFragment(save, second.entrant.ref, 'beaten')
   const bestArcade = arcadePlacements[0]
   chronicle(save, '🌏', champion.kind === 'arcade'
     ? `${champion.name} WON EVO Year ${save.year}. From this arcade. Nothing will ever top this.`
     : `EVO Year ${save.year}: ${champion.name} took the crown${bestArcade ? `; ${bestArcade.entrant.name} carried the arcade to ${bestArcade.place === 1 ? 'victory' : `top ${bestArcade.place <= 4 ? 4 : bestArcade.place <= 8 ? 8 : 17}`}` : ''}`)
+  // The mythology engine at work (§0): for the first years your players
+  // mostly WATCH the majors. Watching writes a page too — "someday" is where
+  // every one of these careers starts.
+  {
+    const competed = new Set(arcadePlacements.map(({ entrant }) => entrant.ref.id))
+    for (const p of Object.values(save.players)) {
+      if (competed.has(p.id) || !p.isRegular || p.retired || p.banished) continue
+      writeJournal(save, p, 'evoWatch', { champ: champion.name })
+    }
+  }
   if (champion.charId && save.charMilestones) {
     const c = save.game.characters.find((x) => x.id === champion.charId)
     if (c) {

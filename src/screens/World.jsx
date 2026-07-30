@@ -295,6 +295,21 @@ function Dossier({ save, id, back, nav }) {
         ))}
       </div>
 
+      {/* FRAGMENTS (REVISION §0.4): elites keep no journal — you know them
+          through interviews, tweets, and lines of commentary. The asymmetry
+          is the mythology; their actual journal stays locked until P5's
+          retirements (or a genuine rivalry with one of yours) opens it. */}
+      {(save.evoRoster.find((e) => e.id === id)?.fragments || []).length > 0 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>In their own words <span className="dim small">— what the world has heard</span></h3>
+          {save.evoRoster.find((e) => e.id === id).fragments.slice(0, 6).map((f, i) => (
+            <p key={i} className="small" style={{ margin: '4px 0', borderLeft: '2px solid var(--border)', paddingLeft: 8 }}>
+              <span className="dim">[{f.kind}]</span> {f.text}
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="card">
         <div className="row spread">
           <h3 style={{ margin: 0 }}>What you've watched them do</h3>

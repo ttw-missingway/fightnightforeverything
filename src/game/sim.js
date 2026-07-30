@@ -23,7 +23,7 @@ import { updateFeedFromDay, postMoneyMatchAnnouncement, postTierList, postCommun
 import { speak, isFirstMeeting, noteMeeting } from './dialogue.js'
 import { noteMatchOutcome, reconcileTakes, loudestTake, isConviction, takeKind, takeSubjectLabel, findTake, pushTake, disputeKind } from './takes.js'
 import { generateTierList } from './balance.js'
-import { rankedInTop, worldTalkExchange } from './world.js'
+import { rankedInTop, worldTalkExchange, worldRankings } from './world.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
@@ -32,6 +32,9 @@ import {
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
 import { relevanceDaily } from './relevance.js'
 import { processEurekaDaily, edge as eurekaEdge } from './eureka.js'
+import { writeJournal } from './journal.js'
+import { pushToast, pruneToasts } from './notify.js'
+import { fragmentsMonthly } from './fragments.js'
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
@@ -522,6 +525,7 @@ function maybeInnovate(save, player, events) {
   player.respect += 5
   // Created something (§1.2's edge table): invention pressures invention.
   eurekaEdge(save, player, { weight: 1.2, stats: ['innovation'], why: `"${innov.name}" is theirs` })
+  writeJournal(save, player, 'innovation', { tech: innov.name, char: save.game.characters.find((c) => c.id === innov.charId)?.name })
   if (save.innovations.length === 1) {
     chronicle(save, '💡', `${pName(save, player)} discovered the scene's first original tech: "${innov.name}"`)
   }
@@ -1051,6 +1055,8 @@ function runMoneyMatch(save, mm, present, events) {
   bumpPassion(loser, 2) // even losing one this big is a story worth staying for
   remember(save, winner, 'moneymatch', `winning the money match against ${pName(save, loser)}`, { subjectIds: [loser.id] })
   remember(save, loser, 'moneymatch', `losing the money match to ${pName(save, winner)}`, { subjectIds: [winner.id] })
+  writeJournal(save, winner, 'moneyWin', { opp: loser.alias || loser.firstName })
+  writeJournal(save, loser, 'moneyLoss', { opp: winner.alias || winner.firstName })
   // A money match is the whole arcade's memory, not just the two principals'.
   witnessed(save, watchers, 'moneymatch',
     `watching ${pName(save, winner)} beat ${pName(save, loser)} in that money match`,
@@ -1138,6 +1144,7 @@ function runInteraction(save, group, where, events, results = {}) {
       chance(0.02 + mentor.social.community * 0.02)) {
     save.mentorships.push({ mentorId: mentor.id, studentId: student.id, startedDay: save.day, startedYear: save.year })
     mentor.respect += 4
+    writeJournal(save, mentor, 'mentor', { opp: student.alias || student.firstName })
     outcomes.push(`${pName(save, mentor)} started mentoring ${pName(save, student)}!`)
   }
 
@@ -1740,6 +1747,7 @@ export function endDay(save) {
       if (g) {
         events.push({ type: 'guide',
           text: `${pName(save, p)} has written a ${g.charName} guide — the room's first real document on the character.` })
+        pushToast(save, { icon: '📖', text: `${pName(save, p)} wrote the room's ${g.charName} guide.`, see: { screen: 'codex' } })
       }
     } else maybeSettleMain(save, p, events)
     checkFallingOut(save, p, events)
@@ -1957,6 +1965,28 @@ export function advanceDay(save) {
   settleRecurring(save)
   relevanceDaily(save)
   maybeWorldEvent(save)
+  pruneToasts(save)
+  // A monthly line of world texture — an interview quote, a tweet, a guide
+  // sentence — attached to a ranked name. The fragment layer's idle drip.
+  if (dayOfMonthOf(save.day) === 14) fragmentsMonthly(save)
+  // THE MYTHOLOGY BANNERS (REVISION §6): the world's summit changing hands is
+  // a moment whatever screen you're on. Checked on the universal tick so a
+  // coup during EVO week still lands.
+  {
+    const top = worldRankings(save)[0]
+    if (top && top.id !== save.lastWorldNo1) {
+      if (save.lastWorldNo1 != null) {
+        pushToast(save, {
+          icon: '🌍',
+          text: top.yours
+            ? `${top.name} is the best player in the world. Yours. From this arcade.`
+            : `There's a new best player in the world: ${top.name}.`,
+          see: { screen: 'world' },
+        })
+      }
+      save.lastWorldNo1 = top.id
+    }
+  }
   // Daily economic snapshot for the Manage-tab income graph and foot-traffic
   // count: net cash change and how many people came through the door. Recorded
   // here — the single tick EVERY day flows through (normal, tournament, EVO,
@@ -2056,7 +2086,9 @@ export function advanceDay(save) {
       if (ranked.length) {
         const top = ranked.reduce((a, r) => (r.rank < a.rank ? r : a))
         const who = top.name || 'somebody here'
-        if (top.rank <= 64) awardMilestone(save, 'world-64', 3, `${who} is ranked in the world top 64`)
+        if (top.rank <= 64 && awardMilestone(save, 'world-64', 3, `${who} is ranked in the world top 64`)) {
+          pushToast(save, { icon: '🌏', text: `${who} cracked the world top 64. The list has your arcade on it now.`, see: { screen: 'world' } })
+        }
         if (top.rank <= 32) awardMilestone(save, 'world-32', 4, `${who} cracked the world top 32`)
         if (top.rank <= 16) awardMilestone(save, 'world-16', 6, `${who} is one of the sixteen best players alive`)
         if (top.rank <= 8) awardMilestone(save, 'world-8', 8, `${who} made the world top 8`)

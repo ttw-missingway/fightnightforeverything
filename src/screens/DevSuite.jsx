@@ -314,10 +314,10 @@ function Fixtures() {
 // ---------- Journal viewer ----------
 
 /**
- * Any player's full feed, entry quality judged in bulk. Until P2 promotes
- * memories[] into the first-class journal this shows the raw material — the
- * capped shelf plus the lifetime write count — and P2's mechanical-delta
- * margin lands here when entries start carrying deltas.
+ * Any player's full journal, entry quality judged in bulk, with the
+ * mechanical deltas in a margin — the one-announcement rule made visible:
+ * every stat move should have a line here, and every line with a delta IS a
+ * stat move. Threads shown so continuity reads at a glance.
  */
 function JournalViewer() {
   const { save } = useStore()
@@ -325,27 +325,32 @@ function JournalViewer() {
   if (!save) return <p className="dim" style={{ marginTop: 12 }}>No save loaded.</p>
   const people = Object.values(save.players || {})
     .filter((p) => !p.npc)
-    .sort((a, b) => (b.memoriesWritten || 0) - (a.memoriesWritten || 0))
+    .sort((a, b) => (b.journalWritten || 0) - (a.journalWritten || 0))
   const p = save.players[pid] || people[0]
   if (!p) return <p className="dim" style={{ marginTop: 12 }}>Nobody in this save yet.</p>
-  const shelf = [...(p.memories || [])].sort((a, b) => (a.absDay ?? 0) - (b.absDay ?? 0))
+  const feed = p.journal || []
+  const threads = p.threads || []
   return (
     <div style={{ marginTop: 12 }}>
-      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+      <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <select value={p.id} onChange={(e) => setPid(e.target.value)}>
           {people.map((x) => (
-            <option key={x.id} value={x.id}>{displayName(x, save)} · {x.memoriesWritten || 0} written</option>
+            <option key={x.id} value={x.id}>{displayName(x, save)} · {x.journalWritten || 0} entries</option>
           ))}
         </select>
-        <span className="dim small">{fullName(p)} — {p.memoriesWritten || 0} moments written, shelf keeps {shelf.length}</span>
+        <span className="dim small">{fullName(p)} · {p.temperament}/{p.socialTemperament}
+          {' '}· threads: {threads.filter((t) => !t.closedAbs).map((t) => t.kind).join(', ') || 'none open'}</span>
       </div>
       <div className="card" style={{ marginTop: 8 }}>
-        {shelf.length === 0 && <p className="dim">An empty shelf — nothing has happened to this person yet.</p>}
-        {shelf.map((m, i) => (
+        {feed.length === 0 && <p className="dim">Blank pages — nothing has happened to this person yet.</p>}
+        {feed.map((e, i) => (
           <div key={i} className="row" style={{ gap: 10, borderBottom: '1px solid var(--border)', padding: '4px 0', alignItems: 'baseline' }}>
-            <span className="dim small" style={{ minWidth: 150 }}>{formatDay(m.day, m.year)}</span>
-            <span className="small gold" style={{ minWidth: 84 }}>[{m.kind}] w{m.weight ?? '—'}</span>
-            <span className="small">{m.text}</span>
+            <span className="dim small" style={{ minWidth: 148 }}>{formatDay(e.day, e.year)}</span>
+            <span className="small gold" style={{ minWidth: 130 }}>
+              [{e.kind}]{e.thread ? ' 🧵' : ''}
+              {e.deltas?.map((d, j) => <span key={j} className="cyan"> {d.stat}{d.points > 0 ? `+${d.points}` : ''}</span>)}
+            </span>
+            <span className="small" style={{ flex: 1 }}>{e.text}</span>
           </div>
         ))}
       </div>

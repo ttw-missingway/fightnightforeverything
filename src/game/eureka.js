@@ -36,6 +36,9 @@ import {
 } from './constants.js'
 import { chronicle, remember, newEureka } from './model.js'
 import { bumpPassion } from './career.js'
+import { rivalOf } from './social.js'
+import { writeJournal, openThread, threadOf, closeThread, isJournaled } from './journal.js'
+import { pushToast, dismissToastByKey } from './notify.js'
 
 // ---------- Tuning (§1.10's hypothesis, adjusted by measurement) ----------
 // The targets: 2–4 productive pressure/week for a focused player, 8–11
@@ -272,6 +275,10 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
   const name = displayName(player, save)
   const today = abs(save)
 
+  // THE ONE-ANNOUNCEMENT RULE (REVISION §0.4): a stat change speaks in the
+  // journal and nowhere else. The chronicle keeps collective, numberless
+  // moments; toasts point at the journal, they do not repeat it.
+  const topWhy = (e.sources[stat] || []).at(-1)?.why || 'everything lately'
   if (forced) {
     // They resolved it themselves — badly, at a cost. The point lands, but
     // something breaks with it: mood, passion, and sometimes a friendship.
@@ -281,18 +288,38 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
     if (rels.length && rels[0][1] < 20 && rand() < 0.35) {
       player.relationships[rels[0][0]] = clamp(rels[0][1] - 25, -100, 100)
     }
-    if (!player.npc) {
-      chronicle(save, '💥', `${name} finally dealt with what everyone could see coming — the hard way. Something broke on the way through.`)
+    writeJournal(save, player, 'forced', {
+      stat, always: true, deltas: [{ stat, points: 1 }],
+      thread: openThread(save, player, 'crisis')?.id,
+    })
+    if (isJournaled(player)) {
+      pushToast(save, { icon: '💥', text: `${name} went through something. Their journal has the shape of it.`, see: { screen: 'players' }, sticky: true })
     }
   } else {
     player.mood = clamp(player.mood + 2.5, 0, 10)
     bumpPassion(player, 6)
     e.purpleUntilAbs = today + EUREKA.PURPLE_DAYS
+    // Influence has two faces: a PERSON who rubbed off, or a CHARACTER whose
+    // demands were finally met. The entry must know which — "courtesy of
+    // watching Piper" about a fictional grappler is nonsense prose.
+    let entryKind = kind === 'edge' ? 'breakthroughEdge' : kind === 'influence' ? 'breakthroughInfluence' : 'breakthroughWound'
+    let mentorName = null
+    if (kind === 'influence') {
+      const company = [...(e.sources[stat] || [])].reverse()
+        .find((s) => / is simply better at this$/.test(s.why))
+      if (company) mentorName = company.why.replace(/ is simply better at this$/, '')
+      else entryKind = 'breakthroughDemand'
+    }
+    writeJournal(save, player, entryKind, {
+      stat, why: topWhy, opp: mentorName || undefined,
+      char: (e.sources[stat] || []).find((s) => / demands it$/.test(s.why))?.why.replace(/ demands it$/, ''),
+      always: true, deltas: [{ stat, points: 1 }],
+    })
     if (!player.npc) {
-      const how = kind === 'edge' ? 'sharpened the blade' : kind === 'influence' ? 'grew into the company they keep' : 'fixed what kept costing them'
-      chronicle(save, '✨', `${name} broke through — ${stat} clicked. They ${how}.`)
       remember(save, player, 'eureka', `the breakthrough on ${stat}${cross ? ' — becoming someone new' : ''}`)
     }
+    // A breakthrough closes the crisis chapter, if one was open.
+    closeThread(save, player, threadOf(player, 'crisis'))
   }
 
   // Inertia bookkeeping, and the rare identity shift: enough cross-row
@@ -306,7 +333,10 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
       else player.socialTemperament = row.key
       e.crossRowBy = {}
       e.rowShifts = (e.rowShifts || 0) + 1 // §1.11: temperament-change rate
+      writeJournal(save, player, 'shift', { row: row.label, always: true, deltas: [{ stat: 'temperament', points: 0 }] })
       if (!player.npc) {
+        // The room noticing is a collective moment, and numberless — the
+        // chronicle may keep it. The stat mechanics stay in the journal.
         chronicle(save, '🦋', `${name} isn't who they were. The room would tell you: they're ${row.label} now.`)
         remember(save, player, 'eureka', `becoming ${row.label}`)
       }
@@ -320,7 +350,9 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
   e.pressure[stat] = 0
   for (const k of Object.keys(e.pressure)) e.pressure[k] *= EUREKA.CARRY
   delete e.sources[stat]
+  if (e.glowNoted) delete e.glowNoted[stat] // the glow may foreshadow again
   e.pending = null
+  dismissToastByKey(save, `verge_${player.id}`) // the question was answered
   return { stat, kind, cross: !!cross, forced }
 }
 
@@ -347,7 +379,16 @@ export function checkEureka(save, player) {
   const isCast = !player.npc && player.createdBy === 'user'
   if (isCast) {
     e.pending = { sinceAbs: abs(save), candidates }
-    chronicle(save, '✨', `${displayName(player, save)} is on the verge of something — the choice is yours.`)
+    // The prompt is a toast, not a chronicle line: you cannot call a
+    // breakthrough, only answer it — and this is the game telling you one
+    // is waiting. Sticky, because sitting on it has a deadline.
+    pushToast(save, {
+      icon: '✨',
+      text: `${displayName(player, save)} is on the verge of something — the choice is yours.`,
+      see: { screen: 'players' },
+      sticky: true,
+      key: `verge_${player.id}`,
+    })
   } else {
     chooseBreakthrough(save, player, autoPickStat(player, candidates))
   }
@@ -534,10 +575,12 @@ function weeklyPass(save, player, e, today) {
       const spiritWall = player.spiritCeil && now >= player.spiritCeil.skill - 2
       if (spiritWall) {
         adversity(save, player, { weight: 1.2, stats: ['presence', 'community'], why: 'the ceiling is real, and they can feel it', convKey: 'determination' })
-        if (!e.capFeltAbs && !player.npc) {
+        if (!e.capFeltAbs) {
           e.capFeltAbs = today
-          chronicle(save, '🧱', `${displayName(player, save)}: "I don't think I'm getting any better at this."`)
-          remember(save, player, 'eureka', 'realising the climb was over')
+          // §1.6's obligation: the wall arrives as a sentence, never a number
+          // — and it arrives in the JOURNAL, where discoveries live.
+          writeJournal(save, player, 'wall', { always: true })
+          if (!player.npc) remember(save, player, 'eureka', 'realising the climb was over')
         }
       } else if (e.plateauStreak >= 4) {
         // §1.6's steering, at the ceiling that is actually stopping them: a
@@ -561,7 +604,8 @@ function weeklyPass(save, player, e, today) {
   // RUPTURES: a relationship gone properly bad, counted once per pair.
   // Sensitivity is deliberately double-edged here (§1.2): the same event is a
   // politeness wound for the one who did not read the room and a sensitivity
-  // wound for the one the room got to.
+  // wound for the one the room got to. The journal must distinguish those —
+  // they are different entries about different people (§1.2's ruling).
   for (const [otherId, rel] of Object.entries(player.relationships || {})) {
     if (rel > -55) continue
     const key = pairKey(player.id, otherId)
@@ -572,5 +616,95 @@ function weeklyPass(save, player, e, today) {
     const stat = caused ? ((s.politeness ?? 0) <= (s.sportsmanship ?? 0) ? 'politeness' : 'sportsmanship') : 'sensitivity'
     const why = caused ? 'they did not read the room, and it cost a friendship' : 'the falling out got all the way in'
     adversity(save, player, { weight: 3, stats: [stat], why, convKey: 'determination' })
+    const other = save.players[otherId]
+    if (other) {
+      const grudge = openThread(save, player, 'grudge', otherId)
+      writeJournal(save, player, caused ? 'ruptureCaused' : 'ruptureAbsorbed', {
+        opp: other.alias || other.firstName, thread: grudge?.id,
+      })
+    }
+  }
+
+  // FRIENDSHIPS: the warm crossing, once per pair — the counterweight so the
+  // journal is a life, not a casualty list.
+  for (const [otherId, rel] of Object.entries(player.relationships || {})) {
+    if (rel < 55) continue
+    const key = pairKey(player.id, otherId)
+    if ((e.friendSeen ??= []).includes(key)) continue
+    e.friendSeen.push(key)
+    const other = save.players[otherId]
+    if (other) writeJournal(save, player, 'friend', { opp: other.alias || other.firstName })
+  }
+
+  // RIVALRY: a genuine rival earns a thread and a page of their own —
+  // the company channel already makes them productive; this makes them plot.
+  // One page per PERSON, ever (a rekindled rivalry is P4+ material), and the
+  // torch passes: a new rival closes the old thread.
+  {
+    const rival = rivalOf(save, player)
+    if (rival && !threadOf(player, 'rival', rival.id)) {
+      for (const t of player.threads || []) {
+        if (t.kind === 'rival' && !t.closedAbs) closeThread(save, player, t)
+      }
+      const thread = openThread(save, player, 'rival', rival.id)
+      // One page per person ever, and no more than one new-rival page a
+      // season — the churn of who counts as "the rival" is real, but a diary
+      // that re-announces it monthly reads like a form letter.
+      if (!(e.rivalSeen ??= []).includes(rival.id) && today - (e.rivalNotedAbs || 0) > 84) {
+        e.rivalSeen.push(rival.id)
+        e.rivalNotedAbs = today
+        writeJournal(save, player, 'rivalOpen', { opp: rival.alias || rival.firstName, thread: thread?.id })
+      }
+    }
+  }
+
+  // THE SLUMP: opened off recent form, closed off recent form — journal-side
+  // continuity for what the wound channel already taxes.
+  {
+    const form = player.form || []
+    const slump = threadOf(player, 'slump')
+    if (!slump && form.length >= 5 && form.slice(0, 5).every((r) => r === 'l')) {
+      const thread = openThread(save, player, 'slump')
+      writeJournal(save, player, 'slumpOpen', { thread: thread?.id })
+    } else if (slump && form.length >= 3 && form.slice(0, 3).every((r) => r === 'w')) {
+      closeThread(save, player, slump)
+      writeJournal(save, player, 'slumpClose', { thread: slump.id })
+    }
+  }
+
+  // GLOW FORESHADOW: the first time a stat crosses into the glow band since
+  // its last reset, the journal says so — weeks before the payoff. This is
+  // the two-hands-ahead read, in fiction.
+  {
+    e.glowNoted ??= {}
+    for (const g of glowingStats(player).slice(0, 2)) {
+      if (e.glowNoted[g.stat]) continue
+      e.glowNoted[g.stat] = true
+      writeJournal(save, player, 'glow', { stat: g.stat })
+    }
+  }
+
+  // PASSION CROSSINGS: the early warning arrives as an entry you could skim
+  // past; the late one is a toast, because by then it is nearly too late.
+  {
+    const p = player.passion ?? 80
+    e.passionStage ??= 'ok'
+    if (e.passionStage === 'ok' && p < 36) {
+      e.passionStage = 'low'
+      writeJournal(save, player, 'passionLow', { always: true })
+    } else if (e.passionStage === 'low' && p < 21) {
+      e.passionStage = 'out'
+      writeJournal(save, player, 'passionOut', { always: true, thread: openThread(save, player, 'crisis')?.id })
+      if (isJournaled(player)) {
+        pushToast(save, {
+          icon: '🔥',
+          text: `${displayName(player, save)} is burning out. Their journal has been saying so for a while.`,
+          see: { screen: 'players' },
+          sticky: true,
+        })
+      }
+    } else if (p > 50 && e.passionStage !== 'ok') {
+      e.passionStage = 'ok' // recovered — re-arm the warnings for next time
+    }
   }
 }

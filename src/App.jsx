@@ -22,6 +22,7 @@ import World from './screens/World.jsx'
 import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
 import { TAB_GATES, tabOpen, tabHint } from './game/tabs.js'
 import { setFacePalette } from './components/art.js'
+import { bannerToasts, liveToasts, dismissToast } from './game/notify.js'
 
 export default function App() {
   const { save, screen, nav, closeSave, mutate } = useStore()
@@ -146,6 +147,9 @@ export default function App() {
       {/* Above the tab content for the same reason the danger rows are: it has
           to be seen from wherever the owner happened to be standing. */}
       <UnlockBanner />
+      {/* The nearly-too-late class persists HERE, on the arcade screen, until
+          waved off (REVISION §0.4). Everywhere else it rides the overlay. */}
+      {screen.name === 'arcade' && <ToastBanner />}
 
       {screen.name === 'arcade' && <Arcade />}
       {screen.name === 'players' && <Players />}
@@ -161,8 +165,56 @@ export default function App() {
       {screen.name === 'studio' && isUnlocked(save, 'studio') && <GameStudio />}
       {screen.name === 'manage' && <Manage />}
 
+      <ToastOverlay onArcade={screen.name === 'arcade'} />
       <ForeclosureModal />
       <GameOverModal />
+    </div>
+  )
+}
+
+/**
+ * The notification layer's arcade face: sticky toasts as persistent banner
+ * rows until dismissed. "See it" goes to the actual thing and is omitted when
+ * there is nothing to show. All dismissible, always (REVISION §6).
+ */
+function ToastBanner() {
+  const { save, nav, mutate } = useStore()
+  const rows = bannerToasts(save)
+  if (!rows.length) return null
+  const wave = (id) => mutate((s) => dismissToast(s, id), { ack: true })
+  return (
+    <div className="dangers">
+      {rows.map((t) => (
+        <div key={t.id} className="danger unlock">
+          <span className="d-icon">{t.icon}</span>
+          <div><div className="d-title">{t.text}</div></div>
+          {t.see && <button className="d-go" onClick={() => { wave(t.id); nav(t.see.screen, t.see.params || {}) }}>See it →</button>}
+          <button className="d-go" onClick={() => wave(t.id)}>✕</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Toasts on ANY screen — the ambient stack. On the arcade the sticky class
+ * already owns the banner, so the overlay only carries the rest there.
+ */
+function ToastOverlay({ onArcade }) {
+  const { save, nav, mutate } = useStore()
+  const rows = liveToasts(save).filter((t) => !(onArcade && t.sticky)).slice(0, 4)
+  if (!rows.length) return null
+  const wave = (id) => mutate((s) => dismissToast(s, id), { ack: true })
+  return (
+    <div style={{ position: 'fixed', right: 14, bottom: 14, zIndex: 60, display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 380 }}>
+      {rows.map((t) => (
+        <div key={t.id} className="card" style={{ margin: 0, padding: '8px 10px', display: 'flex', gap: 8, alignItems: 'center', borderColor: t.sticky ? 'var(--gold)' : 'var(--border)' }}>
+          <span>{t.icon}</span>
+          <span className="small" style={{ flex: 1 }}>{t.text}</span>
+          {t.see && <button className="small" onClick={() => { wave(t.id); nav(t.see.screen, t.see.params || {}) }}>See it →</button>}
+          <button className="small" onClick={() => wave(t.id)} title="dismiss">✕</button>
+        </div>
+      ))}
     </div>
   )
 }

@@ -15,7 +15,7 @@
 // invisible to every bundler and static check, so a file move broke the
 // harness silently — and Vite can now load this module for the dev suite's
 // fast-forward, which a computed import path would forbid.
-import { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild } from '../../src/game/model.js'
+import { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild, ensureSpirit } from '../../src/game/model.js'
 import { generateCharacter, populateRoster, generateEvoRoster, randomIdentity, randomPreferences } from '../../src/game/generate.js'
 import {
   TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS, AD_CHANNELS,
@@ -142,6 +142,10 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
       if (left === before) break // everything is maxed
     }
     legalizeBuild(p, budget)
+    // The third choose-one. Without this the whole cast ran spirit-less —
+    // no caps, no radiance, breadth stuck at the default — and P1's
+    // cap-realisation zeros were partly THIS harness bug, not the design.
+    ensureSpirit(p)
     save.players[p.id] = p
     noteDecision(save, 'create-player') // coarse: one decision per person made
   }

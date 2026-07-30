@@ -972,3 +972,63 @@ the cast) and the competent player's egalitarian camera (streams 'best' now —
 eureka reads and the local separation views. The dev-suite inspector shows
 per-stat pressure with named evidence; determinism invariants hold with the
 full spine (400d).
+
+---
+
+## 16. P2 — the journal, built and measured (2026-07-30)
+
+REVISION §0.4 and §5-P2, implemented: `journal.js` (the first-person feed,
+temperament-driven voice, open threads, a 3-entries-per-week budget),
+`notify.js` (toasts on any screen, all dismissible, sticky ones persisting as
+the arcade banner, "See it" navigation), elite fragments by persona
+(`fragments.js`) with the journal-unlock hook armed for P5, and the journal
+surfaces: the profile feed, the dev-suite viewer with the mechanical-delta
+margin, and `journal.mjs` as the content tool.
+
+**The one-announcement rule is enforced by construction**: post-creation
+stat changes happen in exactly one function (`chooseBreakthrough`), and that
+function writes the journal entry carrying the delta. The chronicle keeps
+collective, numberless moments; toasts point at the journal, never repeat it.
+Breakthrough prompts are TOASTS keyed to the condition (`verge_<playerId>`)
+and are dismissed by the code that resolves the choice — a prompt cannot
+outlive its question (this fixed a real bug: answered breakthroughs left
+"the choice is yours" banners standing).
+
+### Metric 7 — in the band
+
+Entries per cast player per year, n=24 × 10y: **13.2 / 15.3 / 17.3 / 20.4 /
+21.8 / 20.0** (y1 is the mid-June opening's partial year). Target 15–30 ✓.
+The exit test — a year reads as a story — holds across voices: the same
+world writes a killer/warm career and a stoic/put-together career that do
+not sound remotely alike, and threads (rival, slump, grudge, crisis) give
+the arcs names. Voice variants were doubled where repetition showed
+(rivalOpen, team, innovation) and rival pages throttled to one per person
+ever, one per season.
+
+### Two instrument corrections (both matter beyond P2)
+
+- **The harness cast had no spirits.** `makeRun` never called
+  `ensureSpirit`, so every §15 number involving cast spirit caps/radiance
+  ran spirit-less. Fixed; corrected reads: **cap realisation community 0.69,
+  popularity 0.44, skill still 0.00** — the love and mana ceilings are real
+  and reachable, the skill wall genuinely sits above a 4–5-year career
+  (§15's conclusion stands, now on clean data). Attractor match 0.30 ≈
+  chance — §1.6's steering still cannot be validated until careers extend
+  (P4–P5).
+- **Latency truncated to the shortest-lived seed**, which erased the patch
+  lever's window whenever one arm died before the day-400 pull. Now averages
+  over surviving pairs (valid while ≥ half live): **stream 5d (+301
+  followers), patch 0d (+61 relevance — bigger than the baseline's +45,
+  because with exhibitions cut the patch is the only pump left), money no
+  measurable effect** (its real job arrives in P3).
+
+### Standing facts
+
+Metric 3 unchanged by P2 (9.6/career, front-loaded); wound:edge 2.47; metric
+6 flat at ~6.0–6.2 decisions/week with eureka answers counted; survival
+median 1442d, all runs dead by y6 — the widening-across-TEN-years claim
+remains a survival problem and remains P3–P5's job. Fragments generate (17
+of 80 elites carried one after two years; EVO, patch and monthly-drip
+sources), and the dialogue corpus was deliberately NOT mined for journal
+prose — single-voice entries sidestep the coherence problem, so they were
+written native.

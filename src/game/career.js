@@ -9,6 +9,8 @@
 import { clamp, chance, displayName } from './util.js'
 import { statLevel } from './constants.js'
 import { chronicle, remember } from './model.js'
+import { writeJournal, isJournaled } from './journal.js'
+import { pushToast } from './notify.js'
 
 export const PASSION_MAX = 100
 
@@ -102,6 +104,18 @@ export function checkRetirement(save, player, events) {
     if (!team.history) team.history = []
     team.history.push({ day: save.day, year: save.year, text: `${name} retired from the game` })
     player.teamId = null
+  }
+
+  // The final entry — written before the book closes, whatever else the week
+  // held. The toast is for the owner; the entry is for the player.
+  writeJournal(save, player, 'retire', { days: player.daysAttended, wins: player.wins, always: true })
+  if (isJournaled(player)) {
+    pushToast(save, {
+      icon: '🏁',
+      text: `${name} retired. Their journal's last page is written.`,
+      see: { screen: 'players' },
+      sticky: true,
+    })
   }
 
   const glorious = (player.glory || 0) >= 40

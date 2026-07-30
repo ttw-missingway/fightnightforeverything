@@ -1,9 +1,8 @@
 // Journal dump — a CONTENT tool, not a balance tool (docs/REVISION.md §2.4).
-// The journal is the front of the game from P2 on; prose quality decides
-// whether the eureka system sings or embarrasses. This dumps one player's
-// career as their memory feed reads today, so entry quality can be judged
-// without playing. Until P2 promotes memories[] into the first-class journal,
-// what this shows is the raw material.
+// The journal is the front of the game now; prose quality decides whether
+// the eureka system sings or embarrasses. This dumps one player's career as
+// their journal reads, threads and all, so entry quality can be judged
+// without playing. THE P2 EXIT TEST: a year of this must read as a story.
 //
 //   node tools/balance/journal.mjs [playerIdx] [years] [seed] [difficulty]
 
@@ -26,14 +25,25 @@ if (!p) {
   process.exit(1)
 }
 
-console.log(`${fullName(p)} — ${p.temperament || '?'} / ${p.socialTemperament || '?'}`)
+const yearsPlayed = new Set((p.journal || []).map((e) => e.year)).size || 1
+console.log(`${fullName(p)} — ${p.temperament || '?'} / ${p.socialTemperament || '?'} / ${p.spirit || '?'}`)
 console.log(`elo ${Math.round(p.elo)} · ${p.wins}W/${p.losses}L · ${p.tournamentWins} brackets · passion ${Math.round(p.passion)}`
   + (p.retired ? ` · RETIRED ${formatDay(p.retiredDay, p.retiredYear)}` : ''))
-console.log(`${p.memoriesWritten || 0} moments written over the career; the shelf keeps ${p.memories.length}:\n`)
+console.log(`${p.journalWritten || 0} entries (${((p.journalWritten || 0) / yearsPlayed).toFixed(1)}/yr — metric 7 band is 15–30)`)
 
-const sorted = [...(p.memories || [])].sort((a, b) => (a.absDay ?? 0) - (b.absDay ?? 0))
-for (const m of sorted) {
-  console.log(`  ${formatDay(m.day, m.year).padEnd(22)} [${m.kind}] ${m.text}`)
+const threadName = Object.fromEntries((p.threads || []).map((t) => [t.id, t.kind]))
+let lastYear = null
+for (const e of p.journal || []) {
+  if (e.year !== lastYear) {
+    lastYear = e.year
+    console.log(`\n───── Year ${e.year} ─────`)
+  }
+  const margin = [
+    e.deltas?.map((d) => `${d.stat}${d.points > 0 ? '+' + d.points : ''}`).join(' '),
+    e.thread ? `🧵${threadName[e.thread] || 'thread'}` : null,
+  ].filter(Boolean).join(' · ')
+  console.log(`${formatDay(e.day, e.year).padEnd(22)}${e.text}${margin ? `\n${' '.repeat(22)}⌊ ${margin}` : ''}`)
 }
-if (!sorted.length) console.log('  (an empty shelf — nothing has happened to this person)')
-console.log(`\ncast index runs 0–${cast.length - 1}; pass a different idx to read another career.`)
+const open = (p.threads || []).filter((t) => !t.closedAbs)
+console.log(`\nopen threads: ${open.map((t) => t.kind + (t.subjectId ? `(${save.players[t.subjectId]?.alias || '?'})` : '')).join(', ') || 'none'}`)
+console.log(`cast index runs 0–${cast.length - 1}; pass a different idx to read another career.`)

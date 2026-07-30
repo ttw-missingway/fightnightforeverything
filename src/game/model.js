@@ -168,7 +168,13 @@ export function newPlayer(partial = {}) {
     knownInnovations: [], // innovation ids (sim-created techniques)
     relationships: {}, // otherPlayerId -> -100..100
     h2h: {}, // otherPlayerId -> {w, l} lifetime head-to-head record
-    memories: [], // {day, year, kind, text} — defining moments, capped
+    memories: [], // {day, year, kind, text} — defining moments, capped (dialogue's shelf)
+    // The first-person feed (journal.js). THE journal rule: a stat change is
+    // announced here and nowhere else. Cast only — filler and elites keep
+    // none; elites get fragments instead.
+    journal: [], // {absDay, day, year, kind, text, deltas, thread}
+    journalWritten: 0, // lifetime entries — metric 7 reads the rate off this
+    threads: [], // open storylines: {id, kind, subjectId, openedAbs, closedAbs}
     met: {}, // otherId -> {firstDay, count} — who they've actually spoken to
     takes: [], // {topic, subject, stance, strength, formedAbs} — see takes.js
     said: [], // recent line ids, so they don't repeat themselves
@@ -686,6 +692,8 @@ export function newSave(partial = {}) {
     freeInstalls: {}, // attraction pack key -> one installation on the house, this run
     archives: [], // past runs preserved by reset: {run, endedDateLabel, chronicle, hallOfFame, vods, innovations}
     socialFeed: [], // fake posts about the scene — newest first, capped
+    toasts: [], // the notification layer — see notify.js; dismissible everywhere
+    lastWorldNo1: null, // elite/player id last seen at world #1 — change fires a toast
     dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
     moneyMatches: [], // {id, aId, bId, dayOfYear, year, status, winnerId}
     players: {}, // id -> player
@@ -940,11 +948,17 @@ export function migrateSave(save) {
   if (!save.rng || typeof save.rng.state !== 'number') save.rng = newRngState()
   bindRng(save) // backfills below may draw (spirit rolls) — draw from the save's own stream
   save.attention ??= newAttention()
+  save.toasts ??= []
+  save.lastWorldNo1 ??= null
   for (const p of Object.values(save.players || {})) {
     p.memoriesWritten ??= (p.memories || []).length
     // The spirit layer and eureka spine (P1). Pre-P1 revision saves get their
     // shapes rolled now, from their own stream.
     ensureSpirit(p)
+    // The journal (P2).
+    p.journal ??= []
+    p.journalWritten ??= 0
+    p.threads ??= []
   }
   trimVods(save) // replay data can outgrow localStorage in any era
   return save

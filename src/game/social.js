@@ -1,5 +1,7 @@
 import { clamp, hash01, chance, choice, rand } from './util.js'
 import { newTeam, remember, chronicle, getMatchup } from './model.js'
+import { writeJournal } from './journal.js'
+import { pushToast } from './notify.js'
 import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
@@ -142,6 +144,9 @@ export function tryFoundTeam(save, founder, cofounder, day, year, events) {
   teamLog(save, team, `Founded by ${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName}`)
   remember(save, founder, 'team', `founding ${name}`, { subjectIds: [cofounder.id] })
   remember(save, cofounder, 'team', `founding ${name}`, { subjectIds: [founder.id] })
+  writeJournal(save, founder, 'team', { team: name })
+  writeJournal(save, cofounder, 'team', { team: name })
+  pushToast(save, { icon: '🛡', text: `A new team: ${name} [${acronym}].`, see: { screen: 'teams' } })
   events.push({
     type: 'team',
     text: `${founder.alias || founder.firstName} and ${cofounder.alias || cofounder.firstName} founded a new team: ${name} [${acronym}]!`,
@@ -156,6 +161,7 @@ export function tryJoinTeam(save, team, player, inviter, events) {
   player.teamId = team.id
   team.lastGrowth = (save.year - 1) * DAYS_PER_YEAR + save.day
   teamLog(save, team, `${player.alias || player.firstName} joined, recruited by ${inviter.alias || inviter.firstName}`)
+  writeJournal(save, player, 'team', { team: team.name })
   events.push({
     type: 'team',
     text: `${inviter.alias || inviter.firstName} brought ${player.alias || player.firstName} into ${team.name} [${team.acronym}].`,
@@ -178,6 +184,7 @@ export function checkFallingOut(save, player, events) {
     team.memberIds = team.memberIds.filter((id) => id !== player.id)
     player.teamId = null
     player.mood = clamp(player.mood - 1.5, 0, 10)
+    writeJournal(save, player, 'teamLeft', { team: team.name })
     teamLog(save, team, `${player.alias || player.firstName} left after a falling out`)
     events.push({
       type: 'team',
