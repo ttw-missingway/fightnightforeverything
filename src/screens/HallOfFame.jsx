@@ -60,7 +60,7 @@ export default function HallOfFame() {
                 {[...a.hallOfFame].reverse().map((r) => (
                   <div className="row spread" key={r.id} style={{ padding: '2px 0' }}>
                     <span className="small">
-                      {r.type === 'evo' ? '🌏' : r.type === 'teams' ? '🛡' : '🏆'} {r.name}
+                      {r.type === 'evo' ? '🌏' : r.type === 'circuit' ? '🌐' : r.type === 'teams' ? '🛡' : '🏆'} {r.name}
                     </span>
                     <span className="small gold">{r.champion}</span>
                   </div>
@@ -123,7 +123,7 @@ export default function HallOfFame() {
         <div className="card" key={r.id} style={r.type === 'evo' ? { borderColor: 'var(--gold)' } : {}}>
           <div className="row spread">
             <h3 style={{ margin: 0 }}>
-              {r.type === 'evo' ? '🌏' : r.type === 'teams' ? '🛡' : '🏆'} {r.name}
+              {r.type === 'evo' ? '🌏' : r.type === 'circuit' ? '🌐' : r.type === 'teams' ? '🛡' : '🏆'} {r.name}
             </h3>
             <span className="dim small">{r.dateLabel} · {r.entrantCount} entrants</span>
           </div>

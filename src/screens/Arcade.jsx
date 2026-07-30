@@ -3,6 +3,7 @@ import { useStore } from '../state/store.jsx'
 import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf,
   IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf, helperOn, seasonOf } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
+import { upcomingCircuit, circuitEventName } from '../game/circuit.js'
 import { moodLabel } from '../game/social.js'
 import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
 import VenueStrip, { DayLedger } from '../components/VenueStrip.jsx'
@@ -64,6 +65,7 @@ export default function Arcade() {
     buttonLabel = '⏭ Skip the broadcast'
   } else if (!dip) {
     buttonLabel = today === 'evo' ? '▶ EVO is TODAY!'
+      : today?.circuit ? `▶ ${circuitEventName(save, today.circuit, save.year)} is today`
       : today ? `▶ Run "${today.name}"`
       : '▶ Open the arcade'
   } else if (save.hour < HOURS_PER_DAY) {
@@ -146,6 +148,15 @@ export default function Arcade() {
               </div>
             )}
             <span className="dim small">{daysToEvo === 0 ? 'EVO today!' : `${daysToEvo} days until EVO`}</span>
+            {(() => {
+              // The world's calendar, always in view: the next circuit date is
+              // a thing you can see coming — and budget for (REVISION §0).
+              const next = upcomingCircuit(save, 1)[0]
+              if (!next || daysToEvo === 0) return null
+              const away = next.startAbs - ((save.year - 1) * DAYS_PER_YEAR + save.day)
+              if (away > daysToEvo && daysToEvo > 0) return null // EVO is the nearer date
+              return <span className="dim small">{circuitEventName(save, next.def, next.year)} in {away} day{away === 1 ? '' : 's'}</span>
+            })()}
           </div>
         </div>
       </div>

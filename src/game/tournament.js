@@ -37,7 +37,7 @@ export function arcadeEntrant(save, player) {
   }
 }
 
-function eliteEntrant(elite) {
+export function eliteEntrant(elite) {
   // The flag rides along in the NAME because a match record only ever carries
   // strings — narration, pool tables and brackets all read `aName`, so this is
   // the one place that can put a nationality on every screen at once.
@@ -85,6 +85,21 @@ function entrantPerformance(save, e, context = 'tournament') {
   return e.ref.skill * 0.75 + (e.ref.elo - 1200) / 40 + rand() * 6
 }
 
+/**
+ * Stamp each elite entrant with whether the world list carried them WHEN THE
+ * FIELD WAS DRAWN. A hungry outsider can win enough sets inside one bracket
+ * to cross the rank-64 cutoff mid-event — and then beating them in the finals
+ * would read as "a name off the world list" on a technicality. The moment
+ * (and metric 2) key off this stamp, not off a mid-bracket re-derivation.
+ */
+export function stampRanked(save, entrants) {
+  const ranked = new Map(rankedWorld(save).map((r) => [r.id, r.rank]))
+  for (const e of entrants) {
+    if (e && e.kind === 'elite') e.rankedAtStart = ranked.get(e.id) ?? null
+  }
+  return entrants
+}
+
 function entrantCharName(save, e) {
   const c = save.game.characters.find((x) => x.id === e.charId)
   return c ? c.name : 'Random Select'
@@ -99,9 +114,11 @@ function entrantPersonality(e) {
   return e.kind === 'arcade' ? personalityOf(e.ref) : elitePersonality(e.ref)
 }
 
-export function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' } = {}) {
-  const perfA = entrantPerformance(save, a, context)
-  const perfB = entrantPerformance(save, b, context)
+export function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament', handicapA = 0, handicapB = 0 } = {}) {
+  // The handicap is the survivor format's fatigue (circuit.js): a player who
+  // stays on the machine gets heavier every set, so a streak self-limits.
+  const perfA = entrantPerformance(save, a, context) - handicapA
+  const perfB = entrantPerformance(save, b, context) - handicapB
   // Matchup chart only really bites at high-level play.
   const weight = matchupWeight(entrantSkill(a), entrantSkill(b))
   const matchupShift = a.charId && b.charId
@@ -129,6 +146,12 @@ export function resolveEntrantMatch(save, a, b, { long = true, context = 'tourna
   if (bothArcade) {
     shiftRel(loser.ref, winner.ref, socialDelta(loser.ref, winner.ref, { justLostTo: true }))
     recordH2H(winner.ref, loser.ref)
+  } else {
+    // A set against the outside world is a set the world SAW — the road
+    // record that worldRankings gates list membership on (P4). Win or lose:
+    // being seen is being seen.
+    if (winner.kind === 'arcade') winner.ref.roadGames = (winner.ref.roadGames || 0) + 1
+    if (loser.kind === 'arcade') loser.ref.roadGames = (loser.ref.roadGames || 0) + 1
   }
   save.patchGames = (save.patchGames || 0) + 1 // tournament sets are balance data too
 
@@ -136,6 +159,7 @@ export function resolveEntrantMatch(save, a, b, { long = true, context = 'tourna
   // edge attribution as a casual set, weighted by the stage. Losing to an
   // ELITE lands here too: that is the loss-to-someone-above-you the whole
   // spine feeds on.
+  let listScalp = null // the beaten name's world rank when the field was drawn
   if (loser.kind === 'arcade' && loser.ref.eureka) {
     matchWound(save, loser.ref, winner.ref, { probSelf: aWins ? 1 - probA : probA, stage: context })
   }
@@ -145,18 +169,23 @@ export function resolveEntrantMatch(save, a, b, { long = true, context = 'tourna
       rivals: bothArcade && areRivals(save, winner.ref, loser.ref),
     })
     // THE MOMENT the whole game is built around: one of yours takes a set off
-    // a world-ranked player. The first one ever gets a page whatever the
-    // week looked like; the toast tells the room.
+    // a world-RANKED player — the list has 64 places, and the moment is a
+    // name coming off it. The elite_ tail below the cut (the hungry
+    // contenders a pot pulls through your door) doesn't trigger it: beating
+    // one of them is a good night, not the page a career is built around.
     if (loser.kind === 'elite' && isJournaled(winner.ref)) {
-      const first = !winner.ref.eureka.eliteBeatenAbs
-      winner.ref.eureka.eliteBeatenAbs ??= (save.year - 1) * 336 + save.day
-      writeJournal(save, winner.ref, 'eliteWin', { opp: loser.ref.alias, always: first })
-      if (first) {
-        pushToast(save, { icon: '🌍', text: `${winner.name} just beat ${loser.name}. A name off the world list. It happened here.`, see: { screen: 'players' } })
+      if (loser.rankedAtStart != null) {
+        listScalp = loser.rankedAtStart
+        const first = !winner.ref.eureka.eliteBeatenAbs
+        winner.ref.eureka.eliteBeatenAbs ??= (save.year - 1) * 336 + save.day
+        writeJournal(save, winner.ref, 'eliteWin', { opp: loser.ref.alias, always: first })
+        if (first) {
+          pushToast(save, { icon: '🌍', text: `${winner.name} just beat ${loser.name}. A name off the world list. It happened here.`, see: { screen: 'players' } })
+        }
       }
       // A genuine rivalry with one of yours is one of the two keys to an
       // elite's eventual journal (§0.4). P5 writes the journal; this turns
-      // the lock.
+      // the lock — ranked or not, a rivalry is a rivalry.
       const beaten = (loser.ref.beatenBy ??= {})
       beaten[winner.ref.id] = (beaten[winner.ref.id] || 0) + 1
       if (beaten[winner.ref.id] >= 2) loser.ref.journalUnlockedAbs ??= (save.year - 1) * 336 + save.day
@@ -227,6 +256,7 @@ export function resolveEntrantMatch(save, a, b, { long = true, context = 'tourna
     narrationHud: nar.hud, ftTarget: nar.target, narrationSeed: nar.seed,
     stream,
     postMatch,
+    ...(listScalp != null ? { listScalp } : {}), // the fallen name's rank-at-draw — metric 2 reads this stamp
     bye: false,
   }
 }
@@ -256,7 +286,7 @@ function seedBracket(entrants) {
  * stopWhenNoArcade: rounds after every arcade player is out are simulated
  * silently (so the wider world stays consistent) but flagged as off-screen.
  */
-function runBracket(save, entrants, { stopWhenNoArcade = false, context = 'tournament' } = {}) {
+export function runBracket(save, entrants, { stopWhenNoArcade = false, context = 'tournament', long = true } = {}) {
   let current = seedBracket(entrants)
   const rounds = []
   const exitRound = new Map()
@@ -283,7 +313,7 @@ function runBracket(save, entrants, { stopWhenNoArcade = false, context = 'tourn
         continue
       }
       if (!a && !b) { next.push(null); continue }
-      const m = resolveEntrantMatch(save, a, b, { context })
+      const m = resolveEntrantMatch(save, a, b, { context, long })
       const winner = m.winnerId === a.id ? a : b
       const loser = m.winnerId === a.id ? b : a
       exitRound.set(loser.id, { entrant: loser, round: roundIdx, remaining: current.filter(Boolean).length })
@@ -307,7 +337,7 @@ function runBracket(save, entrants, { stopWhenNoArcade = false, context = 'tourn
   return { rounds, placements, champion, abruptEndRound }
 }
 
-const roundName = (idx, total) => {
+export const roundName = (idx, total) => {
   const remaining = Math.pow(2, total - idx)
   if (remaining === 2) return 'Grand Finals'
   if (remaining === 4) return 'Semifinals'
@@ -318,13 +348,13 @@ const roundName = (idx, total) => {
 // ---------- Round robin ----------
 // Everyone plays everyone (circle method); standings by wins, tiebreak elo.
 // Returns pre-titled rounds so the record builder can use them as-is.
-function roundRobinBracket(save, entrants, { context = 'tournament' } = {}) {
+function roundRobinBracket(save, entrants, { context = 'tournament', long = true } = {}) {
   const arr = [...entrants]
   if (arr.length % 2 === 1) arr.push(null) // a rotating bye
   const n = arr.length
   const half = n / 2
-  const wins = new Map(entrants.map((e) => [e.id, 0]))
   const rounds = []
+  const all = []
   const order = [...arr]
   for (let r = 0; r < n - 1; r++) {
     const matches = []
@@ -332,10 +362,9 @@ function roundRobinBracket(save, entrants, { context = 'tournament' } = {}) {
       const a = order[i]
       const b = order[n - 1 - i]
       if (!a || !b) continue // the bye sits out
-      const m = resolveEntrantMatch(save, a, b, { context })
-      const winner = m.winnerId === a.id ? a : b
-      wins.set(winner.id, wins.get(winner.id) + 1)
+      const m = resolveEntrantMatch(save, a, b, { context, long })
       matches.push(m)
+      all.push(m)
     }
     rounds.push({ title: `Round ${r + 1}`, matches })
     // rotate everyone but the first
@@ -344,9 +373,13 @@ function roundRobinBracket(save, entrants, { context = 'tournament' } = {}) {
     rest.unshift(rest.pop())
     order.splice(0, order.length, fixed, ...rest)
   }
-  const ranked = [...entrants].sort((a, b) => (wins.get(b.id) - wins.get(a.id)) || ((b.ref.elo || 0) - (a.ref.elo || 0)))
-  const placements = ranked.map((e, i) => ({ entrant: e, place: i + 1 }))
-  return { rounds, placements, champion: ranked[0] }
+  // A round robin IS a group stage, so it gets the group table — the same
+  // standings EVO pools are drawn in (points, then game differential, then
+  // games won, then health left), because "everyone plays everyone" earns
+  // exactly the argument that table settles.
+  const standings = poolStandings(entrants, all)
+  const placements = standings.map((row, i) => ({ entrant: row.entrant, place: i + 1 }))
+  return { rounds, placements, champion: standings[0].entrant, standings }
 }
 
 // ---------- Double elimination ----------
@@ -354,7 +387,7 @@ function roundRobinBracket(save, entrants, { context = 'tournament' } = {}) {
 // LB champ in the grand finals (with a bracket reset if the LB player takes the
 // first set). Requires a power-of-two field (fillBracket delivers exactly the
 // scheduled size; the runner trims to the nearest power of two just in case).
-function doubleElimBracket(save, entrants, { context = 'tournament' } = {}) {
+export function doubleElimBracket(save, entrants, { context = 'tournament', long = true } = {}) {
   let pow = 1
   while (pow * 2 <= entrants.length) pow *= 2
   const seeded = seedBracket(entrants.slice(0, pow)).filter(Boolean)
@@ -367,7 +400,7 @@ function doubleElimBracket(save, entrants, { context = 'tournament' } = {}) {
   const playRound = (pairs, bracket, title) => {
     const matches = []; const winners = []; const losers = []
     for (const [a, b] of pairs) {
-      const m = resolveEntrantMatch(save, a, b, { context })
+      const m = resolveEntrantMatch(save, a, b, { context, long })
       const w = m.winnerId === a.id ? a : b
       matches.push(m); winners.push(w); losers.push(w === a ? b : a)
     }
@@ -427,10 +460,10 @@ function doubleElimBracket(save, entrants, { context = 'tournament' } = {}) {
 }
 
 // Pick the bracket runner for a scheduled format.
-function runFormat(save, entrants, format) {
-  if (format === 'roundrobin') return roundRobinBracket(save, entrants, {})
-  if (format === 'doubleelim') return doubleElimBracket(save, entrants, {})
-  return runBracket(save, entrants)
+function runFormat(save, entrants, format, opts = {}) {
+  if (format === 'roundrobin') return roundRobinBracket(save, entrants, opts)
+  if (format === 'doubleelim') return doubleElimBracket(save, entrants, opts)
+  return runBracket(save, entrants, opts)
 }
 
 // ---------- Invitations ----------
@@ -572,10 +605,26 @@ export function runSinglesTournament(save, scheduleEntry) {
   if ((save.relevance ?? 55) >= 40 && save.evoRoster?.length) {
     const outsiders = potPerHead >= 45 ? 3 : potPerHead >= 20 ? 2 : potPerHead >= 8 ? 1 : 0
     if (outsiders > 0) {
+      // WHO comes for a pot: the hungry UNRANKED tail — the people fighting
+      // to get ON the world list, for whom your $200 Saturday is real money.
+      // A ranked name doesn't drive across three states for it… unless the
+      // pot is genuinely worth the flight, and even then only sometimes.
+      // (This is also what guards metric 2: beating a pot outsider at your
+      // own Weekly is a good night, not "a name off the world list".)
+      // The DEEP tail, deliberately: the strongest unranked name is a week's
+      // elo drift from rank 60, and then your Weekly is handing out list
+      // scalps at the boundary. The bottom ten are structurally far from it.
+      const rankedIds = new Set(rankedWorld(save).map((r) => r.id))
       const pool = save.evoRoster
-        .filter((e) => e.skill <= 72 && e.mainCharId)
+        .filter((e) => e.mainCharId && !rankedIds.has(e.id))
         .sort((a, b) => a.skill - b.skill)
-        .slice(0, 20)
+        .slice(0, 10)
+      if (potPerHead >= 45 && rand() < 0.2) {
+        const tempted = save.evoRoster
+          .filter((e) => e.mainCharId && rankedIds.has(e.id) && e.skill <= 72)
+          .sort((a, b) => a.skill - b.skill)[0]
+        if (tempted) pool.push(tempted)
+      }
       const drawn = []
       // THE RESURFACING (§0.6): someone you banished may walk back through
       // the door behind a pot worth winning — sharper than you remember, and
@@ -601,7 +650,11 @@ export function runSinglesTournament(save, scheduleEntry) {
     }
   }
   const format = scheduleEntry?.format || 'single'
-  const { rounds, placements, champion } = runFormat(save, entrants, format)
+  stampRanked(save, entrants)
+  // The house picks its set length: first-to-2 keeps a big bracket to an
+  // evening; first-to-3 is the fuller story (and the default).
+  const long = (scheduleEntry?.series || 'ft3') !== 'ft2'
+  const { rounds, placements, champion, standings } = runFormat(save, entrants, format, { long })
 
   // Baseline glory scales with field size AND how rare the event is — a
   // 64-man yearly major is legacy, a weekly 8-man is a good Tuesday. On top
@@ -692,6 +745,15 @@ export function runSinglesTournament(save, scheduleEntry) {
     placements: placements.slice(0, 8).map(({ entrant, place }) => ({ place, name: entrant.name })),
     champion: champion.name,
     entrantCount: entrants.length,
+    // Round robins carry their group table (the EVO-pool shape) — the record
+    // of everyone-plays-everyone is a TABLE, not a bracket.
+    ...(standings ? {
+      standings: standings.map((r) => ({
+        id: r.entrant.id, name: r.entrant.name, kind: r.entrant.kind, charId: r.entrant.charId || null,
+        mp: r.mp, w: r.w, d: r.d, l: r.l, gf: r.gf, ga: r.ga, gd: r.gd, pts: r.pts,
+        hp: Math.round(r.hp), form: r.form,
+      })),
+    } : {}),
   }
   decorateStreamStats(save, record)
   updateFeedFromTournament(save, record)
@@ -1097,10 +1159,10 @@ export function runEvo(save) {
     .sort((a, b) => b.elo - a.elo)
     .slice(0, EVO_FIELD - qualified.length)
   if (!elites.length) return { ok: false, reason: 'No elite field exists for EVO.' }
-  const entrants = [
+  const entrants = stampRanked(save, [
     ...qualified.map((p) => arcadeEntrant(save, p)),
     ...elites.map(eliteEntrant),
-  ]
+  ])
   const rounds = []
   const storylines = []
 
@@ -1324,7 +1386,7 @@ export function revealNextMatch(record) {
   return record
 }
 
-function decorateStreamStats(save, record) {
+export function decorateStreamStats(save, record) {
   let peak = 0
   for (const round of record.rounds) {
     for (const m of round.matches) {
@@ -1351,7 +1413,7 @@ function applyTournamentMess(save, entry) {
   save.arcade.cleanliness = clamp((save.arcade.cleanliness ?? 80) - mess, 0, 100)
 }
 
-function summaryOf(record) {
+export function summaryOf(record) {
   return {
     id: record.id,
     type: record.type,
@@ -1363,5 +1425,6 @@ function summaryOf(record) {
     arcadeResults: record.arcadeResults || null,
     entrantCount: record.entrantCount,
     format: record.format || null, // achievements ask what shape it was
+    circuitKind: record.circuitKind || null, // the world's events are not "yours" (achievements)
   }
 }

@@ -136,10 +136,9 @@ function yearSnapshot(save, yearJustClosed, ctx) {
 export function instrumentedRun({ seed, difficulty = 'normal', years = 10, policy = DEFAULT_POLICY } = {}) {
   const save = makeRun({ seed, difficulty, policy })
   const userIds = new Set(Object.values(save.players).filter((p) => !p.npc && p.createdBy === 'user').map((p) => p.id))
-  const isElite = (id) => typeof id === 'string' && id.startsWith('elite_')
 
   const yearly = []
-  const events = { firstEliteWin: null, eliteWins: 0, retirementAbsDays: [] }
+  const events = { firstEliteWin: null, firstRankedWin: null, eliteWins: 0, retirementAbsDays: [] }
 
   let lastTournamentId = save.lastTournament?.id || null
   let lastLogHead = save.economy.log[0] || null
@@ -174,18 +173,33 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
     playDay(save, policy)
     ctx.daysThisYear += 1
 
-    // New tournament record? Scan it for a user player beating an elite.
+    // New tournament record? Scan it for a user player taking a set off a
+    // TOP-32 name. Metric 2 is the impossible moment, and per §14's own
+    // calibration the rank-64 BOUNDARY sits at ~55 skill — par for a year-3
+    // cast, which is why measuring there collapsed the moment the P4
+    // calendar densified contact (that was the calendar doing its job). The
+    // impossible tier is the top 32 — killers and up, skill 65+. The engine
+    // stamps every ranked scalp itself (`listScalp` = the beaten name's rank
+    // when the field was drawn, resolveEntrantMatch), so the instrument and
+    // the in-game moment cannot drift apart; the instrument just sets the
+    // bar. eliteWins still counts scalps at any rank, for volume.
     const rec = save.lastTournament
     if (rec && rec.id !== lastTournamentId) {
       lastTournamentId = rec.id
+      const scan = (m) => {
+        if (m.bye || !m.winnerId || m.listScalp == null) return
+        if (userIds.has(m.winnerId)) {
+          events.eliteWins += 1
+          events.firstRankedWin ??= { absDay: absDayOf(save.day, save.year), year: save.year, rank: m.listScalp }
+          if (m.listScalp <= 32) {
+            events.firstEliteWin ??= { absDay: absDayOf(save.day, save.year), year: save.year, rank: m.listScalp }
+          }
+        }
+      }
       for (const round of rec.rounds || []) {
         for (const m of round.matches || []) {
-          if (m.bye || !m.winnerId) continue
-          const loserId = m.winnerId === m.aId ? m.bId : m.aId
-          if (userIds.has(m.winnerId) && isElite(loserId)) {
-            events.eliteWins += 1
-            events.firstEliteWin ??= { absDay: absDayOf(save.day, save.year), year: save.year }
-          }
+          scan(m)
+          for (const duel of m.duels || []) scan(duel) // crew battles count too
         }
       }
     }
@@ -379,6 +393,15 @@ export function aggregate(runs) {
       share: r2(wins.length / runs.length),
       medianYear: wins.length ? median(wins.map((r) => r.events.firstEliteWin.year)) : null,
     },
+    // Context for the headline: the first scalp at ANY rank. The gap between
+    // this and firstEliteWin is the contender tail doing its job as the rung.
+    firstRankedWin: (() => {
+      const any = runs.filter((r) => r.events.firstRankedWin)
+      return {
+        share: r2(any.length / runs.length),
+        medianYear: any.length ? median(any.map((r) => r.events.firstRankedWin.year)) : null,
+      }
+    })(),
     eureka: aggregateEureka(runs),
     retirementDispersion: {
       meanStddevDays: dispersions.length ? Math.round(mean(dispersions)) : null,

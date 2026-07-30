@@ -25,8 +25,9 @@ import {
 import {
   ARCHETYPES, MOVE_TYPES, DAYS_PER_YEAR, EVO_DAY, formatDay, WEEKDAYS, BRACKET_SIZES,
   DIFFICULTIES, difficultyOf, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, AD_CHANNELS,
-  HELPERS, helperOn,
+  HELPERS, helperOn, dayOfMonthOf,
 } from '../game/constants.js'
+import { CIRCUIT } from '../game/circuit.js'
 import {
   availableFoods, lockedFoodPacks, availableAttractions, lockedAttractionPacks,
   hasFreeInstall, claimFreeInstall,
@@ -1857,6 +1858,49 @@ export function StaffManagement({ save, update }) {
   )
 }
 
+/**
+ * Date collisions, said out loud BEFORE you book (P4). They are structural in
+ * this calendar: day 1 is a Sunday, 28-day months keep the week aligned, so
+ * every 1st is a Sunday forever — and the world's circuit owns ten Sundays a
+ * year on top. The engine resolves a collision deterministically (the rarer
+ * event runs; the circuit beats everything); the editor's job is to make sure
+ * nobody finds that out three months in from a tournament that never fired.
+ */
+function scheduleWarnings(save, t) {
+  const wd = (e) => ((e.cadence || 'weekly') === 'weekly' ? (e.weekday || 0)
+    : e.cadence === 'monthly' ? ((e.dayOfMonth || 1) - 1) % 7
+      : ((e.dayOfYear || 1) - 1) % 7)
+  const dom = (e) => (e.cadence === 'monthly' ? (e.dayOfMonth || 1) : dayOfMonthOf(e.dayOfYear || 1))
+  const rarity = { weekly: 1, monthly: 2, yearly: 3 }
+  const out = []
+  for (const o of save.arcade.schedule) {
+    if (o.id === t.id) continue
+    const a = t.cadence || 'weekly'
+    const b = o.cadence || 'weekly'
+    const hit = (a === 'weekly' || b === 'weekly') ? wd(t) === wd(o)
+      : (a === 'monthly' || b === 'monthly') ? dom(t) === dom(o)
+        : (t.dayOfYear || 1) === (o.dayOfYear || 1)
+    if (!hit) continue
+    if ((rarity[a] || 3) < (rarity[b] || 3)) out.push(`shares its date with “${o.name}” — the bigger event runs and this one sits out`)
+    else if ((rarity[a] || 3) > (rarity[b] || 3)) out.push(`shares its date with “${o.name}” — this one runs and “${o.name}” sits out`)
+    else out.push(`shares its date with “${o.name}” — same size, so whichever was booked first runs`)
+  }
+  const cadence = t.cadence || 'weekly'
+  const circuitHits = cadence === 'weekly'
+    ? (wd(t) === 0 ? CIRCUIT.length + 1 : 0) // every circuit date (and EVO) is a Sunday
+    : cadence === 'monthly'
+      ? CIRCUIT.filter((c) => dayOfMonthOf(c.day) === (t.dayOfMonth || 1)).length + (dayOfMonthOf(EVO_DAY) === (t.dayOfMonth || 1) ? 1 : 0)
+      : CIRCUIT.some((c) => c.day === (t.dayOfYear || 1)) || (t.dayOfYear || 1) === EVO_DAY ? 1 : 0
+  if (circuitHits > 0) {
+    out.push(cadence === 'weekly'
+      ? `Sundays belong to the world circuit ${circuitHits} times a year — those weeks this event sits out`
+      : cadence === 'monthly'
+        ? `lands on a circuit date ${circuitHits} time${circuitHits === 1 ? '' : 's'} a year — the circuit runs, this sits out`
+        : 'lands on a world circuit date — the circuit runs, this never will')
+  }
+  return out
+}
+
 export function ScheduleEditor({ save, update }) {
   const consequential = save.settings.mode !== 'sandbox'
   // Consequential worlds hold real tournaments to a floor: no sub-8-player
@@ -1914,7 +1958,10 @@ export function ScheduleEditor({ save, update }) {
         Brackets are always a power of two — the bracket size you set here is the invite list, filled by
         elo + reputation. If the slots can't be filled, that running of the tournament is cancelled.
         {consequential && ' Consequential worlds require at least 8 players (singles) or 4 teams (crew battles).'}
-        {' '}EVO happens automatically on day {EVO_DAY} ({formatDay(EVO_DAY, 1).replace(', Year 1', '')}) every year — your top 8 qualify.
+        {' '}EVO happens automatically on day {EVO_DAY} ({formatDay(EVO_DAY, 1).replace(', Year 1', '')}) every year — your world-ranked players qualify.
+        {' '}The rest of the world's circuit — three majors, their qualifiers, two regionals and the
+        Squad Showdown — runs itself on Sundays (dates on the World tab), and a circuit day pre-empts
+        anything you schedule against it.
       </p>
       {save.arcade.schedule.map((t) => (
         <div className="card sub" key={t.id}>
@@ -1939,6 +1986,13 @@ export function ScheduleEditor({ save, update }) {
                 <option value="single">Single elim</option>
                 <option value="doubleelim">Double elim</option>
                 <option value="roundrobin">Round robin</option>
+              </select>
+            )}
+            {t.type === 'singles' && (
+              <select value={t.series || 'ft3'} title="set length — first-to-2 keeps a big bracket to an evening"
+                onChange={(e) => patchEntry(t.id, (x) => { x.series = e.target.value })}>
+                <option value="ft3">sets: first to 3</option>
+                <option value="ft2">sets: first to 2</option>
               </select>
             )}
             <select value={t.cadence || 'weekly'} onChange={(e) => patchEntry(t.id, (x) => { x.cadence = e.target.value })}>
@@ -1998,6 +2052,9 @@ export function ScheduleEditor({ save, update }) {
             📡 {eventLoad(t)} matches a month
             {eventLoad(t) > bandwidthCap(save) * 0.5 && <span className="gold"> — that's most of your bandwidth</span>}
           </div>
+          {scheduleWarnings(save, t).map((w, i) => (
+            <div key={i} className="gold small" style={{ marginTop: 2 }}>⚠ {w}</div>
+          ))}
         </div>
       ))}
       {save.arcade.schedule.length === 0 && <p className="dim">Nothing scheduled yet.</p>}

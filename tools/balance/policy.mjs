@@ -24,6 +24,7 @@ import {
 import { computeMatchups } from '../../src/game/balance.js'
 import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../../src/game/sim.js'
 import { runSinglesTournament, runTeamTournament, runEvo } from '../../src/game/tournament.js'
+import { runCircuitEvent } from '../../src/game/circuit.js'
 import { audienceMix, hasFreeInstall, claimFreeInstall } from '../../src/game/catalog.js'
 import { ATTRACTION_PACKS } from '../../src/game/names.js'
 import * as eco from '../../src/game/economy.js'
@@ -390,7 +391,12 @@ export function playDay(save, policy = DEFAULT_POLICY) {
   bindRng(save)
   const today = whatHappensToday(save)
   if (today === 'evo') { runEvo(save); advanceDay(save); return }
-  if (today) {
+  if (today?.circuit) {
+    const res = runCircuitEvent(save, today.circuit)
+    if (res.ok) { advanceDay(save); return }
+    // A cancelled circuit date (a world too thin for the Showdown) falls
+    // through to a normal day, same as a cancelled local bracket.
+  } else if (today) {
     const res = today.type === 'teams' ? runTeamTournament(save, today) : runSinglesTournament(save, today)
     if (res.ok) { advanceDay(save); return }
   }

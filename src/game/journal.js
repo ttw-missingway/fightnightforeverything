@@ -480,6 +480,35 @@ const LINES = {
       `The money was there. The answer was still no. I heard what was actually said.`,
     ],
   },
+  // -------- the circuit (P4 — seats are earned two ways) --------
+  seatWon: {
+    killer: [
+      `I QUALIFIED. {event}. Nobody voted for me, nobody did me a favor — I took that seat out of a thirty-two man bracket with my hands.`,
+    ],
+    scholar: [
+      `Qualified for {event}. The bracket was the hypothesis test and the seat is the result. Now the real study begins: sixteen invitations, and mine is one of them.`,
+    ],
+    natural: [
+      `I'm going to {event}. Like, actually going. I keep saying it out loud in the empty stairwell to check it's real.`,
+    ],
+    stoic: [
+      `A seat at {event}. Won, not given. The work continues at a higher altitude.`,
+    ],
+  },
+  fanFavourite: {
+    killer: [
+      `The crowd voted me into {event}. I wanted to win the seat outright — but fine. They want a show? They have NO idea what I'm bringing.`,
+    ],
+    scholar: [
+      `Voted into {event} as a fan favourite. Interesting mechanism: the bracket rejected me and the audience overruled it. Visibility is a stat. I have been underweighting it.`,
+    ],
+    natural: [
+      `THE VOTE. They VOTED for ME. I'm going to {event} because people like watching me play. I have read the replies eleven times and I'm not sorry.`,
+    ],
+    stoic: [
+      `The crowd sent me to {event}. Not the result I wanted; a debt all the same. It gets repaid on stage.`,
+    ],
+  },
   awayPlaced: {
     killer: [
       `{event}: {place}. Walked into somebody else's room and took what I came for. Tell everyone.`,

@@ -1099,3 +1099,111 @@ in P4 if it holds). Watch: influence chosen-kind share is now the largest
 (730 vs wound 483) after the visibility multiplier — §1.2 wants wound
 dominant; dial the company base down when P4 recalibrates pacing. Cap
 realisation unchanged (skill 0 — careers still end before the wall).
+
+## 18. P4 — the calendar, built and measured (2026-07-30)
+
+REVISION §5-P4: the world grew a real competitive calendar (`circuit.js`).
+Ten fixed Sunday dates a year: three invitational majors (16, double elim;
+4 host-region seats, 2 each to the next four strongest regions, 4 from the
+qualifier), a qualifier a month before each (32, single elim, belief ≥ 40
+self-entry; two seats by bracket, **two by fan vote** — stream visibility
+and personality are competitive access, which is what the streaming systems
+were always for), two regionals (top 16 of a 64-deep national board, double
+elim), and the Squad Showdown at lunar new year (eight crews, survivor
+format, gated on a world-top-64 player). EVO unchanged at day 162. Hosts
+rotate yearly through the eight strongest scenes, and your cast's elo counts
+toward your own country's strength — a small scene can be dragged up the
+table by the arcade that builds champions in it.
+
+The regional board is the missing rung: 56 generated national competitors
+(`rc_*`, banded by country weight — a US board's top rivals the contender
+tail, a Malawi board is winnable in year two) plus your country's elites
+plus your cast, on one elo ladder. It is an OPEN pool, which the sealed room
+needed (§2.6 plateau); it drifts and churns yearly like the world roster.
+
+Travel (`travel.js`) was rewritten onto the circuit: generic away events are
+gone; every ask is a real date with a real field, and a funded player
+actually appears in it. Eligibility is the event's own entry rule read three
+weeks early. Denying a held MAJOR seat is always the flush-weight wound (6)
+— the world said yes and the front counter said no. Overlaps fixed:
+`whatHappensToday` resolves collisions by rarity (yearly > monthly >
+weekly), the circuit pre-empts local events, and the editor warns at booking
+time. Backlog landed: per-event first-to-2/first-to-3, round robins carry
+the EVO-pool group table, achievements no longer credit the world's events
+as yours.
+
+### Metric 2 — first elite win ✅ (re-specified, and the window holds)
+
+**Top-32 first win: share 0.83, median year 4** (n=24 × 10y; per-seed probe
+at n=10 read [3,3,4,4,4,4,4,4,5,5] — never year 1–2). Context metric
+`firstRankedWin` (any rank ≤ 64): share 0.83, median 3.5 — the contender
+tail is the rung under the moment, as intended.
+
+**The re-spec, on the record.** Measured at the rank-64 boundary the metric
+collapsed to year 2 — and the first probe showed why: it was ALREADY
+collapsed in P3 (pot outsiders drawn from the weakest 20 elites were being
+beaten at the local Weekly in year 2; the committed baseline's median-4 was
+P0 scarcity, not difficulty). §14's own calibration puts the top-64 cutoff
+at ~56 skill — par for a year-3 cast — so a boundary-rank scalp cannot be
+"the impossible moment" once the calendar densifies contact, which is the
+entire point of P4. The moment is re-specified as a set off a **top-32**
+name (killer tier and up, skill 65+). The engine stamps every ranked scalp
+itself (`listScalp` = the loser's rank when the field was DRAWN,
+`stampRanked` in tournament.js) so the instrument and the in-game moment
+cannot drift; rank-at-draw also kills the boundary jitter where an outsider
+crossed onto the list mid-bracket and handed out a technicality scalp.
+
+Three engine changes moved the needle honestly rather than by instrument
+fiat: (1) pot outsiders now come from the DEEP unranked tail (bottom 10; a
+ranked name doesn't drive three states for your Saturday pot — though a
+tier-3 pot tempts one 20% of the time), (2) national elites attend
+regionals only 25% of the time, and the board's rc names carry a distinct
+entrant kind so beating one never fires the eliteWin page, and (3) **the
+world list now ranks only cast the world has SEEN** — `WORLD_SEEN_GAMES =
+20` road sets (any set vs a non-arcade entrant) before a rank exists. The
+closed-room elo-farming inflation (the entrantPerformance comment's old
+enemy) stops mattering: by the time the road record exists, the road has
+corrected the elo it ranks. EVO qualification inherits the gate, so year-2
+EVO trips via farmed elo are gone and "for the first two years you mostly
+watch" is now structurally true.
+
+### What the calendar did to everything else
+
+Survival median 1444d (§17: 1391), funnels opinion 13 / dynamics 9 /
+economy 2. Burnout share 0.37 → 0.17 (road placings feed passion).
+Metrics 1/3/7 shapes hold. Elite band drifts up slightly (champion 97.9,
+median 63.4) — the circuit gives elites more games against each other.
+
+**Metric 10 regressed and is carried.** Competition share of spend reads
+0.03/0.11/0.12/0.10/0.10/0.10 by year — DOWN from §17's climbing
+0.09→0.33. The cause is the point: asks are now merit-gated (top-16 board
+spot, belief 40, a held seat), so the early game has almost nothing to buy
+— correct for Act 1, but the inversion §0 promises must now come from the
+mid/late game and it is not there yet. The money finding of §17 stands
+(belief-gated lever); the crossover now waits on more eligible players per
+year — which is P5's succession/regeneration work by construction.
+
+### Two determinism-class leaks (the P3 lesson, third and fourth sightings)
+
+Both caught before shipping: (1) `regionalRankings` originally MINTED the
+board lazily — a World-tab render would have drawn from the save's rng
+stream at user-timed positions. It is now read-only; the engine mints the
+board on travelDaily's tick and at save load. (2) `hostsForYear` caches
+from CURRENT region strength, so WHEN it runs is part of the answer — a
+render could commit different hosts than the engine would have. Hosts for
+this year and next are now precomputed on the engine's clock. Rule extended:
+**no UI render may be the first caller of anything that writes to the
+save.** Determinism suite green (same-seed, serialize+resume).
+
+### Standing facts and watch items
+
+Journal volume y5 32/yr, y6 39/yr — the §17 watch item worsened with the
+circuit's away pages; trim in P5 (candidates: travelAsk pages, weekly-out
+aways). Influence chosen-kind still dominant (793 vs wound 371) — carried
+again; P4 did not touch the company base. Metric 9 (recoverability cliff,
+feud compounding) was NOT addressed this phase despite §17 assigning it —
+carried to P5 explicitly, not silently. Deferred from the backlog: the
+opening-day promotional build-up (Act 1 pacing) — better built with P6's
+notification/idle sweep; on the record here so it isn't dropped. Baseline
+remains the P0 commit; do not re-bless until the P5 world-regeneration pass
+so every phase diffs against the same origin.

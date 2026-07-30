@@ -67,10 +67,10 @@ export default function Tournament() {
       <div className="row spread">
         <div>
           <h1 style={{ fontSize: 30, margin: '4px 0' }}>
-            {t.type === 'evo' ? '🌏 ' : '🏆 '}{t.name}
+            {t.type === 'evo' ? '🌏 ' : t.circuitKind === 'squad' ? '🏮 ' : t.circuitKind ? '🌐 ' : '🏆 '}{t.name}
           </h1>
           <span className="dim">{t.dateLabel} · {t.entrantCount} entrants · {
-            t.type === 'evo' ? 'the biggest stage in the world' : t.type === 'teams' ? 'crew battle format' : 'single elimination'
+            t.type === 'evo' ? 'the biggest stage in the world' : t.circuitKind === 'squad' ? 'survivor format — one player stays on until they fall' : t.type === 'teams' ? 'crew battle format' : t.circuitKind === 'major' ? "a world major — sixteen invitations" : t.circuitKind === 'qualifier' ? 'four seats on the line — two by bracket, two by vote' : t.circuitKind === 'regional' ? 'the national top sixteen' : t.format === 'doubleelim' ? 'double elimination' : t.format === 'roundrobin' ? 'round robin' : 'single elimination'
           }</span>
           {t.channelName && (
             <div className="small">
@@ -119,6 +119,32 @@ export default function Tournament() {
               Arcade results: {t.arcadeResults.map((r) => `${r.name} — ${ordinal(r.place)}`).join(' · ')}
             </p>
           )}
+        </div>
+      )}
+
+      {/* A round robin is a GROUP STAGE, and a group stage is read as a table
+          (the same shape EVO pools are drawn in). Held back until the
+          broadcast finishes — the table is one big spoiler. */}
+      {done && t.standings && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Group table</h3>
+          <div className="table-scroll"><table>
+            <thead>
+              <tr><th>#</th><th>Player</th><th>MP</th><th>W</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th><th>Form</th></tr>
+            </thead>
+            <tbody>
+              {t.standings.map((r, i) => (
+                <tr key={r.id} className={r.kind === 'arcade' ? 'world-mine' : ''}>
+                  <td className="dim">{i + 1}</td>
+                  <td><strong>{r.name}</strong></td>
+                  <td>{r.mp}</td><td>{r.w}</td><td>{r.l}</td><td>{r.gf}</td><td>{r.ga}</td>
+                  <td>{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
+                  <td className="gold">{r.pts}</td>
+                  <td className="small">{(r.form || []).map((f) => (f === 'w' ? '🟩' : '🟥')).join('')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
         </div>
       )}
 

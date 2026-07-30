@@ -208,8 +208,7 @@ function ToastBanner() {
 function TravelBanner() {
   const { save, mutate } = useStore()
   const asks = pendingAsks(save)
-  const event = save.travel?.event
-  if (!asks.length || !event) return null
+  if (!asks.length) return null
   const cash = Math.round(save.economy?.money ?? 0)
   return (
     <div className="dangers">
@@ -221,9 +220,11 @@ function TravelBanner() {
           <div key={a.id} className="danger unlock">
             <span className="d-icon">✈️</span>
             <div>
-              <div className="d-title">{displayName(p, save)} wants to go to {event.name}</div>
+              <div className="d-title">
+                {a.squad ? `The crew wants to go to ${a.eventName}` : `${displayName(p, save)} wants to go to ${a.eventName}`}
+              </div>
               <div className="d-detail">
-                {TRAVEL_TIERS[event.tier].label} · in {daysUntil(save, event)} days · costs ${a.cost} of your ${cash}.
+                {TRAVEL_TIERS[a.kind]?.label || 'the road'} · in {daysUntil(save, a)} days · costs ${a.cost} of your ${cash}.
                 A placing recoups; an early exit is money burned.
               </div>
               {flush && <div className="d-fix">You can afford this, and they know it.</div>}

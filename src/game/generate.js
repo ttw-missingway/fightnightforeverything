@@ -417,6 +417,37 @@ export const ELITE_PERSONAS = [
   { key: 'veteran', loyalty: 0.8 },
 ]
 
+/**
+ * A regional-ladder competitor (P4) — the national scene between your room and
+ * the world list. Deliberately lighter than an elite: no persona, no spirit,
+ * no stat card. They are not characters, they are the RUNG — a 64-deep board
+ * of names your players climb on the way to being anybody, and the open elo
+ * pool that lets a sealed room's average actually rise (REVISION §2.6,
+ * plateau). How strong the board is comes from the caller via `band`, because
+ * that is the run-shaping fact of your address: a US board's top rivals the
+ * world's contender tail, a long-tail country's board is winnable in year two.
+ */
+export function makeRegionalCompetitor(save, { country, band, usedAliases = new Set() }) {
+  let alias = choice(ELITE_ALIASES)
+  let guard = 40
+  while (usedAliases.has(alias) && guard-- > 0) alias = choice(ELITE_ALIASES)
+  if (usedAliases.has(alias)) alias = `${alias} ${randInt(2, 9)}`
+  usedAliases.add(alias)
+  const pool = selectableChars(save.game)
+  return {
+    id: uid('rc'),
+    alias,
+    ...identityForCountry(country),
+    region: country,
+    tier: 'regional',
+    facePalette: choice(PALETTE_KEYS),
+    mainCharId: pool.length ? choice(pool).id : null,
+    skill: randInt(band.skill[0], band.skill[1]),
+    elo: randInt(band.elo[0], band.elo[1]),
+    titles: 0,
+  }
+}
+
 /** One world-class player, made from scratch — a whole person, not a row. */
 export function makeElite(save, { tier, usedAliases = new Set() } = {}) {
   let alias = choice(ELITE_ALIASES)

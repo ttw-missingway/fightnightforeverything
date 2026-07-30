@@ -36,6 +36,7 @@ import { writeJournal } from './journal.js'
 import { pushToast, pruneToasts } from './notify.js'
 import { fragmentsMonthly } from './fragments.js'
 import { travelDaily } from './travel.js'
+import { circuitEventOn, driftRegionalField } from './circuit.js'
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
@@ -1971,18 +1972,30 @@ export function simDay(save) {
   endDay(save)
 }
 
-// What fires today: 'evo' | schedule entry | null. A health-department
-// shutdown cancels your local events — EVO is the world's stage, not yours.
+// What fires today: 'evo' | {circuit} | schedule entry | null. The circuit is
+// the world's calendar — it runs whether your doors are open or shut, and it
+// owns its Sundays: a local event scheduled against a circuit date simply
+// doesn't run that week. A health-department shutdown likewise cancels your
+// local events only — EVO and the circuit are the world's stage, not yours.
 export function whatHappensToday(save) {
   if (save.day === EVO_DAY) return 'evo'
+  const circuit = circuitEventOn(save.day)
+  if (circuit) return { circuit }
   if (arcadeClosed(save)) return null
-  const t = save.arcade.schedule.find((s) => {
+  const hits = save.arcade.schedule.filter((s) => {
     if (s.done) return false
     if (s.cadence === 'weekly') return weekdayOf(save.day) === (s.weekday || 0)
     if (s.cadence === 'monthly') return dayOfMonthOf(save.day) === (s.dayOfMonth || 1)
     return s.dayOfYear === save.day // yearly (and pre-cadence saves)
   })
-  return t || null
+  if (!hits.length) return null
+  // THE SUNDAY COLLISION, fixed: every 1st is a Sunday (day 1 is a Sunday and
+  // 28-day months keep the week aligned), so a Sunday weekly and a 1st-of-the-
+  // month monthly used to race on array order and one of them silently never
+  // ran. Overlaps now resolve by rarity — the big event wins the date — and
+  // deterministically, so the loser is at least the same loser every time.
+  const rarity = { yearly: 3, monthly: 2, weekly: 1 }
+  return hits.sort((a, b) => (rarity[b.cadence] ?? 3) - (rarity[a.cadence] ?? 3))[0]
 }
 
 export function advanceDay(save) {
@@ -2106,6 +2119,7 @@ export function advanceDay(save) {
     save.day = 1
     save.year += 1
     driftEvoRoster(save)
+    driftRegionalField(save) // the national board regresses and churns too
     if (save.settings.mode !== 'sandbox' && save.year >= 2 && save.year <= 6) {
       awardMilestone(save, `year-${save.year}`, save.year, `${save.arcade.name} made it to Year ${save.year}`)
     }

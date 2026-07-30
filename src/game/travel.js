@@ -1,9 +1,9 @@
 // TRAVEL — the other half of money's new job (REVISION §0). Your players ask
-// to attend outside events; the arcade foots the bill. You can say no, and
-// often you simply cannot afford everyone and must choose. Cost scales with
+// to attend the circuit; the arcade foots the bill. You can say no, and often
+// you simply cannot afford everyone and must choose. Cost scales with
 // distance, which makes your region a standing financial fact — and the
 // calendar problem is the sharpest two-hands-ahead read in the game: did you
-// still have the cash in month eight, or did it go into a pot in month three?
+// still have the cash in December, or did it go into a pot in September?
 //
 // Saying no is itself eureka fuel — "they wouldn't send me to Stockholm" is
 // the §1.10 denied-funding wound (weight 4–6). Your books are visible to your
@@ -11,129 +11,180 @@
 // betrayal. Funding is a wager — a placing recoups, an early exit is money
 // burned.
 //
-// Until P4 builds the real calendar (qualifiers, regionals, majors), the
-// destinations here are GENERIC away events on a cadence. The ask/deny loop,
-// the costs, the wager and the wounds are the permanent machinery; P4 swaps
-// the destinations for the real thing.
+// P4: the destinations are no longer generic away events on a cadence — every
+// ask points at a REAL date on the world's calendar (circuit.js), and a funded
+// player actually appears in that event's field. The ask/deny loop, the costs,
+// the wager and the wounds are the same machinery P3 built; the calendar is
+// what it was always waiting for.
 
-import { clamp, rand, randInt, choice, displayName, uid } from './util.js'
-import { absDayOf, competitiveIntensity } from './constants.js'
-import { chronicle } from './model.js'
-import { econLog, trySpend } from './economy.js'
-import { countryCluster, countryName, rollCountry } from './geo.js'
+import { clamp, uid, displayName } from './util.js'
+import { absDayOf } from './constants.js'
+import { trySpend } from './economy.js'
+import { countryCluster, countryName } from './geo.js'
 import { arcadeCountryOf } from './generate.js'
-import { adversity, edge, eliminationWound } from './eureka.js'
+import { adversity } from './eureka.js'
 import { writeJournal } from './journal.js'
 import { pushToast, dismissToastByKey } from './notify.js'
 import { bumpPassion } from './career.js'
+import { rankedInTop } from './world.js'
+import {
+  upcomingCircuit, circuitEventName, hostOf, feedsYear, circuitState,
+  regionalRankings, REGIONAL_CUT, projectedMajorField, QUALIFIER_BELIEF,
+  ensureRegionalField, hostsForYear,
+} from './circuit.js'
 
+/**
+ * What a trip is FOR, and what the fare multiplier is. The squad tier buys
+ * four seats on the plane, which is why it costs like it does.
+ */
 export const TRAVEL_TIERS = {
-  regional: { label: 'a regional', field: [40, 58], costMult: 1, glory: 4 },
-  invitational: { label: 'an invitational', field: [50, 68], costMult: 1.5, glory: 7 },
-  major: { label: 'a major', field: [58, 80], costMult: 2.5, glory: 12 },
+  regional: { label: 'the national regionals', costMult: 1 },
+  qualifier: { label: 'a major qualifier', costMult: 1.5 },
+  major: { label: 'a world major', costMult: 2.5 },
+  squad: { label: 'the Squad Showdown', costMult: 3.5 },
 }
 
-const EVENT_NAMES = {
-  regional: ['Coastal Clash', 'Northern Format', 'The Runback Open', 'Second City Showdown'],
-  invitational: ['Kings of the Cabinet', 'The Proving Grounds', 'Marquee Invitational', 'House of Reads'],
-  major: ['Continental Finals', 'The Grand Circuit', 'World Stage Classic', 'Summit of Play'],
-}
+/** Three weeks' notice — enough time for the books to matter. */
+export const TRAVEL_LEAD = 21
 
 export function newTravelState() {
-  return { nextEventAbs: 0, event: null, asks: [] }
+  return { asks: [], seen: {} }
 }
 
 /** Distance is a standing financial fact: your region prices every trip. */
-function travelCost(save, country, tier) {
+export function travelCost(save, country, kind) {
   const home = arcadeCountryOf(save)
   const near = country === home
   const mid = !near && countryCluster(country) === countryCluster(home)
   const base = near ? 60 : mid ? 140 : 240
-  return Math.round(base * TRAVEL_TIERS[tier].costMult)
-}
-
-function generateEvent(save, abs) {
-  const roll = rand()
-  const tier = roll < 0.5 ? 'regional' : roll < 0.85 ? 'invitational' : 'major'
-  const country = rollCountry()
-  return {
-    id: uid('away'),
-    tier,
-    name: `${choice(EVENT_NAMES[tier])} · ${countryName(country)}`,
-    country,
-    startAbs: abs + 21, // three weeks' notice — enough time for the books to matter
-    cost: travelCost(save, country, tier),
-  }
+  return Math.round(base * (TRAVEL_TIERS[kind]?.costMult ?? 1))
 }
 
 const activeCast = (save) => Object.values(save.players)
-  .filter((p) => !p.npc && p.createdBy === 'user' && p.isRegular && !p.retired && !p.banished)
+  .filter((p) => !p.npc && p.createdBy === 'user' && p.isRegular && !p.retired && !p.banished && p.mainCharId)
 
-/** Who wants to go: ambition asks, and ambition is earned visibility. */
-function pickAskers(save, event) {
-  const eligible = activeCast(save).filter((p) =>
-    ((p.belief ?? 0) >= 30 || (p.tournamentWins || 0) >= 2)
-    && (p.eureka?.askCooldownAbs || 0) <= event.startAbs - 21)
-  return eligible
-    .sort((a, b) => ((b.belief ?? 0) + b.glory / 10 + competitiveIntensity(b) * 3)
-      - ((a.belief ?? 0) + a.glory / 10 + competitiveIntensity(a) * 3))
-    .slice(0, 2)
+/**
+ * Who asks to go where. Eligibility is the event's own entry rule, read three
+ * weeks early — the ask IS the calendar telling you what it will cost to be
+ * the scene you claim to be building:
+ *  · regionals — you're on the board's top 16; the cut is the invitation
+ *  · qualifier — belief ≥ 40; self-entry is a claim about yourself
+ *  · major — you hold a seat (won at the qualifier, or the region's own)
+ *  · squad — the room has a world-top-64 name and four bodies for a crew
+ */
+function askSpecsFor(save, occ) {
+  const { def, year } = occ
+  const cast = activeCast(save)
+  if (def.kind === 'regional') {
+    const rows = regionalRankings(save)
+    return cast.filter((p) => {
+      const row = rows.find((r) => r.id === p.id)
+      return row && row.rank <= REGIONAL_CUT
+    })
+  }
+  if (def.kind === 'qualifier') {
+    return cast
+      .filter((p) => (p.belief ?? 0) >= QUALIFIER_BELIEF)
+      .sort((a, b) => ((b.belief ?? 0) + b.glory / 10) - ((a.belief ?? 0) + a.glory / 10))
+      .slice(0, 4)
+  }
+  if (def.kind === 'major') {
+    const seats = circuitState(save).seats[`${def.key}:${feedsYear(def, year)}`] || []
+    const seated = new Set(seats.filter((s) => s.kind === 'arcade').map((s) => s.id))
+    const { picks } = projectedMajorField(save, def, year)
+    for (const pick of picks) if (pick.kind === 'arcade') seated.add(pick.id)
+    return cast.filter((p) => seated.has(p.id))
+  }
+  // squad — one ask, carried by the ace, for the whole crew.
+  if (!rankedInTop(save, 64).length) return []
+  const crew = [...cast].sort((a, b) => b.elo - a.elo)
+  return crew.length >= 4 ? [crew[0]] : []
 }
 
 /**
- * The daily tick (advanceDay): raise events, collect asks, resolve trips,
- * and let unanswered asks lapse into the soft no.
+ * The daily tick (advanceDay): raise asks for circuit dates entering the
+ * three-week window, and let unanswered asks lapse into the soft no when the
+ * date arrives. Runs AFTER the event itself on event days, so a funded ask is
+ * still on the books when the runner builds its field.
  */
 export function travelDaily(save) {
   const t = (save.travel ??= newTravelState())
+  t.asks ??= []
+  t.seen ??= {}
+  // The engine mints the national board on its own tick — regionalRankings
+  // itself is read-only so UI renders can never fork the rng stream.
+  ensureRegionalField(save)
+  // Hosts likewise: this year's and next year's cities are booked on the
+  // engine's clock (they derive from current region strength, so WHEN they
+  // are computed is part of the answer). By the time any screen shows an
+  // upcoming event, the venue is already on the books.
+  hostsForYear(save, save.year)
+  hostsForYear(save, save.year + 1)
+  // P3's generic-event fields, retired with the generic events themselves.
+  delete t.event
+  delete t.nextEventAbs
   const abs = absDayOf(save.day, save.year)
 
-  if (!t.event && abs >= (t.nextEventAbs || 0)) {
-    t.event = generateEvent(save, abs)
-    for (const p of pickAskers(save, t.event)) {
-      const ask = { id: uid('ask'), playerId: p.id, eventId: t.event.id, cost: t.event.cost, state: 'pending' }
+  // The date arriving answers every unanswered ask — with a no.
+  for (const ask of t.asks) {
+    if (ask.state === 'pending' && abs >= ask.startAbs) denyAsk(save, ask, { lapsed: true })
+  }
+  t.asks = t.asks.filter((a) => abs < a.startAbs)
+
+  for (const occ of upcomingCircuit(save, 6)) {
+    const lead = occ.startAbs - abs
+    if (lead < 7 || lead > TRAVEL_LEAD) continue
+    const seenKey = `${occ.def.key}:${occ.year}`
+    if (t.seen[seenKey]) continue
+    t.seen[seenKey] = true
+    const country = hostOf(save, occ.def, occ.year)
+    const eventName = circuitEventName(save, occ.def, occ.year)
+    const cost = travelCost(save, country, occ.def.kind)
+    for (const p of askSpecsFor(save, occ)) {
+      const ask = {
+        id: uid('ask'),
+        playerId: p.id,
+        eventKey: occ.def.key,
+        eventYear: occ.year,
+        startAbs: occ.startAbs,
+        kind: occ.def.kind,
+        eventName,
+        country,
+        cost,
+        squad: occ.def.kind === 'squad' || undefined,
+        state: 'pending',
+      }
       t.asks.push(ask)
-      if (p.eureka) p.eureka.askCooldownAbs = abs + 45
-      writeJournal(save, p, 'travelAsk', { event: t.event.name, place: countryName(t.event.country) })
+      writeJournal(save, p, 'travelAsk', { event: eventName, place: countryName(country) })
       pushToast(save, {
         icon: '✈️',
-        text: `${displayName(p, save)} wants to go to ${t.event.name} — $${t.event.cost}, ${daysUntil(save, t.event)} days out.`,
+        text: ask.squad
+          ? `The crew wants to go to ${eventName} — $${cost} for four seats, ${lead} days out. ${displayName(p, save)} did the asking.`
+          : `${displayName(p, save)} wants to go to ${eventName} — $${cost}, ${lead} days out.`,
         see: { screen: 'arcade' },
         sticky: true,
         key: `ask_${ask.id}`,
       })
     }
-    // A destination with no askers just passes by — the world is running
-    // whether or not your room is ready for it.
-    if (!t.asks.some((a) => a.eventId === t.event.id)) {
-      t.event = null
-      t.nextEventAbs = abs + randInt(25, 40)
-    }
   }
-
-  if (t.event && abs >= t.event.startAbs) {
-    for (const ask of t.asks.filter((a) => a.eventId === t.event.id)) {
-      if (ask.state === 'pending') denyAsk(save, ask, { lapsed: true })
-      if (ask.state === 'funded') resolveTrip(save, ask, t.event)
-    }
-    t.asks = t.asks.filter((a) => a.eventId !== t.event.id)
-    t.event = null
-    t.nextEventAbs = abs + randInt(40, 65)
+  // Old seen-keys are dead weight once their year has passed.
+  for (const k of Object.keys(t.seen)) {
+    if (Number(k.split(':')[1]) < save.year) delete t.seen[k]
   }
 }
 
-export const daysUntil = (save, event) => Math.max(0, event.startAbs - absDayOf(save.day, save.year))
+export const daysUntil = (save, ask) => Math.max(0, ask.startAbs - absDayOf(save.day, save.year))
 export const pendingAsks = (save) => (save.travel?.asks || []).filter((a) => a.state === 'pending')
 
 export function fundAsk(save, askId) {
   const t = save.travel
   const ask = t?.asks.find((a) => a.id === askId)
   const p = ask && save.players[ask.playerId]
-  if (!ask || !p || ask.state !== 'pending' || !t.event) return false
-  if (!trySpend(save, ask.cost, `funded ${displayName(p, save)}'s trip to ${t.event.name}`)) return false
+  if (!ask || !p || ask.state !== 'pending') return false
+  if (!trySpend(save, ask.cost, `funded ${ask.squad ? 'the crew' : displayName(p, save)} — ${ask.eventName}`)) return false
   ask.state = 'funded'
   dismissToastByKey(save, `ask_${ask.id}`)
-  writeJournal(save, p, 'travelFunded', { event: t.event.name, place: countryName(t.event.country) })
+  writeJournal(save, p, 'travelFunded', { event: ask.eventName, place: countryName(ask.country) })
   bumpPassion(p, 5) // being backed is being believed in
   return true
 }
@@ -147,12 +198,15 @@ export function denyAsk(save, askId, { lapsed = false } = {}) {
   dismissToastByKey(save, `ask_${ask.id}`)
   // THE BOOKS ARE VISIBLE. Refusing while broke is understood; refusing while
   // flush is a betrayal — and never answering at all is its own message.
+  // Refusing someone a seat they QUALIFIED for is the flush weight regardless:
+  // the world said yes and the front counter said no.
   const flush = (save.economy?.money ?? 0) >= ask.cost * 3
-  const weight = lapsed ? 4 : flush ? 6 : 4
+  const seatHeld = ask.kind === 'major'
+  const weight = lapsed ? 4 : flush || seatHeld ? 6 : 4
   adversity(save, p, {
     weight,
     stats: ['determination'],
-    why: `they wouldn't send me to ${t?.event ? countryName(t.event.country) : 'the event'}`,
+    why: `they wouldn't send me to ${countryName(ask.country)}`,
     convKey: 'determination',
   })
   // Ledgered apart so the instruments can tell bought adversity (pots, road
@@ -162,52 +216,8 @@ export function denyAsk(save, askId, { lapsed = false } = {}) {
   bumpPassion(p, flush ? -7 : -3)
   p.mood = clamp(p.mood - (flush ? 2 : 1), 0, 10)
   writeJournal(save, p, flush ? 'travelDeniedFlush' : 'travelDenied', {
-    event: t?.event?.name || 'the event',
-    place: t?.event ? countryName(t.event.country) : 'there',
+    event: ask.eventName,
+    place: countryName(ask.country),
   })
   return true
-}
-
-/**
- * The trip itself, simmed offscreen: four rounds against the tier's field.
- * A placing recoups; an early exit is money burned — the wager the funding
- * always was.
- */
-function resolveTrip(save, ask, event) {
-  const p = save.players[ask.playerId]
-  if (!p || p.retired || p.banished) return
-  const [lo, hi] = TRAVEL_TIERS[event.tier].field
-  const skill = Math.max(0, ...Object.values(p.charSkill || {}), 0)
-  let wins = 0
-  for (let round = 0; round < 4; round++) {
-    // The field sharpens every round — winning out means beating the top of it.
-    const opp = lo + (hi - lo) * (0.25 + round * 0.22) + (rand() - 0.5) * 6
-    const pWin = 1 / (1 + Math.pow(10, (opp - skill) / 14))
-    if (rand() < pWin) wins += 1
-    else break
-  }
-  const placeLabel = wins === 4 ? 'won it' : wins === 3 ? 'made the final four' : wins === 2 ? 'made top eight' : wins === 1 ? 'went two-and-out' : 'went out first round'
-  const prize = wins === 4 ? Math.round(ask.cost * 2.5) + 40 : wins === 3 ? Math.round(ask.cost * 1.2) : wins === 2 ? Math.round(ask.cost * 0.5) : 0
-  if (prize > 0) econLog(save, prize, `${displayName(p, save)} placed at ${event.name} — prize`)
-
-  const tier = TRAVEL_TIERS[event.tier]
-  p.glory += wins * tier.glory
-  p.belief = clamp((p.belief ?? 0) + 3 + wins * 3, 0, 100) // road reps are stage reps
-  p.elo += Math.round((wins - 1.5) * 8) // the world saw the result
-  bumpPassion(p, wins >= 3 ? 10 : wins >= 2 ? 4 : 1)
-
-  if (wins >= 3) {
-    edge(save, p, { weight: 1.4, stats: ['composure', 'stamina'], why: `went the distance at ${event.name}` })
-    chronicle(save, '✈️', `${displayName(p, save)} ${placeLabel} at ${event.name}. The arcade's money came home with interest.`)
-  } else if (wins <= 1 && (p.belief ?? 0) >= 35) {
-    eliminationWound(save, p, {
-      believed: true,
-      late: false,
-      favored: (p.belief ?? 0) >= 60,
-      stage: event.tier === 'major' ? 'evo' : 'tournament',
-    })
-  }
-  writeJournal(save, p, wins >= 3 ? 'awayPlaced' : 'awayOut', {
-    event: event.name, place: placeLabel, always: true,
-  })
 }

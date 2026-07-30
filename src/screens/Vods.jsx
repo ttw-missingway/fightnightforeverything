@@ -3,7 +3,7 @@ import { useStore } from '../state/store.jsx'
 import { isVodWatched } from '../game/model.js'
 
 const typeIcon = (type) =>
-  type === 'evo' ? '🌏' : type === 'teams' ? '🛡' : type === 'moneymatch' ? '💸' : '🏆'
+  type === 'evo' ? '🌏' : type === 'circuit' ? '🌐' : type === 'teams' ? '🛡' : type === 'moneymatch' ? '💸' : '🏆'
 
 export default function Vods() {
   const { save, nav } = useStore()

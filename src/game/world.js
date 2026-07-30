@@ -50,6 +50,22 @@ export const WORLD_RANK_SIZE = 64
  * Filler is deliberately absent. The forgettable regular who wanders in on a
  * Tuesday is not a globally ranked competitor.
  */
+/**
+ * How many sets against the OUTSIDE world it takes before the list will rank
+ * one of yours at all. Elo alone can't do it: a closed room farms rating off
+ * its own regulars, so a local hero can show up at 1700 having never played
+ * anybody outside the building (see entrantPerformance's history of exactly
+ * this). The list ranks people the world has seen play — and the calendar
+ * (regionals, qualifiers, pot outsiders) is how you get seen. By the time
+ * the road record exists, the road has also corrected the elo it ranks.
+ *
+ * Twenty sets is roughly two full seasons of showing up: pots pulling names
+ * through your door, both regionals, a couple of qualifier runs. Measured at
+ * 12 the list arrived in year 2–3 and EVO (and the first ranked scalp) came
+ * with it — a year ahead of the metric-2 window the revision asks for.
+ */
+export const WORLD_SEEN_GAMES = 20
+
 export function worldRankings(save) {
   if (!save) return []
   const elites = (save.evoRoster || []).map((e) => ({
@@ -83,10 +99,19 @@ export function worldRankings(save) {
       charId: p.mainCharId || null,
       yours: true,
       retired: !!p.retired,
+      seen: (p.roadGames ?? 0) >= WORLD_SEEN_GAMES,
     }))
+  // Unseen cast sort where their elo says but hold NO rank — the list skips
+  // them the way the real world skips an unverified score. Everyone below
+  // them moves up a place; nobody is lied to.
+  let place = 0
   return [...elites, ...cast]
     .sort((a, b) => b.elo - a.elo || b.skill - a.skill || b.titles - a.titles)
-    .map((r, i) => ({ ...r, rank: i < WORLD_RANK_SIZE ? i + 1 : null }))
+    .map((r) => {
+      const eligible = r.kind === 'elite' || r.seen
+      if (eligible) place += 1
+      return { ...r, rank: eligible && place <= WORLD_RANK_SIZE ? place : null }
+    })
 }
 
 /** Just the ranked ones — the list the world actually publishes. */

@@ -198,6 +198,7 @@ export function newPlayer(partial = {}) {
     passion: 80, // 0-100 love for the game; erodes with tenure, refilled by wins/content
     belief: 0, // 0-100 earned stage composure — grows from streamed/marquee reps; the EVO "choke" factor
     popularity: 0, // 0-100 public profile — grows from being featured on stream; feeds passion
+    roadGames: 0, // sets vs the outside world (circuit, EVO, pot outsiders) — the world ranks what it has SEEN
     banished: false, // kicked out for good — gone from the scene, not coming back
     banishedDay: null,
     banishedYear: null,
@@ -955,7 +956,7 @@ export function migrateSave(save) {
   save.attention ??= newAttention()
   save.toasts ??= []
   save.lastWorldNo1 ??= null
-  save.travel ??= { nextEventAbs: 0, event: null, asks: [] }
+  save.travel ??= { asks: [], seen: {} }
   for (const t of save.arcade?.schedule || []) t.potBoost ??= 0
   for (const p of Object.values(save.players || {})) {
     p.memoriesWritten ??= (p.memories || []).length
@@ -966,6 +967,10 @@ export function migrateSave(save) {
     p.journal ??= []
     p.journalWritten ??= 0
     p.threads ??= []
+    // The road record (P4): the world ranks what it has SEEN. Saves from
+    // before the circuit get rough credit for the proof they already carry —
+    // an EVO title or a shelf of local trophies was witnessed by somebody.
+    p.roadGames ??= Math.min(40, (p.evoTitles || 0) * 16 + (p.tournamentWins || 0) * 2 + Math.floor((p.glory || 0) / 12))
   }
   trimVods(save) // replay data can outgrow localStorage in any era
   return save

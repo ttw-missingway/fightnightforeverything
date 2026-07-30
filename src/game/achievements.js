@@ -49,12 +49,13 @@ const SUMMER = 70 // June 15 → the end of August
 const TO_NEW_YEAR = 182 // June 15 → January 1
 
 /**
- * Tournaments YOU ran. EVO sits on the same hall-of-fame shelf but it is the
- * WORLD's tournament — you did not book it, fill it, or clean up after it, and
- * counting its 64-player field as "you filled a 32-entrant bracket" is exactly
- * the sort of free credit these achievements exist not to give.
+ * Tournaments YOU ran. EVO and the circuit (majors, qualifiers, regionals,
+ * the Squad Showdown) sit on the same hall-of-fame shelf but they are the
+ * WORLD's tournaments — you did not book them, fill them, or clean up after
+ * them, and counting a major's 16-invitation field as "you filled a bracket"
+ * is exactly the sort of free credit these achievements exist not to give.
  */
-const yours = (save) => (save.hallOfFame || []).filter((r) => r.type !== 'evo')
+const yours = (save) => (save.hallOfFame || []).filter((r) => r.type !== 'evo' && r.type !== 'circuit' && !r.circuitKind)
 
 export const ACHIEVEMENTS = [
   // ---------- Idle speeds: you earn the right to skip ahead ----------

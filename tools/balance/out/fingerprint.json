@@ -5,61 +5,61 @@
     "difficulty": "normal",
     "years": 10,
     "baseSeed": 1000,
-    "full": true
+    "full": false
   },
   "headline": {
     "runs": 24,
     "survival": {
       "diedShare": 1,
       "funnels": {
-        "opinion": 17,
-        "dynamics": 6,
-        "economy": 1
+        "opinion": 13,
+        "dynamics": 9,
+        "economy": 2
       },
-      "medianLastedDays": 1391
+      "medianLastedDays": 1444
     },
     "perYear": [
       {
         "year": 1,
-        "runsAlive": 24,
+        "runsAlive": 22,
         "separationSkill": 1.52,
-        "separationElo": 1.44,
-        "separationLocalSkill": 2.43,
+        "separationElo": 1.43,
+        "separationLocalSkill": 2.3,
         "separationLocalElo": 1.23,
-        "castMeanSkill": 26.1,
-        "castTopSkill": 30.1,
-        "castSkillStddev": 3.5,
-        "castMeanElo": 1360,
-        "breakthroughsPerPlayer": 2.6,
-        "journalPerPlayer": 16.6,
-        "attentionPerWeek": 4.78,
+        "castMeanSkill": 24.6,
+        "castTopSkill": 29.9,
+        "castSkillStddev": 4.4,
+        "castMeanElo": 1341,
+        "breakthroughsPerPlayer": 2.3,
+        "journalPerPlayer": 12.6,
+        "attentionPerWeek": 4.83,
         "moneyShares": {
-          "survival": 0.69,
-          "competition": 0.09,
-          "growth": 0.2,
+          "survival": 0.71,
+          "competition": 0.03,
+          "growth": 0.25,
           "other": 0.01
         },
         "retirements": 0
       },
       {
         "year": 2,
-        "runsAlive": 23,
+        "runsAlive": 22,
         "separationSkill": 1.52,
         "separationElo": 1.44,
-        "separationLocalSkill": 2.06,
+        "separationLocalSkill": 1.99,
         "separationLocalElo": 1.34,
-        "castMeanSkill": 43.9,
-        "castTopSkill": 47,
-        "castSkillStddev": 2.3,
-        "castMeanElo": 1507,
+        "castMeanSkill": 43.4,
+        "castTopSkill": 46.5,
+        "castSkillStddev": 2.4,
+        "castMeanElo": 1509,
         "breakthroughsPerPlayer": 3.7,
-        "journalPerPlayer": 20.5,
-        "attentionPerWeek": 6.44,
+        "journalPerPlayer": 17.3,
+        "attentionPerWeek": 6.64,
         "moneyShares": {
-          "survival": 0.74,
-          "competition": 0.22,
-          "growth": 0.04,
-          "other": 0.01
+          "survival": 0.77,
+          "competition": 0.11,
+          "growth": 0.02,
+          "other": 0.09
         },
         "retirements": 0
       },
@@ -68,20 +68,20 @@
         "runsAlive": 22,
         "separationSkill": 1.52,
         "separationElo": 1.44,
-        "separationLocalSkill": 1.9,
-        "separationLocalElo": 1.4,
-        "castMeanSkill": 51.8,
-        "castTopSkill": 54.2,
-        "castSkillStddev": 1.8,
-        "castMeanElo": 1577,
+        "separationLocalSkill": 1.83,
+        "separationLocalElo": 1.39,
+        "castMeanSkill": 51,
+        "castTopSkill": 53.7,
+        "castSkillStddev": 2.1,
+        "castMeanElo": 1570,
         "breakthroughsPerPlayer": 2.6,
-        "journalPerPlayer": 27.8,
-        "attentionPerWeek": 6.31,
+        "journalPerPlayer": 21.9,
+        "attentionPerWeek": 6.35,
         "moneyShares": {
-          "survival": 0.72,
-          "competition": 0.26,
+          "survival": 0.73,
+          "competition": 0.12,
           "growth": 0.01,
-          "other": 0.01
+          "other": 0.15
         },
         "retirements": 0
       },
@@ -89,292 +89,119 @@
         "year": 4,
         "runsAlive": 19,
         "separationSkill": 1.51,
-        "separationElo": 1.44,
-        "separationLocalSkill": 1.78,
-        "separationLocalElo": 1.44,
-        "castMeanSkill": 55.8,
-        "castTopSkill": 58.1,
-        "castSkillStddev": 1.8,
-        "castMeanElo": 1603,
+        "separationElo": 1.43,
+        "separationLocalSkill": 1.75,
+        "separationLocalElo": 1.42,
+        "castMeanSkill": 54.8,
+        "castTopSkill": 57.3,
+        "castSkillStddev": 2.1,
+        "castMeanElo": 1605,
         "breakthroughsPerPlayer": 1.8,
-        "journalPerPlayer": 34.1,
-        "attentionPerWeek": 6.33,
+        "journalPerPlayer": 27.4,
+        "attentionPerWeek": 6.29,
         "moneyShares": {
-          "survival": 0.7,
-          "competition": 0.29,
-          "growth": 0,
-          "other": 0.01
+          "survival": 0.64,
+          "competition": 0.1,
+          "growth": 0.01,
+          "other": 0.25
         },
-        "retirements": 0
+        "retirements": 0.3
       },
       {
         "year": 5,
-        "runsAlive": 3,
+        "runsAlive": 5,
         "separationSkill": 1.5,
         "separationElo": 1.43,
-        "separationLocalSkill": 1.76,
-        "separationLocalElo": 1.48,
-        "castMeanSkill": 57.1,
-        "castTopSkill": 59.4,
-        "castSkillStddev": 1.9,
-        "castMeanElo": 1611,
-        "breakthroughsPerPlayer": 1.3,
-        "journalPerPlayer": 33.2,
-        "attentionPerWeek": 6.29,
+        "separationLocalSkill": 1.81,
+        "separationLocalElo": 1.5,
+        "castMeanSkill": 57,
+        "castTopSkill": 59.1,
+        "castSkillStddev": 2,
+        "castMeanElo": 1634,
+        "breakthroughsPerPlayer": 1.2,
+        "journalPerPlayer": 32.1,
+        "attentionPerWeek": 6.5,
         "moneyShares": {
-          "survival": 0.7,
-          "competition": 0.3,
+          "survival": 0.62,
+          "competition": 0.1,
           "growth": 0,
-          "other": 0
+          "other": 0.28
         },
-        "retirements": 0.4
+        "retirements": 0.8
       },
       {
         "year": 6,
         "runsAlive": 0,
-        "separationSkill": 1.52,
-        "separationElo": 1.44,
-        "separationLocalSkill": 1.82,
-        "separationLocalElo": 1.57,
-        "castMeanSkill": 57.3,
-        "castTopSkill": 59.9,
-        "castSkillStddev": 1.7,
-        "castMeanElo": 1646,
-        "breakthroughsPerPlayer": 1.7,
-        "journalPerPlayer": 49,
-        "attentionPerWeek": 6.23,
+        "separationSkill": 1.5,
+        "separationElo": 1.42,
+        "separationLocalSkill": 2.07,
+        "separationLocalElo": 1.64,
+        "castMeanSkill": 58.7,
+        "castTopSkill": 61.1,
+        "castSkillStddev": 2.8,
+        "castMeanElo": 1754,
+        "breakthroughsPerPlayer": 1.2,
+        "journalPerPlayer": 39,
+        "attentionPerWeek": 6.59,
         "moneyShares": {
-          "survival": 0.67,
-          "competition": 0.33,
+          "survival": 0.65,
+          "competition": 0.1,
           "growth": 0,
-          "other": 0
+          "other": 0.24
         },
-        "retirements": 0.3
+        "retirements": 1
       }
     ],
     "firstEliteWin": {
-      "share": 0.92,
-      "medianYear": 3
+      "share": 0.83,
+      "medianYear": 4
+    },
+    "firstRankedWin": {
+      "share": 0.83,
+      "medianYear": 3.5
     },
     "eureka": {
       "careers": 144,
-      "meanCareerBreakthroughs": 9.9,
+      "meanCareerBreakthroughs": 9.3,
       "chosenKinds": {
-        "wound": 483,
-        "edge": 210,
-        "influence": 730
+        "wound": 371,
+        "edge": 176,
+        "influence": 793
       },
-      "woundEdgeRatio": 2.3,
+      "woundEdgeRatio": 2.11,
       "forcedShare": 0,
       "crossRowShare": 0.85,
-      "temperamentChanges": 24,
+      "temperamentChanges": 27,
       "breakthroughShare": 1,
-      "burnoutShare": 0.14,
+      "burnoutShare": 0.17,
       "capRealisation": {
         "skill": 0,
-        "community": 0.65,
-        "popularity": 0.47
+        "community": 0.73,
+        "popularity": 0.45
       },
-      "attractorMatch": 0.24,
-      "toppedAnyShare": 0.74
+      "attractorMatch": 0.32,
+      "toppedAnyShare": 0.79
     },
     "retirementDispersion": {
-      "meanStddevDays": 55,
-      "runsMeasured": 1
+      "meanStddevDays": 100,
+      "runsMeasured": 9
     },
     "eliteBand": {
       "year1": {
         "championSkill": 95.2,
-        "top8MeanSkill": 88.5,
-        "top64CutoffSkill": 54.3,
+        "top8MeanSkill": 88.6,
+        "top64CutoffSkill": 53.8,
         "medianSkill": 60.5,
-        "championElo": 2531.2,
-        "top64CutoffElo": 1575.2
+        "championElo": 2543.8,
+        "top64CutoffElo": 1574.8
       },
       "final": {
-        "championSkill": 97.5,
-        "top8MeanSkill": 90.7,
-        "top64CutoffSkill": 55.8,
-        "medianSkill": 63.1,
-        "championElo": 2535.4,
-        "top64CutoffElo": 1598.8
-      }
-    },
-    "leverLatency": {
-      "stream": {
-        "lever": "stream",
-        "label": "daily streaming begins → followers",
-        "latencyDays": 6,
-        "effectAt56d": 307.83,
-        "seeds": 6,
-        "pullFired": 6,
-        "observedDays": 168
-      },
-      "money": {
-        "lever": "money",
-        "label": "pots staked + travel funded → bought adversity intake",
-        "latencyDays": null,
-        "effectAt56d": -4.52,
-        "seeds": 6,
-        "pullFired": 6,
-        "observedDays": 168
-      },
-      "patch": {
-        "lever": "patch",
-        "label": "one balance patch ships → relevance",
-        "latencyDays": 0,
-        "effectAt56d": 57.64,
-        "seeds": 6,
-        "pullFired": 6,
-        "observedDays": 168
-      }
-    },
-    "recovery": {
-      "toxicity": {
-        "crisis": "toxicity",
-        "curve": [
-          {
-            "k": 0,
-            "recoveredShare": 0,
-            "n": 6
-          },
-          {
-            "k": 7,
-            "recoveredShare": 0,
-            "n": 6
-          },
-          {
-            "k": 14,
-            "recoveredShare": 0,
-            "n": 6
-          },
-          {
-            "k": 28,
-            "recoveredShare": 0,
-            "n": 6
-          },
-          {
-            "k": 56,
-            "recoveredShare": 0,
-            "n": 6
-          },
-          {
-            "k": 112,
-            "recoveredShare": 0.17,
-            "n": 6
-          }
-        ]
-      },
-      "burnout": {
-        "crisis": "burnout",
-        "curve": [
-          {
-            "k": 0,
-            "recoveredShare": 0.67,
-            "n": 6
-          },
-          {
-            "k": 7,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 14,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 28,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 56,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 112,
-            "recoveredShare": 0.5,
-            "n": 6
-          }
-        ]
-      },
-      "irrelevance": {
-        "crisis": "irrelevance",
-        "curve": [
-          {
-            "k": 0,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 7,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 14,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 28,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 56,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 112,
-            "recoveredShare": 0.5,
-            "n": 6
-          }
-        ]
-      },
-      "plateau": {
-        "crisis": "plateau",
-        "curve": [
-          {
-            "k": 0,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 7,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 14,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 28,
-            "recoveredShare": 0.33,
-            "n": 6
-          },
-          {
-            "k": 56,
-            "recoveredShare": 0.5,
-            "n": 6
-          },
-          {
-            "k": 112,
-            "recoveredShare": 0.83,
-            "n": 6
-          }
-        ]
-      },
-      "naturalIncidence": {
-        "toxicity": 0,
-        "burnout": 0.5,
-        "irrelevance": 1,
-        "plateau": 1
+        "championSkill": 97.9,
+        "top8MeanSkill": 90.9,
+        "top64CutoffSkill": 55.9,
+        "medianSkill": 63.4,
+        "championElo": 2543.3,
+        "top64CutoffElo": 1598.1
       }
     }
   }

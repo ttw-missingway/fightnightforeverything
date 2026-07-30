@@ -2,10 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game/sim.js'
 import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyOf } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
+import { runCircuitEvent, ensureRegionalField, hostsForYear } from '../game/circuit.js'
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
 import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
 import { migrateSave, newSave, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION } from '../game/model.js'
+import { bindRng } from '../game/rng.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
@@ -144,6 +146,17 @@ export function salvageCastById(id) {
 function repairWorld(save) {
   if (!save) return save
   if ((save.evoRoster || []).length) repairEvoRoster(save)
+  // The circuit's standing state (P4): the national board and the year's
+  // booked host cities exist BEFORE the first screen renders, because both
+  // are minted from the save's own stream/current standings and a render must
+  // never be the thing that commits them (the P3 determinism lesson). On a
+  // mid-play save these are no-ops.
+  if ((save.evoRoster || []).length) {
+    bindRng(save)
+    ensureRegionalField(save)
+    hostsForYear(save, save.year)
+    hostsForYear(save, save.year + 1)
+  }
   return save
 }
 
@@ -333,7 +346,8 @@ function stepSave(next) {
     if (today === 'evo' || today) {
       const res = today === 'evo'
         ? runEvo(next)
-        : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+        : today.circuit ? runCircuitEvent(next, today.circuit)
+          : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
       if (res.ok) {
         advanceDay(next)
         return { type: 'tournament', record: res.record }
@@ -384,7 +398,8 @@ function idleArcadeStep(next) {
     if (today === 'evo' || today) {
       const res = today === 'evo'
         ? runEvo(next)
-        : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+        : today.circuit ? runCircuitEvent(next, today.circuit)
+          : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
       if (res.ok) {
         const rec = res.record
         rec.revealed = 0
@@ -607,7 +622,8 @@ export function StoreProvider({ children }) {
       if (today === 'evo' || today) {
         const res = today === 'evo'
           ? runEvo(next)
-          : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+          : today.circuit ? runCircuitEvent(next, today.circuit)
+            : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
         if (res.ok) {
           advanceDay(next)
           persistSave(next)

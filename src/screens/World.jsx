@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useStore } from '../state/store.jsx'
-import { worldRankings, rankedWorld, cutoffElo, bestRanked, theClimb, dossier, TIER_LABEL, WORLD_RANK_SIZE } from '../game/world.js'
+import { worldRankings, rankedWorld, cutoffElo, bestRanked, theClimb, dossier, TIER_LABEL, WORLD_RANK_SIZE, WORLD_SEEN_GAMES } from '../game/world.js'
+import { regionalRankings, REGIONAL_CUT, upcomingCircuit, circuitEventName } from '../game/circuit.js'
+import { absDayOf } from '../game/constants.js'
 import { lookOf } from '../game/skins.js'
 import { Portrait, PointDots, StatBar } from '../components/ui.jsx'
 import { lookArt, playerArt } from '../components/art.js'
@@ -63,7 +65,11 @@ export default function World() {
                 {mine.elo} elo{charName(mine) ? ` · ${charName(mine)}` : ''}
                 {mine.rank != null
                   ? ` · on the world list`
-                  : ` · ${Math.max(1, cutoff - mine.elo)} elo short of the cut (#${WORLD_RANK_SIZE} sits at ${cutoff})`}
+                  : mine.seen === false && mine.elo >= cutoff
+                    // The list ranks people the world has SEEN. The road —
+                    // regionals, qualifiers, names a pot pulls in — is how.
+                    ? ` · the elo is there, the world hasn't seen it: ${save.players[mine.id]?.roadGames || 0} of ${WORLD_SEEN_GAMES} road sets`
+                    : ` · ${Math.max(1, cutoff - mine.elo)} elo short of the cut (#${WORLD_RANK_SIZE} sits at ${cutoff})`}
               </p>
             </>
           ) : (
@@ -96,12 +102,31 @@ export default function World() {
         </div>
       </div>
 
+      {/* The world's calendar — always visible, always coming (P4). The next
+          three dates are the budget problem: did you keep the fare money? */}
+      <div className="card">
+        <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+          {upcomingCircuit(save, 3).map(({ def, year, startAbs }) => {
+            const away = startAbs - absDayOf(save.day, save.year)
+            return (
+              <span className="small" key={`${def.key}:${year}`}>
+                🗓 <strong>{circuitEventName(save, def, year)}</strong>
+                <span className="dim"> · {away} day{away === 1 ? '' : 's'}</span>
+              </span>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="tabs">
         <button className={scope === 'top' ? 'active' : ''} onClick={() => setScope('top')}>🌍 World top 64</button>
+        <button className={scope === 'region' ? 'active' : ''} onClick={() => setScope('region')}>🗺 National board</button>
         <button className={scope === 'mine' ? 'active' : ''} onClick={() => setScope('mine')}>🏠 My cast</button>
       </div>
 
-      <div className="card">
+      {scope === 'region' && <NationalBoard save={save} nav={nav} openDossier={setOpenId} charName={charName} />}
+
+      {scope !== 'region' && <div className="card">
         <div className="table-scroll"><table>
           <thead>
             <tr><th>#</th><th>Player</th><th>Scene</th><th>Main</th><th>Elo</th><th>Skill</th><th>EVO</th></tr>
@@ -133,7 +158,54 @@ export default function World() {
           </tbody>
         </table></div>
         {scope === 'mine' && shown.length === 0 && <p className="dim">No players yet.</p>}
-      </div>
+      </div>}
+    </div>
+  )
+}
+
+/**
+ * The national board — the missing rung (P4). Your country's own top 64,
+ * strong in proportion to how much scene the country actually has. The top
+ * sixteen make the regionals twice a year, and the cut line is drawn where
+ * it bites. This is the ladder a year-two player can actually appear on.
+ */
+function NationalBoard({ save, nav, openDossier, charName }) {
+  const rows = regionalRankings(save).slice(0, 64)
+  return (
+    <div className="card">
+      <p className="dim small" style={{ marginTop: 0 }}>
+        {save.arcade.country || 'Your country'}'s own ladder. The top {REGIONAL_CUT} are invited to the
+        regionals — twice a year, winner takes the season. World-ranked names hold spots here too;
+        whether they bother to show up is another matter.
+      </p>
+      <div className="table-scroll"><table>
+        <thead>
+          <tr><th>#</th><th>Player</th><th>Main</th><th>Elo</th><th>Skill</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <Fragment key={r.id}>
+              <tr className={`clickable${r.yours ? ' world-mine' : ''}`}
+                onClick={() => (r.yours ? nav('players', { playerId: r.id }) : r.kind === 'elite' ? openDossier(r.id) : null)}
+                style={r.kind === 'rc' ? { cursor: 'default' } : undefined}>
+                <td className="dim">{r.rank}</td>
+                <td>
+                  <strong className={r.yours ? 'cyan' : r.kind === 'elite' ? 'gold' : ''}>{r.name}</strong>
+                  {r.kind === 'elite' && <span className="dim small" title="world-ranked"> 🌍</span>}
+                </td>
+                <td className="small">{charName(r) || <span className="dim">—</span>}</td>
+                <td>{r.elo}</td>
+                <td className="cyan">{r.skill || <span className="dim">—</span>}</td>
+              </tr>
+              {i === REGIONAL_CUT - 1 && (
+                <tr><td colSpan={5} className="dim small" style={{ textAlign: 'center', padding: 2, borderBottom: '1px dashed var(--border)' }}>
+                  — the regionals cut —
+                </td></tr>
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+      </table></div>
     </div>
   )
 }
