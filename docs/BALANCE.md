@@ -780,3 +780,79 @@ gate-1 arms if you add the variants; gate 2 needs a new script, as the
 per-100-days instrumentation is not in `playRun`'s metrics bundle. The
 scratchpad scripts from the 2026-07-28 pass were session-temporary and are
 gone — do not go looking for them.
+
+---
+
+## 14. The P0 baseline — the pre-revision game, measured (2026-07-29)
+
+**This is the number the whole revision is judged against.** Captured by
+`tools/balance/fingerprint.mjs 24 normal --years 10 --full` on the last
+commit before the deprecation lane; committed as
+`tools/balance/baseline.json`. Fully seeded — rerunning on the same code
+reproduces it byte for byte. Recorded BEFORE §4-of-REVISION's cuts on
+purpose: this measures the game the playtests actually complained about,
+with discipline and exhibitions still live.
+
+### The disease, at n=24
+
+Separation (metric 1) is FLAT: skill 1.53 → 1.51, elo 1.44 → 1.43 across
+seven years. Cast skill stddev collapses 4.4 → 0.9 while the mean converges
+on ~55. Everyone lands together, exactly as the fifty playtest hours said.
+**P1 exists to move this number and nothing else matters if it doesn't.**
+
+### Headline (metrics 1–10)
+
+| # | metric | baseline reading | target shape |
+|---|---|---|---|
+| 1 | separation | FLAT 1.53/1.44, cast σ → 0.9 | must widen |
+| 2 | first elite win | 88% of runs, median year 4 | year 4–6, majority — *already in band* (EVO pools feed contender-tier elites to qualifiers) |
+| 3 | eureka cadence | 0 — no system | 10–12/career, front-loaded |
+| 4 | breakthrough : burnout | 0 : 0.37 (37% of cast retires with nothing) | neither ~0 nor ~1 |
+| 5 | retirement dispersion | σ = 173 days (n=16 runs) | high / flat |
+| 6 | attention | ~6.1 steady decisions/week, flat y1→y7 | ~flat — *shape already right* |
+| 7 | journal volume | ~20 moments/player/yr | 15–30 — *in band* (raw memories) |
+| 8 | lever latency | stream 8d · patch 0d (+45 relevance) · money NO effect (−4.8 attendance at +56d) | stream ≈ weeks ✓ · patch ≈ now ✓ · money ≥ month — **money's lever doesn't exist yet** |
+| 9 | recovery | toxicity **flat 0 at every lag** · burnout flat 0.83 · irrelevance ~0.9 flat · plateau noisy 0.17–0.83 | S-curves with a findable cliff |
+| 10 | money's job | survival share 0.67 → 0.88, competition ~0.12, growth → 0 | must invert |
+
+Survival: 100% of 24 runs die by year 7 (median day 1660); funnels
+dynamics 15 / opinion 7 / economy 2 — the room and the world's interest
+kill runs, not the books, consistent with §12's ladder.
+
+### Metric 9 details worth remembering
+
+- **Toxicity recovers 0% at every lag** with the full discipline toolkit
+  (weekly warnings on the chief instigator + separations) — the number
+  REVISION §5 predicted, now on record. P3's levers are held against this.
+- **No curve has lag structure.** Burnout is 0.83 whether you react on day
+  0 or day 112 — "caught it early" is currently meaningless everywhere,
+  which is precisely the two-hands-ahead failure the revision claims.
+- Natural incidence over 6y (n=4): burnout 0.83, irrelevance 0.83, plateau
+  0.83 — injected crises correspond to things that actually happen.
+  Toxicity detected 0 naturally at threshold 0.45; either the detector
+  threshold is high or natural toxicity is rarer than remembered. Caveat,
+  not a finding — revisit when P3 touches chemistry.
+
+### The elite band — §1.6's calibration data (open question 2, half-answered)
+
+| point | skill | elo |
+|---|---|---|
+| world champion | ~95.4 | ~2533 |
+| top-8 mean | ~89.2 | — |
+| median elite | ~60.1 | — |
+| top-64 cutoff | ~55.2 | ~1607 |
+
+§1.6 hypothesised the top 64 begins around ~85; **it measures ~55.** With
+a 75–100 spirit roll, even a tertiary axis (~81 expected) would clear the
+current cutoff by 25 points — a Healer wouldn't be fringe-top-64, they'd be
+top-20. Before P1 sets the roll range, either the contender band must rise
+or the range must be recalibrated against these numbers. Do not set 75–100
+by feel; that is now a measured decision.
+
+### Instrument notes
+
+Money's lever latency is measured against TODAY'S money levers (ads +
+capacity) and the effect is negative — the dirt/staffing feedback documented
+in constants.js eats the extra traffic. When P3 gives money its real job
+(pots + travel), latency.mjs's money lever definition changes with it; the
+baseline keeps the old reading for comparison.

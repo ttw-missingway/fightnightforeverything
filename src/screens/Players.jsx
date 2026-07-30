@@ -11,9 +11,8 @@ import { INTEREST_LABEL } from '../game/interest.js'
 import { displayName } from '../game/util.js'
 import { skillCeiling } from '../game/match.js'
 import { voiceSummary } from '../game/dialogue.js'
-import { warnPlayer, banish, separate, unseparate, separationOf, warnableBehaviors, toxicityBlame } from '../game/discipline.js'
+import { banish } from '../game/discipline.js'
 import { rosterOpen } from '../game/model.js'
-import { isUnlocked } from '../game/achievements.js'
 
 const bestSkill = (p) => Math.round(Math.max(0, ...Object.values(p.charSkill || {}), 0))
 
@@ -43,21 +42,17 @@ const PASSION_COLOR = (v) => (v >= 55 ? 'var(--green)' : v >= 30 ? 'var(--gold)'
  */
 function RosterWindow({ save, nav }) {
   if (!rosterOpen(save) || save.settings?.mode === 'sandbox') return null
-  const points = save.prestige?.points || 0
+  // Banked prestige no longer buys stats — the power path was deprecated with
+  // the revision (docs/DEPRECATED.md): a returning run must never start
+  // stronger, or "my player beat an elite" dies permanently. Points remain
+  // the cosmetic unlock currency, spent elsewhere.
   return (
     <div className="dangers">
       <div className="danger unlock">
         <span className="d-icon">🛠</span>
         <div>
-          <div className="d-title">
-            {points > 0
-              ? `Your crew is still yours to change — ${points} banked point${points === 1 ? '' : 's'} to spend`
-              : 'Your crew is still yours to change'}
-          </div>
-          <div className="d-detail">
-            Nothing has happened yet. Open any player to rebuild them
-            {points > 0 ? ' with everything this lineage has earned' : ''}.
-          </div>
+          <div className="d-title">Your crew is still yours to change</div>
+          <div className="d-detail">Nothing has happened yet. Open any player to rebuild them.</div>
           <div className="d-fix">This closes the moment you open the arcade for the first day.</div>
         </div>
       </div>
@@ -359,7 +354,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
         </div>
       )}
 
-      <DisciplinePanel save={save} player={p} mutate={mutate} />
+      <BanishPanel save={save} player={p} mutate={mutate} />
       {!p.retired && !p.banished && <ComparePanel save={save} player={p} mutate={mutate} goTo={goTo} />}
 
       <div className="grid2">
@@ -443,27 +438,8 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           {rels.map(({ other, v }) => (
             <div className="row spread" key={other.id} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
               <span style={{ cursor: 'pointer' }} onClick={() => goTo(other.id)}>{displayName(other, save)}</span>
-              <span className="row" style={{ gap: 6 }}>
-                {(() => {
-                  const sep = separationOf(save, p.id, other.id)
-                  if (sep) {
-                    return (
-                      <button className="small" title="they are being kept apart — click to let them near each other again"
-                        style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}
-                        onClick={() => mutate((s) => unseparate(s, p.id, other.id))}>
-                        ✋ apart · {sep.daysLeft}d
-                      </button>
-                    )
-                  }
-                  if (v > -40 || p.retired || p.banished || other.retired || other.banished) return null
-                  return (
-                    <button className="small" title="keep these two apart for 3 weeks so the bad blood can cool"
-                      onClick={() => mutate((s) => separate(s, p.id, other.id))}>✋ keep apart</button>
-                  )
-                })()}
-                <span className={`small ${v >= 20 ? 'green' : v <= -20 ? 'red' : 'dim'}`}>
-                  {relLabel(v)} ({Math.round(v)})
-                </span>
+              <span className={`small ${v >= 20 ? 'green' : v <= -20 ? 'red' : 'dim'}`}>
+                {relLabel(v)} ({Math.round(v)})
               </span>
             </div>
           ))}
@@ -513,90 +489,33 @@ function ComparePanel({ save, player: p, mutate, goTo }) {
             <span className="small gold">{displayName(p, save)} {h.w}–{h.l} {displayName(o, save)}</span>
           </div>
           {drama && <p className="small" style={{ margin: '6px 0 0', color: drama.color }}>{drama.text}</p>}
-          {(() => {
-            const sep = separationOf(save, p.id, o.id)
-            if (sep) {
-              return (
-                <div className="row spread" style={{ marginTop: 8, alignItems: 'center' }}>
-                  <span className="small gold">
-                    ✋ Kept apart — {sep.daysLeft} day{sep.daysLeft === 1 ? '' : 's'} left.
-                    <span className="dim"> They won't be matched or drawn into the same circle.</span>
-                  </span>
-                  <button className="small" onClick={() => mutate((s) => unseparate(s, p.id, o.id))}>Lift it</button>
-                </div>
-              )
-            }
-            if (mutual > -40 || p.retired || p.banished || o.retired || o.banished) return null
-            return (
-              <button className="small" style={{ marginTop: 6 }}
-                onClick={() => mutate((s) => separate(s, p.id, o.id))}>✋ Keep these two apart (3 weeks)</button>
-            )
-          })()}
         </div>
       )}
     </div>
   )
 }
 
-// The owner's discipline lever: warn a problem player (risking backfire),
-// or ban them outright. Available in every mode — this is a god action, not
-// a stat edit.
-function DisciplinePanel({ save, player: p, mutate }) {
-  const [note, setNote] = useState(null)
+// The one nuclear option. Warnings and separations went to the deprecation
+// lane with the revision (docs/DEPRECATED.md) — the room is shaped by the
+// levers now, not by punishment — but you can still ask someone to leave.
+// Always available, never gated: rare, painful, and yours.
+function BanishPanel({ save, player: p, mutate }) {
   const [confirmBan, setConfirmBan] = useState(false)
   if (p.retired || p.banished) return null
-  // Warnings, separations and bans are earned tools. Until then the only
-  // levers on a souring room are the ones that were always there: matchmaking,
-  // a clean floor, a staffed counter, and a meta nobody hates.
-  if (!isUnlocked(save, 'discipline')) return null
-  const behaviors = warnableBehaviors(save, p)
-  const blame = toxicityBlame(save, p)
-  const warnings = p.warnings || []
-  if (!behaviors.length && !warnings.length && blame < 4) return null
-
-  const doWarn = (behavior) => {
-    let res
-    mutate((s) => { const live = s.players[p.id]; if (live) res = warnPlayer(s, live, behavior) })
-    if (res) setNote({ outcome: res.outcome, text: res.text })
-  }
   const doBanish = () => { mutate((s) => { const live = s.players[p.id]; if (live) banish(s, live, null) }); setConfirmBan(false) }
-
-  const LABEL = { toxicity: 'toxic behavior', hygiene: 'poor hygiene' }
   return (
-    <div className="card" style={{ borderColor: 'var(--gold)' }}>
-      <h3 style={{ marginTop: 0 }}>⚖️ Discipline</h3>
-      {behaviors.length > 0 ? (
-        <p className="small dim" style={{ marginTop: 0 }}>
-          Problems worth addressing: {behaviors.map((b) => LABEL[b]).join(', ')}. A warning might straighten them
-          out — or backfire and make it worse. How they take it comes down to their temperament.
-        </p>
-      ) : (
-        <p className="small dim" style={{ marginTop: 0 }}>No active problems right now.</p>
-      )}
-      <div className="row" style={{ flexWrap: 'wrap' }}>
-        {behaviors.map((b) => (
-          <button key={b} className="small" onClick={() => doWarn(b)}>⚠ Warn about {LABEL[b]}</button>
-        ))}
-        {!confirmBan
-          ? <button className="small" style={{ color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => setConfirmBan(true)}>🚫 Banish…</button>
-          : (
-            <span className="row" style={{ gap: 6 }}>
-              <span className="small red">Ban {displayName(p, save)} for good? (One of your finite roster — they never come back.)</span>
-              <button className="small" style={{ color: 'var(--red)', borderColor: 'var(--red)' }} onClick={doBanish}>Confirm ban</button>
-              <button className="small" onClick={() => setConfirmBan(false)}>Cancel</button>
-            </span>
-          )}
-      </div>
-      {note && (
-        <p className="small" style={{ margin: '8px 0 0', color: note.outcome === 'backfire' ? 'var(--red)' : note.outcome === 'reform' ? 'var(--green)' : 'var(--dim)' }}>
-          {note.outcome === 'backfire' ? '💥 ' : note.outcome === 'reform' ? '✓ ' : '• '}{note.text}
-        </p>
-      )}
-      {warnings.length > 0 && (
-        <p className="small dim" style={{ margin: '6px 0 0' }}>
-          Warned {warnings.length}× ({warnings.filter((w) => w.outcome === 'backfire').length} backfired).
-        </p>
-      )}
+    <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 8 }}>
+      {!confirmBan
+        ? <button className="small" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+            title="ask them to leave for good — the one thing an owner can still make final"
+            onClick={() => setConfirmBan(true)}>🚫 Ask them to leave…</button>
+        : (
+          <span className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <span className="small red">Ban {displayName(p, save)} for good? (One of your finite roster — they never come back.)</span>
+            <button className="small" style={{ color: 'var(--red)', borderColor: 'var(--red)' }} onClick={doBanish}>Confirm ban</button>
+            <button className="small" onClick={() => setConfirmBan(false)}>Cancel</button>
+          </span>
+        )}
     </div>
   )
 }
