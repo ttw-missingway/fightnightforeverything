@@ -54,7 +54,7 @@ mkdirSync(OUT, { recursive: true })
 
 bake('year-2-established', 'a healthy scene, two years in — regulars, teams, a channel', () => runYears(501, 2))
 
-bake('year-5-dynasty', 'five years survived on normal — the late-game state most testing never reaches', () => runYears(524, 5))
+bake('year-5-dynasty', 'five years survived on normal — the late-game state most testing never reaches', () => runYears(527, 5))
 
 bake('toxic-room', 'the three most intense players at each other\'s throats, day ~400', () => {
   const save = runYears(502, 1.2)
@@ -71,7 +71,7 @@ bake('burnout-star', 'the best player in the building at passion 10 — retireme
 })
 
 bake('irrelevant', 'relevance cratered to 20 — the world stopped caring', () => {
-  const save = runYears(504, 1.5)
+  const save = runYears(560, 1.5)
   if (!save) return null
   CRISES.irrelevance.inject(save)
   return save

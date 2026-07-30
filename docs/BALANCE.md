@@ -894,3 +894,81 @@ operating on copies, verified stripped from the production bundle.
 **Next: P1, the eureka spine.** The number to move is separation — flat 1.53
 at n=24 — and §14's elite-band table is the input the spirit-roll range must
 be calibrated against.
+
+---
+
+## 15. P1 — the eureka spine, built and measured (2026-07-30)
+
+REVISION §1, implemented in full: per-stat pressure (never one bare meter),
+the three channels (wound dominant, edge selective, influence = company +
+character demands + spirit radiance), the §1.7 conversion split, the §1.8
+belief amplifier, thresholds 25 × 1.35, forced resolution at 2.5×,
+temperament inertia with the rare identity shift, the spirit layer (six
+orderings, hidden 75–100 rolls, three caps, three radiances), and the
+breakthrough choice — the sim answers for everyone but YOUR cast, who wait
+for you on the Players screen.
+
+### Metric 1 — the disease is no longer terminal
+
+Measured n=24 × 10y. The metric was re-specified to read the LOCAL scene
+(cast + filler regulars): with 80 elites in the world ratio, six cast members
+could not move the number that was supposed to measure them. The world ratio
+(the elite mythology gap) is retained and stable at ~1.53.
+
+| year | local sep (skill) | local sep (elo) | cast mean/top | σ |
+|---|---|---|---|---|
+| 1 | 2.32 | 1.23 | 25/30 | 4.1 |
+| 2 | 2.04 | 1.33 | 44/48 | 2.8 |
+| 3 | 1.85 | 1.39 | 52/54 | 1.9 |
+| 4 | **1.76 (trough)** | 1.43 | 56/58 | 1.8 |
+| 5 | 1.80 | 1.49 | 58/60 | 1.7 |
+| 6 | **2.08** | **1.65** | 59/61 | 1.7 |
+
+The shape: a genuine trough in years 3–4 while the cast climbs through the
+veteran pack, then RE-STRATIFICATION — the star pulls away and keeps pulling
+until the run dies. Local elo separation widens monotonically from year one.
+The baseline's shape was converge-and-stay-converged (σ 4.4 → 0.9, forever).
+**The full "widens across ten years" claim is now explicitly a survival
+problem: every run still dies by year 6 (median 1406d), which is P3–P5's
+job.** Two structural causes of convergence were removed on the way: the NPC
+skill tether (castTop − 4 → castTop − 12; the old value welded the room to
+the cast) and the competent player's egalitarian camera (streams 'best' now —
+§1.8 makes exposure the growth gate, so WHO gets the camera is cultivation).
+
+### §1.11, at n=144 careers
+
+- **Cadence (metric 3): 9.4 per career** (2.3 / 3.5 / 2.4 / 1.8 / 1.2 / 0.4
+  by year) — in the 8–11 band, front-loaded, thinning. Never zero for an
+  active cast player.
+- **Wound : edge = 2.3** (588 : 256, influence 503). Wound-dominant with a
+  real minority of edges — the §1.3 tension exists. It initially measured
+  1:8 edge-heavy with a default every-win edge; the fix (edges only for
+  NOTABLE success) is the difference between a spine and a skill tree.
+- **Temperament changes: 19 across 144 careers** (~0.13/career) after inertia
+  tuning (ROW_OUT 1.5, shift at 7 cross-row breakthroughs into one row).
+- **Forced resolutions: 0** with a competent owner answering promptly — the
+  deadline exists for the owner who sits on the choice (browser reality, not
+  harness reality).
+- **Metric 4: burnout 0.25 in the top-adversity quartile** (breakthroughShare
+  reads 1 at the ≥3-bt bar — the bar is too low to discriminate; refine when
+  retirement matters more, P5).
+- **Cap realisation: 0 on every axis.** Careers are 4–5 years and the derived
+  ceiling is the binding constraint; the spirit walls sit above what a
+  truncated career can reach. The steering exists (the long-plateau
+  redirection fires — "months at the same wall" entries are in the
+  inspectors), but §1.6's attractor CANNOT be validated until careers extend
+  (P5) or the roll range drops. On record as P1's open item, with the roll
+  range untouched at [75,100] per §14's elite-band note.
+- Metric 2 side-effect: first elite win now 92% of runs, **median year 3**
+  (was year 4) — the spine accelerates the climb. Watch in P4 (its exit
+  window is years 4–6).
+- Metric 6 held ~6 decisions/week flat with eureka choices included; metric 7
+  at 21–26/player/year.
+- Denied-funding wounds (§1.2's last row) await P3's travel system.
+
+### Instruments
+
+`eureka.mjs` now reports all of §1.11. `metrics.mjs` carries per-career
+eureka reads and the local separation views. The dev-suite inspector shows
+per-stat pressure with named evidence; determinism invariants hold with the
+full spine (400d).

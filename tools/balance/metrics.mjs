@@ -55,7 +55,15 @@ function worldRows(save) {
   const cast = activeCast(save).filter((p) => p.isRegular)
     .map((p) => ({ skill: bestSkillOf(p), elo: p.elo || 0 }))
   const elites = (save.evoRoster || []).map((e) => ({ skill: e.skill || 0, elo: e.elo || 0 }))
-  return { cast, elites, world: [...cast, ...elites] }
+  // The LOCAL competitive scene — cast plus filler regulars. This is the
+  // population the playtests diagnosed ("everyone lands at 40–50 skill and
+  // 1600–1700 elo"): with 80 elites in the world ratio, six cast members can
+  // move without the number noticing, so the disease must be read locally.
+  const local = Object.values(save.players)
+    .filter((p) => p.isRegular && !p.retired && !p.banished)
+    .map((p) => ({ skill: bestSkillOf(p), elo: p.elo || 0 }))
+    .filter((r) => r.skill > 5)
+  return { cast, elites, world: [...cast, ...elites], local }
 }
 
 // top-5% mean ÷ median — the separation ratio of metric 1.
@@ -83,7 +91,7 @@ function eliteBand(save) {
 }
 
 function yearSnapshot(save, yearJustClosed, ctx) {
-  const { cast, world } = worldRows(save)
+  const { cast, world, local } = worldRows(save)
   const castSkills = cast.map((r) => r.skill)
   const castElos = cast.map((r) => r.elo)
   return {
@@ -93,6 +101,9 @@ function yearSnapshot(save, yearJustClosed, ctx) {
     separation: {
       skill: separationOf(world, 'skill'),
       elo: separationOf(world, 'elo'),
+      // The metric-1 read that can actually move: the local hierarchy.
+      localSkill: separationOf(local, 'skill'),
+      localElo: separationOf(local, 'elo'),
     },
     cast: {
       meanSkill: r1(mean(castSkills)),
@@ -103,6 +114,9 @@ function yearSnapshot(save, yearJustClosed, ctx) {
     },
     eliteBand: eliteBand(save),
     retirements: ctx.retirementsThisYear,
+    breakthroughsPerPlayer: ctx.castYearStart.size && ctx.daysThisYear
+      ? r1((ctx.breakthroughsThisYear / ctx.castYearStart.size) * (DAYS_PER_YEAR / ctx.daysThisYear))
+      : 0,
     // A run opens mid-June and can die mid-year, so rates are normalised by
     // the days actually played — otherwise every first and last year would
     // read as half the true cadence.
@@ -132,11 +146,16 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
   let lastSteady = save.attention?.steady || 0
   let retiredSeen = new Set()
 
+  const btTotal = (s) => Object.values(s.players)
+    .filter((p) => !p.npc && p.createdBy === 'user')
+    .reduce((n, p) => n + (p.eureka?.count || 0), 0)
   const newYearCtx = () => ({
     retirementsThisYear: 0,
     journalWrittenThisYear: 0,
     steadyThisYear: 0,
     daysThisYear: 0,
+    breakthroughsThisYear: 0,
+    btStart: btTotal(save),
     moneyThisYear: { survival: 0, competition: 0, growth: 0, other: 0, income: 0 },
     castYearStart: new Set(activeCast(save).map((p) => p.id)),
     journalStart: journalTotal(save),
@@ -198,6 +217,7 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
     const dead = isDead(save)
     if (save.year !== year || dead || d === horizon - 1) {
       ctx.journalWrittenThisYear = journalTotal(save) - ctx.journalStart
+      ctx.breakthroughsThisYear = btTotal(save) - ctx.btStart
       yearly.push(yearSnapshot(save, year, ctx))
       year = save.year
       ctx = newYearCtx()
@@ -206,10 +226,33 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
   }
 
   const finalCast = Object.values(save.players).filter((p) => !p.npc && p.createdBy === 'user')
+  // The §1.11 per-career reads, one row per cast member.
+  const castEureka = finalCast.map((p) => {
+    const e = p.eureka || {}
+    const log = e.log || []
+    const topped = e.axisToppedAbs || {}
+    const first = Object.entries(topped).filter(([, v]) => v != null).sort((a, b) => a[1] - b[1])[0]?.[0] || null
+    return {
+      spirit: p.spirit,
+      count: e.count || 0,
+      wound: log.filter((l) => l.kind === 'wound').length,
+      edge: log.filter((l) => l.kind === 'edge').length,
+      influence: log.filter((l) => l.kind === 'influence').length,
+      forced: log.filter((l) => l.forced).length,
+      cross: log.filter((l) => l.cross).length,
+      rowShifts: e.rowShifts || 0,
+      adversity: Math.round(e.adversity || 0),
+      burnout: Math.round(e.burnout || 0),
+      retired: !!p.retired,
+      topped: Object.keys(topped).filter((k) => topped[k] != null),
+      toppedFirst: first,
+    }
+  })
   return {
     seed,
     yearly,
     events,
+    castEureka,
     final: {
       died: isDead(save),
       funnel: save.economy.foreclosed ? 'economy' : (save.gameOver?.funnel || null),
@@ -221,6 +264,47 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
       attentionSteady: save.attention?.steady || 0,
     },
     save,
+  }
+}
+
+/**
+ * The §1.11 block: everything eureka.mjs reports, computed over every cast
+ * career in the sample. Metric 4's cohort is the top adversity quartile —
+ * the wager is only a wager for the people actually being pushed.
+ */
+function aggregateEureka(runs) {
+  const careers = runs.flatMap((r) => r.castEureka || [])
+  if (!careers.length) return { breakthroughsPerPlayerYear: 0, breakthroughShare: 0, burnoutShare: 0 }
+  const chosen = { wound: 0, edge: 0, influence: 0 }
+  for (const c of careers) { chosen.wound += c.wound; chosen.edge += c.edge; chosen.influence += c.influence }
+  const totalBt = chosen.wound + chosen.edge + chosen.influence
+  const byAdversity = [...careers].sort((a, b) => b.adversity - a.adversity)
+  const cohort = byAdversity.slice(0, Math.max(1, Math.ceil(careers.length / 4)))
+  const spiritFirstAxis = { guru: 'community', fool: 'popularity', king: 'popularity', hero: 'skill', outlaw: 'skill', healer: 'community' }
+  const toppedAny = careers.filter((c) => c.toppedFirst)
+  return {
+    careers: careers.length,
+    meanCareerBreakthroughs: r1(mean(careers.map((c) => c.count))),
+    chosenKinds: chosen,
+    woundEdgeRatio: chosen.edge ? r2(chosen.wound / chosen.edge) : null,
+    forcedShare: totalBt ? r2(careers.reduce((s, c) => s + c.forced, 0) / totalBt) : 0,
+    crossRowShare: totalBt ? r2(careers.reduce((s, c) => s + c.cross, 0) / totalBt) : 0,
+    temperamentChanges: careers.reduce((s, c) => s + c.rowShifts, 0),
+    // Metric 4 — the wager: of the most-pushed quartile, who broke through
+    // (≥3 career breakthroughs) and who burned out of the game entirely.
+    breakthroughShare: r2(cohort.filter((c) => c.count >= 3).length / cohort.length),
+    burnoutShare: r2(cohort.filter((c) => c.retired).length / cohort.length),
+    capRealisation: {
+      skill: r2(careers.filter((c) => c.topped.includes('skill')).length / careers.length),
+      community: r2(careers.filter((c) => c.topped.includes('community')).length / careers.length),
+      popularity: r2(careers.filter((c) => c.topped.includes('popularity')).length / careers.length),
+    },
+    // The narrative attractor: does the FIRST axis a career tops match the
+    // spirit's primary? If this reads like chance, §1.6's steering is not real.
+    attractorMatch: toppedAny.length
+      ? r2(toppedAny.filter((c) => c.toppedFirst === spiritFirstAxis[c.spirit]).length / toppedAny.length)
+      : null,
+    toppedAnyShare: r2(toppedAny.length / careers.length),
   }
 }
 
@@ -254,10 +338,13 @@ export function aggregate(runs) {
       runsAlive: snaps.filter((s) => s.alive).length,
       separationSkill: sep('skill'),
       separationElo: sep('elo'),
+      separationLocalSkill: sep('localSkill'),
+      separationLocalElo: sep('localElo'),
       castMeanSkill: r1(mean(snaps.map((s) => s.cast.meanSkill))),
       castTopSkill: r1(mean(snaps.map((s) => s.cast.topSkill))),
       castSkillStddev: r1(mean(snaps.map((s) => s.cast.skillStddev))),
       castMeanElo: Math.round(mean(snaps.map((s) => s.cast.meanElo))),
+      breakthroughsPerPlayer: r1(mean(snaps.map((s) => s.breakthroughsPerPlayer ?? 0))),
       journalPerPlayer: r1(mean(snaps.map((s) => s.journalPerPlayer))),
       attentionPerWeek: r2(mean(snaps.map((s) => s.attentionPerWeek))),
       moneyShares: shares,
@@ -290,13 +377,7 @@ export function aggregate(runs) {
       share: r2(wins.length / runs.length),
       medianYear: wins.length ? median(wins.map((r) => r.events.firstEliteWin.year)) : null,
     },
-    eureka: {
-      // The spine does not exist yet. These are the baseline's honest zeros —
-      // P1 either moves them or is not finished.
-      breakthroughsPerPlayerYear: 0,
-      breakthroughShare: 0,
-      burnoutShare: r2(mean(runs.map((r) => r.final.castSize ? r.final.castRetired / r.final.castSize : 0))),
-    },
+    eureka: aggregateEureka(runs),
     retirementDispersion: {
       meanStddevDays: dispersions.length ? Math.round(mean(dispersions)) : null,
       runsMeasured: dispersions.length,
