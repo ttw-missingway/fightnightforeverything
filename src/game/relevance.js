@@ -21,11 +21,16 @@ export function relevanceLabel(v) {
   return 'dead'
 }
 
-// Age of the game/scene in years — the run's own calendar (resets on a fresh
-// run). This is what accelerates the decline: an old franchise is hard to keep
-// alive no matter how good the game is.
+// Age of the GAME in years — not of the arcade. This is what accelerates the
+// decline: an old franchise is hard to keep alive no matter how good it is.
+//
+// Measured from the current ERA's start (era.js), not from opening day. When a
+// sequel ships, the franchise is genuinely new again and this clock genuinely
+// restarts — that is the entire mechanical content of surviving Act 3. The
+// arcade's own age is unaffected and still reads off runAge().
 export function gameAgeYears(save) {
-  return (runAge(save) - 1) / DAYS_PER_YEAR
+  const start = save.era?.startAbs ?? (save.openedAbs ?? 1)
+  return Math.max(0, absDayOf(save.day, save.year) - start) / DAYS_PER_YEAR
 }
 
 const staleDaysOf = (save) =>

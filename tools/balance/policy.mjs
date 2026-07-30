@@ -38,6 +38,7 @@ import { bindStream, bindRng, newRngState } from '../../src/game/rng.js'
 import { noteDecision } from '../../src/game/attention.js'
 import { autoPickStat, chooseBreakthrough } from '../../src/game/eureka.js'
 import { pendingAsks, fundAsk, denyAsk } from '../../src/game/travel.js'
+import { prospectsFor, canTakeOn, takeUnderWing, mentorsFor, castSize, MAX_CAST } from '../../src/game/succession.js'
 
 const { startingBudget, arcadeBuildCost } = eco
 
@@ -295,6 +296,22 @@ function manage(save, policy) {
     } else if (runway < 10 || cashNow < ask.cost * 1.2) {
       denyAsk(save, ask.id)
       noteDecision(save, 'travel')
+    }
+  }
+  // SUCCESSION (P5, §0 Act 3): a competent owner keeps somebody coming up
+  // behind the people who built the place. Takes on the best prospect
+  // available whenever there is a mentor free and a seat open — and takes a
+  // flagged prodigy over a merely-good regular every time, because ceiling is
+  // the only thing scouting is actually for. `succession: false` pins this
+  // off for the A/B that proves the mechanic is what carries a long run.
+  if (policy.succession !== false && canTakeOn(save)) {
+    const best = prospectsFor(save)[0]
+    // Only spend a seat on someone with a real ceiling — filling the roster
+    // with journeymen is how you arrive at year twelve with eight people who
+    // cannot win anything.
+    if (best && ['talent', 'prospect'].includes(best.player.ceilingTier)) {
+      const mentor = mentorsFor(save)[0]
+      if (takeUnderWing(save, best.player.id, mentor?.id)) noteDecision(save, 'succession')
     }
   }
   // THE POT: stake past the minimum as the books allow — better fields come

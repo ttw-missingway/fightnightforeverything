@@ -480,6 +480,198 @@ const LINES = {
       `The money was there. The answer was still no. I heard what was actually said.`,
     ],
   },
+  // -------- the other clock (P5 — age, and the endings it writes) --------
+  slowingDown: {
+    killer: [
+      `Watched the tape of a set I lost tonight. The read was RIGHT. My hands were just late. That's a new problem and I hate it more than losing.`,
+    ],
+    scholar: [
+      `Noting it because pretending otherwise would be dishonest: my execution ceiling has started moving in the wrong direction. The knowledge is still compounding. The reflexes are not. Interesting trade, and not one I get a vote on.`,
+    ],
+    natural: [
+      `I could always just... do the thing. Tonight I knew exactly what to do and my thumbs didn't get the message. Weird night. Trying not to think about it.`,
+    ],
+    stoic: [
+      `Slower now. Not less. There is a difference, and I intend to spend the next few years proving it.`,
+    ],
+  },
+  twilight: {
+    killer: [
+      `{days} nights in this building. The kids coming up don't know what I was. That's fine — I'll show them. For as long as there's a for-as-long-as.`,
+    ],
+    scholar: [
+      `{age} years old, {days} nights logged. I've stopped tracking my own improvement curve; it stopped being the interesting variable a while ago. What I know is worth more than what I can execute now. Somebody should get the benefit of it.`,
+    ],
+    natural: [
+      `Still here! Everyone assumes I'll stop and I keep not stopping. One of these days they'll be right, but it is genuinely not today.`,
+    ],
+    stoic: [
+      `The end of this is closer than the start. I've made my peace with that. The work continues until it doesn't.`,
+    ],
+  },
+  retireAge: {
+    killer: [
+      `Last entry. Not because I stopped wanting it — I want it RIGHT NOW, I'll want it at eighty. Because I know exactly what I used to be able to do and I can't do it any more, and I refuse to be the guy who found that out in public. {days} nights. I was terrifying. Ask anyone.`,
+    ],
+    scholar: [
+      `Final entry. {days} nights, {wins} wins, {age} years old. The decision is unsentimental: my results are no longer a function of my preparation, which makes further preparation a bad investment. The notes stay. Somebody else should use them.`,
+    ],
+    natural: [
+      `Okay. That's me done. Not sad-done — done-done, the good kind. {days} nights and I never once dreaded coming in. How many people get to say that about anything? Somebody else's turn on the good cabinet.`,
+    ],
+    stoic: [
+      `{days} nights. I arrived able and I leave able enough to know the difference. That is the correct time to go. The room will be fine; the room was always the point.`,
+    ],
+  },
+
+  // -------- champion as target (P5 — the second one is harder) --------
+  targeted: {
+    killer: [
+      `Nobody plays me straight any more. Every set is somebody with a folder of my habits and a counterpick they've been sitting on for months. Good. Means I'm the problem to solve. Now I have to solve being solved.`,
+    ],
+    scholar: [
+      `Observation: my results are declining while my play is not. The variable is not me — it is the quantity of tape available on me. I have become a known quantity, which is a distinct competitive disadvantage and, I note, one I earned by winning.`,
+    ],
+    natural: [
+      `Everyone's ready for me now. Stuff that worked forever just... doesn't. It's like the whole scene got a patch note about me and I didn't get a copy.`,
+    ],
+    stoic: [
+      `They have all studied me. That is what a title buys you: a room full of people who know exactly what you do. The work now is becoming someone else.`,
+    ],
+  },
+
+  // -------- veteran tier (P5 §1.9 — growth stops being about you) --------
+  veteran_technique: {
+    killer: [
+      `Found something. Nobody else has this — I checked, I checked HARD. Calling it {tech} and letting the room have it, because a thing only I can do dies with me and I intend to be remembered.`,
+    ],
+    scholar: [
+      `{tech}. Fourteen months of dead ends and then it fell out in an afternoon, the way these always do. I am no longer improving as a competitor; I am, apparently, still improving as a mind. That is a fine trade and I'll take it.`,
+    ],
+    natural: [
+      `Okay so I was messing about and I found this thing and it is COMPLETELY unfair and I showed everyone immediately because keeping it to myself sounded lonely. {tech}. Go nuts.`,
+    ],
+    stoic: [
+      `{tech}. It works. It is not mine now — it belongs to whoever uses it next, which was always the point of finding it.`,
+    ],
+  },
+  veteran_guide: {
+    killer: [
+      `Wrote the book on {char}. Every matchup, every setup, every thing I learned the expensive way. Now nobody has to learn it the expensive way. God, that's annoying. Do it anyway.`,
+    ],
+    scholar: [
+      `The {char} document is finished — years of notes, finally in an order somebody else could follow. My competitive results have plateaued and my usefulness has not. I find I mind that far less than I expected to.`,
+    ],
+    natural: [
+      `Wrote a whole {char} guide! It's mostly just me talking, but people keep saying it helped, and that feels better than winning did. Weird. Nice, though.`,
+    ],
+    stoic: [
+      `The {char} guide is done. What I know is now outside my head, where it can outlast me. That is the only kind of permanence available.`,
+    ],
+  },
+  veteran_coach: {
+    killer: [
+      `Spent the whole night on {student}'s neutral instead of my own. Fixed something they've been doing wrong for a year. They didn't even notice it happen. I noticed.`,
+    ],
+    scholar: [
+      `Breakthrough tonight — not mine. {student}'s. I saw the flaw, found the words, and watched it land behind their eyes. I have had a great many of my own and this was better.`,
+    ],
+    natural: [
+      `{student} did the thing!! The thing I've been trying to explain for MONTHS! I actually shouted. Everyone looked at me. Worth it.`,
+    ],
+    stoic: [
+      `{student} understands something today that they did not understand yesterday, and I am the reason. That is worth more than a trophy and takes up less shelf space.`,
+    ],
+  },
+  veteran_meta: {
+    killer: [
+      `I know where {game} is going. Not guessing — I can SEE it. Told the room. Half of them think I've lost it. In six months they'll all be playing it my way and pretending they always did.`,
+    ],
+    scholar: [
+      `A structural read on {game} that I am fairly sure is correct and definitely sure is unpopular. Published it anyway. The scene will arrive at it eventually; my only contribution is shortening the trip.`,
+    ],
+    natural: [
+      `Said a thing about {game} at the counter and accidentally started the biggest argument this place has had in years. I stand by it! Mostly!`,
+    ],
+    stoic: [
+      `The game is not what people think it is. I said so, once, clearly. What the room does with that is the room's business.`,
+    ],
+  },
+  coached: {
+    killer: [
+      `{mentor} watched one game and told me exactly what I've been doing wrong. One game. I've been grinding this for months. Furious. Grateful. Mostly furious.`,
+    ],
+    scholar: [
+      `{mentor} corrected a foundational error I have been building on top of for a year. Painful, efficient, and worth more than every hour I spent not being told. Notes rewritten from the base up.`,
+    ],
+    natural: [
+      `{mentor} showed me something today and it was like someone turned a light on. I've been playing in the dark this whole time and having a great time anyway, but WOW.`,
+    ],
+    stoic: [
+      `{mentor} gave me something today that took them years to learn. I did not earn it. I intend to.`,
+    ],
+  },
+
+  // -------- the handoff (P5 — succession, from both sides) --------
+  takenOn: {
+    killer: [
+      `{mentor} pulled me aside tonight and said they'd work with me. ME. I've been coming in for weeks assuming nobody had noticed. Somebody noticed. I am not going to waste this.`,
+    ],
+    scholar: [
+      `{mentor} has agreed to teach me. I asked how they wanted to structure it and they laughed and said "you'll see." First lesson, presumably. Beginning a proper notebook tonight — everything they say goes in it.`,
+    ],
+    natural: [
+      `{mentor} is going to TEACH me!! I've watched them play since the first day I walked in here and now they're standing behind MY cabinet telling me what I did wrong. Best day.`,
+    ],
+    stoic: [
+      `{mentor} offered to teach me what they know. I said yes. There is nothing else to say yet — the saying comes after the work.`,
+    ],
+  },
+  tookOn: {
+    killer: [
+      `Taking the kid on. They've got something — bad habits stacked on top of it, but something. Everything I know is going in there. If they end up better than me I'll be furious and I'll be proud and I'll get over the first one.`,
+    ],
+    scholar: [
+      `I have taken on a student. Curious sensation: I have spent my whole career optimising myself, and the optimisation problem has quietly changed shape. My results are no longer the only output of my work.`,
+    ],
+    natural: [
+      `Got myself a student! They remind me so much of me at that age that it's honestly a bit rude. Told them all the stuff I wish someone had told me. They ignored most of it. Perfect.`,
+    ],
+    stoic: [
+      `I have someone to teach now. What I know outlasts what I can do — this is how it gets out of my hands and into the room. Long overdue.`,
+    ],
+  },
+
+  // -------- the sequel (P5 — Act 3, and who starts over) --------
+  eraStart: {
+    killer: [
+      `{game} drops today and I am a WHITE BELT again. Everything I bled for on {old} is a story now. Good. I know what it takes to get to the top of a game because I have already done it once. Watch me do it faster.`,
+    ],
+    scholar: [
+      `{old} is closed. {game} is open, and my entire body of notes is worth about 30% of what it was — the frame data is gone, the principles aren't. Starting the notebook again from page one. It is, genuinely, the most exciting thing that has happened to me in years.`,
+    ],
+    natural: [
+      `New game!! {game}!! I sat down and immediately lost to someone I used to beat with my eyes shut and honestly? I laughed. I forgot what being bad feels like. It's kind of great.`,
+    ],
+    stoic: [
+      `{old} ended. {game} begins. My hands are ordinary again and there is a mountain in front of me. I have climbed one before. That is the only advantage I carry and it is enough.`,
+    ],
+  },
+  eraRetire: {
+    killer: [
+      `They're all downloading {next} and I'm sitting here with {game} muscle memory nobody will ever need again. I'm not learning a whole new game to be somebody's warm-up. I was the best in this room. That sentence stays true if I stop now.`,
+    ],
+    scholar: [
+      `Final entry. {game} has been discontinued and with it the entire domain of my expertise. I could rebuild it in {next}. I've run the numbers on how many years that would take and how many I have. The answer is the answer.`,
+    ],
+    natural: [
+      `Everyone's buzzing about {next} and I'm just... not. That's how I knew. It was never the winning, it was the room and the game and the people, and one of those three is gone. Time to go.`,
+    ],
+    stoic: [
+      `{game} is over. I was of it — every hour I put in was put into it. I will not start again, and I do not regret a night. Someone else's turn.`,
+    ],
+  },
+
   // -------- the circuit (P4 — seats are earned two ways) --------
   seatWon: {
     killer: [

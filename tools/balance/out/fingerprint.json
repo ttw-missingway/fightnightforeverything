@@ -1,207 +1,404 @@
 {
   "meta": {
     "capturedAt": "2026-07-30",
-    "n": 24,
+    "n": 16,
     "difficulty": "normal",
-    "years": 10,
+    "years": 15,
     "baseSeed": 1000,
     "full": false
   },
   "headline": {
-    "runs": 24,
+    "runs": 16,
     "survival": {
       "diedShare": 1,
       "funnels": {
-        "opinion": 13,
-        "dynamics": 9,
-        "economy": 2
+        "economy": 15,
+        "dynamics": 1
       },
-      "medianLastedDays": 1444
+      "medianLastedDays": 4140
     },
     "perYear": [
       {
         "year": 1,
-        "runsAlive": 22,
-        "separationSkill": 1.52,
-        "separationElo": 1.43,
-        "separationLocalSkill": 2.3,
-        "separationLocalElo": 1.23,
-        "castMeanSkill": 24.6,
-        "castTopSkill": 29.9,
-        "castSkillStddev": 4.4,
-        "castMeanElo": 1341,
-        "breakthroughsPerPlayer": 2.3,
-        "journalPerPlayer": 12.6,
-        "attentionPerWeek": 4.83,
+        "runsAlive": 16,
+        "separationSkill": 1.51,
+        "separationElo": 1.44,
+        "separationLocalSkill": 2.51,
+        "separationLocalElo": 1.24,
+        "castMeanSkill": 25.4,
+        "castTopSkill": 32.5,
+        "castSkillStddev": 4.7,
+        "castMeanElo": 1350,
+        "breakthroughsPerPlayer": 3.2,
+        "journalPerPlayer": 17.9,
+        "attentionPerWeek": 4.99,
         "moneyShares": {
-          "survival": 0.71,
+          "survival": 0.72,
           "competition": 0.03,
-          "growth": 0.25,
+          "growth": 0.24,
           "other": 0.01
         },
         "retirements": 0
       },
       {
         "year": 2,
-        "runsAlive": 22,
-        "separationSkill": 1.52,
+        "runsAlive": 16,
+        "separationSkill": 1.5,
         "separationElo": 1.44,
-        "separationLocalSkill": 1.99,
-        "separationLocalElo": 1.34,
-        "castMeanSkill": 43.4,
-        "castTopSkill": 46.5,
-        "castSkillStddev": 2.4,
-        "castMeanElo": 1509,
-        "breakthroughsPerPlayer": 3.7,
-        "journalPerPlayer": 17.3,
-        "attentionPerWeek": 6.64,
+        "separationLocalSkill": 2.13,
+        "separationLocalElo": 1.38,
+        "castMeanSkill": 43.2,
+        "castTopSkill": 49.1,
+        "castSkillStddev": 4,
+        "castMeanElo": 1495,
+        "breakthroughsPerPlayer": 3.9,
+        "journalPerPlayer": 19.2,
+        "attentionPerWeek": 6.68,
         "moneyShares": {
-          "survival": 0.77,
-          "competition": 0.11,
-          "growth": 0.02,
-          "other": 0.09
+          "survival": 0.75,
+          "competition": 0.1,
+          "growth": 0.03,
+          "other": 0.12
         },
         "retirements": 0
       },
       {
         "year": 3,
-        "runsAlive": 22,
-        "separationSkill": 1.52,
+        "runsAlive": 16,
+        "separationSkill": 1.48,
         "separationElo": 1.44,
-        "separationLocalSkill": 1.83,
-        "separationLocalElo": 1.39,
-        "castMeanSkill": 51,
-        "castTopSkill": 53.7,
-        "castSkillStddev": 2.1,
-        "castMeanElo": 1570,
-        "breakthroughsPerPlayer": 2.6,
-        "journalPerPlayer": 21.9,
-        "attentionPerWeek": 6.35,
+        "separationLocalSkill": 1.93,
+        "separationLocalElo": 1.44,
+        "castMeanSkill": 50.7,
+        "castTopSkill": 55.9,
+        "castSkillStddev": 4.1,
+        "castMeanElo": 1550,
+        "breakthroughsPerPlayer": 2.8,
+        "journalPerPlayer": 28.8,
+        "attentionPerWeek": 6.49,
         "moneyShares": {
-          "survival": 0.73,
-          "competition": 0.12,
+          "survival": 0.66,
+          "competition": 0.09,
           "growth": 0.01,
-          "other": 0.15
+          "other": 0.24
         },
         "retirements": 0
       },
       {
         "year": 4,
-        "runsAlive": 19,
-        "separationSkill": 1.51,
+        "runsAlive": 16,
+        "separationSkill": 1.47,
         "separationElo": 1.43,
-        "separationLocalSkill": 1.75,
-        "separationLocalElo": 1.42,
-        "castMeanSkill": 54.8,
-        "castTopSkill": 57.3,
-        "castSkillStddev": 2.1,
-        "castMeanElo": 1605,
-        "breakthroughsPerPlayer": 1.8,
-        "journalPerPlayer": 27.4,
-        "attentionPerWeek": 6.29,
+        "separationLocalSkill": 1.8,
+        "separationLocalElo": 1.48,
+        "castMeanSkill": 53.8,
+        "castTopSkill": 59.8,
+        "castSkillStddev": 6.2,
+        "castMeanElo": 1568,
+        "breakthroughsPerPlayer": 2.2,
+        "journalPerPlayer": 33.5,
+        "attentionPerWeek": 6.59,
         "moneyShares": {
-          "survival": 0.64,
-          "competition": 0.1,
-          "growth": 0.01,
-          "other": 0.25
+          "survival": 0.61,
+          "competition": 0.07,
+          "growth": 0,
+          "other": 0.32
         },
-        "retirements": 0.3
+        "retirements": 0.5
       },
       {
         "year": 5,
-        "runsAlive": 5,
-        "separationSkill": 1.5,
-        "separationElo": 1.43,
-        "separationLocalSkill": 1.81,
-        "separationLocalElo": 1.5,
-        "castMeanSkill": 57,
-        "castTopSkill": 59.1,
-        "castSkillStddev": 2,
-        "castMeanElo": 1634,
-        "breakthroughsPerPlayer": 1.2,
-        "journalPerPlayer": 32.1,
-        "attentionPerWeek": 6.5,
+        "runsAlive": 16,
+        "separationSkill": 1.45,
+        "separationElo": 1.35,
+        "separationLocalSkill": 2.17,
+        "separationLocalElo": 1.38,
+        "castMeanSkill": 46.5,
+        "castTopSkill": 52.8,
+        "castSkillStddev": 5.5,
+        "castMeanElo": 1468,
+        "breakthroughsPerPlayer": 2.4,
+        "journalPerPlayer": 35.7,
+        "attentionPerWeek": 7.1,
         "moneyShares": {
           "survival": 0.62,
-          "competition": 0.1,
+          "competition": 0.06,
           "growth": 0,
-          "other": 0.28
+          "other": 0.32
         },
-        "retirements": 0.8
+        "retirements": 2.1
       },
       {
         "year": 6,
-        "runsAlive": 0,
-        "separationSkill": 1.5,
-        "separationElo": 1.42,
-        "separationLocalSkill": 2.07,
-        "separationLocalElo": 1.64,
-        "castMeanSkill": 58.7,
-        "castTopSkill": 61.1,
-        "castSkillStddev": 2.8,
-        "castMeanElo": 1754,
-        "breakthroughsPerPlayer": 1.2,
-        "journalPerPlayer": 39,
-        "attentionPerWeek": 6.59,
+        "runsAlive": 16,
+        "separationSkill": 1.43,
+        "separationElo": 1.33,
+        "separationLocalSkill": 2.73,
+        "separationLocalElo": 1.53,
+        "castMeanSkill": 51.1,
+        "castTopSkill": 59.2,
+        "castSkillStddev": 7.3,
+        "castMeanElo": 1562,
+        "breakthroughsPerPlayer": 2.8,
+        "journalPerPlayer": 38.6,
+        "attentionPerWeek": 7.14,
         "moneyShares": {
-          "survival": 0.65,
-          "competition": 0.1,
+          "survival": 0.68,
+          "competition": 0.06,
+          "growth": 0,
+          "other": 0.26
+        },
+        "retirements": 2.8
+      },
+      {
+        "year": 7,
+        "runsAlive": 16,
+        "separationSkill": 1.41,
+        "separationElo": 1.34,
+        "separationLocalSkill": 2.39,
+        "separationLocalElo": 1.59,
+        "castMeanSkill": 55.5,
+        "castTopSkill": 63.7,
+        "castSkillStddev": 8.1,
+        "castMeanElo": 1615,
+        "breakthroughsPerPlayer": 2.9,
+        "journalPerPlayer": 38.6,
+        "attentionPerWeek": 7.13,
+        "moneyShares": {
+          "survival": 0.63,
+          "competition": 0.05,
+          "growth": 0,
+          "other": 0.31
+        },
+        "retirements": 1.8
+      },
+      {
+        "year": 8,
+        "runsAlive": 16,
+        "separationSkill": 1.4,
+        "separationElo": 1.34,
+        "separationLocalSkill": 2,
+        "separationLocalElo": 1.57,
+        "castMeanSkill": 52.9,
+        "castTopSkill": 61.3,
+        "castSkillStddev": 9.4,
+        "castMeanElo": 1568,
+        "breakthroughsPerPlayer": 2.4,
+        "journalPerPlayer": 38.6,
+        "attentionPerWeek": 7.17,
+        "moneyShares": {
+          "survival": 0.66,
+          "competition": 0.05,
+          "growth": 0,
+          "other": 0.29
+        },
+        "retirements": 1.5
+      },
+      {
+        "year": 9,
+        "runsAlive": 16,
+        "separationSkill": 1.39,
+        "separationElo": 1.3,
+        "separationLocalSkill": 1.99,
+        "separationLocalElo": 1.52,
+        "castMeanSkill": 52.1,
+        "castTopSkill": 59.5,
+        "castSkillStddev": 8.4,
+        "castMeanElo": 1569,
+        "breakthroughsPerPlayer": 2.2,
+        "journalPerPlayer": 41,
+        "attentionPerWeek": 7.05,
+        "moneyShares": {
+          "survival": 0.63,
+          "competition": 0.06,
+          "growth": 0,
+          "other": 0.31
+        },
+        "retirements": 1.2
+      },
+      {
+        "year": 10,
+        "runsAlive": 15,
+        "separationSkill": 1.38,
+        "separationElo": 1.29,
+        "separationLocalSkill": 2.18,
+        "separationLocalElo": 1.51,
+        "castMeanSkill": 50.9,
+        "castTopSkill": 60.2,
+        "castSkillStddev": 10.7,
+        "castMeanElo": 1539,
+        "breakthroughsPerPlayer": 2.5,
+        "journalPerPlayer": 37.9,
+        "attentionPerWeek": 7.14,
+        "moneyShares": {
+          "survival": 0.68,
+          "competition": 0.05,
+          "growth": 0,
+          "other": 0.27
+        },
+        "retirements": 2.1
+      },
+      {
+        "year": 11,
+        "runsAlive": 14,
+        "separationSkill": 1.37,
+        "separationElo": 1.3,
+        "separationLocalSkill": 2.53,
+        "separationLocalElo": 1.62,
+        "castMeanSkill": 55,
+        "castTopSkill": 63.7,
+        "castSkillStddev": 9,
+        "castMeanElo": 1605,
+        "breakthroughsPerPlayer": 2.8,
+        "journalPerPlayer": 37.7,
+        "attentionPerWeek": 7.1,
+        "moneyShares": {
+          "survival": 0.74,
+          "competition": 0.04,
+          "growth": 0,
+          "other": 0.22
+        },
+        "retirements": 1.6
+      },
+      {
+        "year": 12,
+        "runsAlive": 11,
+        "separationSkill": 1.36,
+        "separationElo": 1.31,
+        "separationLocalSkill": 2.37,
+        "separationLocalElo": 1.63,
+        "castMeanSkill": 55.2,
+        "castTopSkill": 63.8,
+        "castSkillStddev": 9.5,
+        "castMeanElo": 1615,
+        "breakthroughsPerPlayer": 2,
+        "journalPerPlayer": 35.5,
+        "attentionPerWeek": 7.06,
+        "moneyShares": {
+          "survival": 0.72,
+          "competition": 0.04,
           "growth": 0,
           "other": 0.24
         },
-        "retirements": 1
+        "retirements": 1.2
+      },
+      {
+        "year": 13,
+        "runsAlive": 7,
+        "separationSkill": 1.34,
+        "separationElo": 1.29,
+        "separationLocalSkill": 2.14,
+        "separationLocalElo": 1.57,
+        "castMeanSkill": 49.1,
+        "castTopSkill": 60.7,
+        "castSkillStddev": 11.1,
+        "castMeanElo": 1495,
+        "breakthroughsPerPlayer": 3.2,
+        "journalPerPlayer": 31,
+        "attentionPerWeek": 7.19,
+        "moneyShares": {
+          "survival": 0.86,
+          "competition": 0.02,
+          "growth": 0,
+          "other": 0.12
+        },
+        "retirements": 2.7
+      },
+      {
+        "year": 14,
+        "runsAlive": 2,
+        "separationSkill": 1.33,
+        "separationElo": 1.27,
+        "separationLocalSkill": 2.17,
+        "separationLocalElo": 1.52,
+        "castMeanSkill": 47.3,
+        "castTopSkill": 59.4,
+        "castSkillStddev": 13.2,
+        "castMeanElo": 1445,
+        "breakthroughsPerPlayer": 3,
+        "journalPerPlayer": 26.3,
+        "attentionPerWeek": 7.03,
+        "moneyShares": {
+          "survival": 0.95,
+          "competition": 0.01,
+          "growth": 0.01,
+          "other": 0.04
+        },
+        "retirements": 2.3
+      },
+      {
+        "year": 15,
+        "runsAlive": 0,
+        "separationSkill": 1.36,
+        "separationElo": 1.32,
+        "separationLocalSkill": 2.02,
+        "separationLocalElo": 1.51,
+        "castMeanSkill": 44.6,
+        "castTopSkill": 61.5,
+        "castSkillStddev": 17.7,
+        "castMeanElo": 1390,
+        "breakthroughsPerPlayer": 3.7,
+        "journalPerPlayer": 21.4,
+        "attentionPerWeek": 6.56,
+        "moneyShares": {
+          "survival": 1,
+          "competition": 0,
+          "growth": 0,
+          "other": 0
+        },
+        "retirements": 2
       }
     ],
     "firstEliteWin": {
-      "share": 0.83,
+      "share": 0.94,
       "medianYear": 4
     },
     "firstRankedWin": {
-      "share": 0.83,
-      "medianYear": 3.5
+      "share": 1,
+      "medianYear": 4
     },
     "eureka": {
-      "careers": 144,
-      "meanCareerBreakthroughs": 9.3,
+      "careers": 407,
+      "meanCareerBreakthroughs": 9.7,
       "chosenKinds": {
-        "wound": 371,
-        "edge": 176,
-        "influence": 793
+        "wound": 1183,
+        "edge": 267,
+        "influence": 1974
       },
-      "woundEdgeRatio": 2.11,
+      "woundEdgeRatio": 4.43,
       "forcedShare": 0,
       "crossRowShare": 0.85,
-      "temperamentChanges": 27,
+      "temperamentChanges": 58,
       "breakthroughShare": 1,
-      "burnoutShare": 0.17,
+      "burnoutShare": 0.97,
       "capRealisation": {
         "skill": 0,
-        "community": 0.73,
-        "popularity": 0.45
+        "community": 0.66,
+        "popularity": 0.52
       },
-      "attractorMatch": 0.32,
-      "toppedAnyShare": 0.79
+      "attractorMatch": 0.27,
+      "toppedAnyShare": 0.72
     },
     "retirementDispersion": {
-      "meanStddevDays": 100,
-      "runsMeasured": 9
+      "meanStddevDays": 966,
+      "runsMeasured": 16
     },
     "eliteBand": {
       "year1": {
-        "championSkill": 95.2,
-        "top8MeanSkill": 88.6,
-        "top64CutoffSkill": 53.8,
-        "medianSkill": 60.5,
-        "championElo": 2543.8,
-        "top64CutoffElo": 1574.8
+        "championSkill": 94.7,
+        "top8MeanSkill": 88.8,
+        "top64CutoffSkill": 54.9,
+        "medianSkill": 61.4,
+        "championElo": 2519.8,
+        "top64CutoffElo": 1581.7
       },
       "final": {
-        "championSkill": 97.9,
-        "top8MeanSkill": 90.9,
-        "top64CutoffSkill": 55.9,
-        "medianSkill": 63.4,
-        "championElo": 2543.3,
-        "top64CutoffElo": 1598.1
+        "championSkill": 83.8,
+        "top8MeanSkill": 74.5,
+        "top64CutoffSkill": 51.5,
+        "medianSkill": 56.9,
+        "championElo": 2128.8,
+        "top64CutoffElo": 1472.8
       }
     }
   }

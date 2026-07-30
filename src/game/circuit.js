@@ -606,6 +606,8 @@ export function runMajor(save, def) {
   for (const { entrant, place } of arcadePlacements) {
     if (place <= 8) awardMilestone(save, 'major-top8', 2, `${entrant.name} made top 8 at a world major`)
     if (place === 1) {
+      // A major title is a target on your back too (match.js targetBurden).
+      entrant.ref.majorTitles = (entrant.ref.majorTitles || 0) + 1
       awardMilestone(save, `major-champion-y${year}-${def.key}`, 5, `${entrant.name} won ${name} — a world major, out of this arcade`)
       writeJournal(save, entrant.ref, 'title', { event: name, always: true })
     }

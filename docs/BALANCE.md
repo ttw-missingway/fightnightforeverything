@@ -1207,3 +1207,129 @@ opening-day promotional build-up (Act 1 pacing) — better built with P6's
 notification/idle sweep; on the record here so it isn't dropped. Baseline
 remains the P0 commit; do not re-bless until the P5 world-regeneration pass
 so every phase diffs against the same origin.
+
+## 19. P5 — the world regenerates, built and measured (2026-07-30)
+
+REVISION §5-P5. The phase opened with a measurement that changed its shape:
+**every competent run died between year 4 and year 6, and none of them died
+of anything they had done wrong.** Cast healthy at 6/6, $5–10k banked, 30
+regulars on the floor — killed purely by the world losing interest in the
+game. The right pressure was producing the wrong ending, and the P5 exit
+(metrics 2 and 5 at year 15) was not merely unmet but unmeasurable.
+
+### What was built
+
+**Ageing, on both sides** (`career.js`). Passion asks "do they still want
+this"; age asks "can they still do it", and nothing tops age back up. Every
+person rolls their OWN `peakAge` (25–31) and `hangUpAge` (peak + 4–14) —
+rolled in `newPlayer` itself rather than defaulted, because a shared default
+is precisely how metric 5's bulk-exodus bug returns. Past their peak,
+execution erodes toward a floor at 55% of their high-water skill (the head
+outlasts the hands). Retirement gains a second, independent door: the age
+door fires on a clock rolled at birth, the passion door on the run's events,
+and the two never line up across a cast. Legibility: a career-stage pill on
+the player card, journal warnings at `late` and `twilight`, and separate
+endings for burning out and ageing out.
+
+**Eras — Act 3's recoverable collapse** (`era.js`). The relevance tenet is
+untouched: decline stays inevitable and nothing in the new code softens the
+slope. What changed is the bottom of it. A scene with a real legacy does not
+die when its game does — **a sequel ships**. Game age becomes era-relative,
+the world's attention resets scaled by your legacy (45–84, the famous name),
+the matchup chart is redrawn, and everyone's hands go back to zero.
+Knowledge transfers and execution does not, so retention is highest for
+guide-writers and veterans. The people furthest past their peak mostly
+decline to start over — which is the succession question asked in the one
+way that cannot be ignored. Each era scores its OWN legacy delta, so a
+dynasty must keep earning its continuations; the first world title does not
+buy immortality.
+
+**Succession** (`succession.js`). The diagnosis that made this file: with
+ageing and eras in, runs still died — every one down `dynamics`, in a room
+holding sixty regulars, to the text "every player you brought into this
+arcade has hung it up." That was literally true and nothing could be done
+about it, because the roster window closes on day one and a cast could only
+ever shrink. Now: **prodigies** walk in a few times a decade (rare, flagged,
+sticky-toasted, and they drift to another scene if ignored), and **the
+handoff** lets a mentor — anyone past their peak, i.e. exactly the people who
+can no longer win — take one under their wing, passing on a character, a head
+start and a piece of who they are. Cast capped at 8. Talent is never
+manufactured: the inheritance is knowledge, never ceiling.
+
+**Veteran-tier eureka** (§1.9), **offscreen elite careers** (elites now age,
+grow toward their spirit ceiling while young, decline after, and turn over by
+clock rather than by weakness, with prodigies entering at 16–21), and
+**champion-as-target** (`targetBurden` in match.js — titles cost real
+performance, capped so a decade at number one stays reachable; readable in
+the journal and itself a eureka trigger).
+
+### The exit: metrics 2 and 5 at year 15 ✅
+
+n=24 × 15y, normal. **Survival median 4291 days — 12.8 years, up from
+P4's 1444 (4.3).** 24/24 alive through year 10; 13/24 at 13; 2/24 at 15.
+
+- **Metric 2 — first elite win: share 1.0, median year 4.** Holds exactly
+  where P4 put it, across a run three times longer. ✅
+- **Metric 5 — retirement dispersion: 976 days, 24/24 runs measured** (P4:
+  100 days over 2 runs; P0 baseline 173 over 16). The per-person clocks did
+  their job — a genuinely flat distribution, which is the whole point of the
+  metric. ✅
+
+Metric 1's LOCAL separation (the disease) runs 2.51 → 1.80 (y4 trough) →
+2.73 → oscillating 2.0–2.5 → 2.02 at y15, with cast σ widening 4.7 → 17.7.
+It re-stratifies and never converges — the P1 shape, holding over fifteen
+years instead of six.
+
+### The error worth recording
+
+The first cut of the era reset applied the same 0.55–0.75 skill cut to
+elites that it applied to the cast. Measured over fifteen years and three
+eras, **the world's champion fell from skill 98 to 71 and the top-64 cutoff
+from 56 to 45** — the exact failure `driftEvoRoster`'s comment was written to
+prevent, reintroduced from a new direction. It also converged metric 1's
+world ratio (1.51 → 1.30) by dragging the top of the ladder down to meet a
+cast that had not actually climbed: the disease wearing a disguise.
+
+Fixed by treating the elite band as the calibration constant it is (§1.6): a
+sequel shuffles standings (elo → 0.55 of distance from 1200) and dips skill
+only 10%, small enough that the existing 25%-a-year band regression restores
+it before the next sequel. Champion skill recovered to 83.8. **Standing rule:
+the elite band is a constant, not a variable — anything that edits elite skill
+in bulk must show its effect on `eliteBand.final` before it lands.**
+
+The cast's retention was raised to 0.45–0.8 in the same pass: at 0.25–0.62 it
+was strictly worse than what elites kept, which meant every sequel cost your
+cultivated cast more than it cost the people they were chasing, and nobody
+could build toward the ceiling §1.6 gives them.
+
+### Carried, with causes
+
+- **The late economy is the new frontier.** 23/24 runs now end in
+  foreclosure, at years 11–15. The arcade runs at break-even (−5 to +9 a day)
+  from year 2 onward with attendance pinned near 20, so a mature run is a
+  random walk that eventually loses. P3 demoted foreclosure to "a guard rail
+  against extravagance and inattention" and it is now the primary killer of
+  every mature scene — that contradiction is real and is P6's to answer.
+  `arcadeRenown` (titles draw pilgrims, capped at +35% attendance) was added
+  as the famous name's attendance-side counterpart and is not sufficient
+  alone.
+- **Metric 4 reads 0.97 burnout share and is now an instrument artifact.**
+  Over fifteen years essentially everyone eventually retires, so "share who
+  retire" trends to 1 by construction. It needs re-specifying as a rate per
+  active career-year before it means anything again.
+- **Metric 10 still does not invert** (competition share 0.03–0.10, falling
+  late as survival spending dominates). Carried from P4; the late-economy
+  work above is now its blocker too.
+- **Journal volume runs 26–43/yr against a 15–30 band** — worse than P4's
+  warning, driven by circuit and era pages. Trim in P6.
+- **Influence still outweighs wound** (1974 vs 1183) against §1.2's intent.
+  Carried a third time; untouched again this phase.
+- **Cap realisation on skill is still 0.** Nobody reaches their spirit
+  ceiling even in a fifteen-year run, so §1.6's immutability promise remains
+  unexercised in practice and veteran tier fires through the age door rather
+  than the topped-out door.
+- **Metric 9 (recoverability cliff)** was assigned to P4, carried to P5, and
+  is untouched again. It is now the oldest open item in the plan.
+
+Baseline remains the P0 commit; still not re-blessed, so every phase diffs
+against the same origin.

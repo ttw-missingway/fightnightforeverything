@@ -7,7 +7,7 @@ import PlayerForm from '../components/PlayerForm.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, spiritOf } from '../game/constants.js'
 import { chooseBreakthrough } from '../game/eureka.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
-import { passionLabel } from '../game/career.js'
+import { passionLabel, careerStageOf } from '../game/career.js'
 import { INTEREST_LABEL } from '../game/interest.js'
 import { displayName } from '../game/util.js'
 import { skillCeiling } from '../game/match.js'
@@ -316,6 +316,16 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           <span className="pill">Respect {Math.round(p.respect)}</span>
           <span className="pill">{p.wins}–{p.losses}</span>
           <span className="pill">Mood: {moodLabel(p.mood)}</span>
+          {/* THE OTHER CLOCK (P5). Retirement must never arrive as a surprise:
+              age is the one pressure no lever tops back up, so where somebody
+              sits in their career is on the card next to the passion they
+              still have for it. The blurb says what the stage means; the
+              number is just their age. */}
+          {!p.retired && (
+            <span className="pill" title={`${p.age} years old — ${careerStageOf(p).blurb}`}>
+              ⏳ {careerStageOf(p).label}
+            </span>
+          )}
           {!p.retired && (
             <span className="pill" title={`passion for the game — ${Math.round(p.passion ?? 80)}/100`}
               style={{ color: PASSION_COLOR(p.passion ?? 80) }}>

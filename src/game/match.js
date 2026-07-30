@@ -255,7 +255,29 @@ export function performance(save, player, charId) {
   // The purple patch: for a couple of weeks after a breakthrough, everything
   // works. The permanent gain is the stat point; this is the glow.
   if ((player.eureka?.purpleUntilAbs || 0) > absDayOf(save.day, save.year)) perf += EUREKA.PURPLE_PERF
+  // CHAMPION-AS-TARGET (REVISION §0, P5): "success generates its own
+  // difficulty. A champion becomes a target: people lab them, matchup edges
+  // erode, counterpicks sharpen. The second title is harder than the first
+  // for a reason you can read in the journal."
+  perf -= targetBurden(player)
   return perf
+}
+
+/**
+ * What being the person everyone is studying costs, in raw performance.
+ *
+ * Scales with what you have actually won — a local hero is not filmed, a world
+ * champion is frame-by-frame homework for the entire planet — and decays as
+ * the title recedes, because the scene eventually moves on to labbing somebody
+ * else. Capped, because this must make the second title HARDER, never
+ * impossible: §0 wants a decade at world number one to be reachable by
+ * somebody who keeps earning it.
+ */
+export function targetBurden(player) {
+  const titles = (player.evoTitles || 0) + (player.majorTitles || 0) * 0.4
+  if (titles <= 0) return 0
+  // Freshest right after a title and easing off over roughly two years.
+  return Math.min(4.5, titles * 1.6)
 }
 
 // Matchup knowledge is a high-level phenomenon: at low skill nobody is

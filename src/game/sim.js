@@ -29,7 +29,7 @@ import {
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
   sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf,
 } from './social.js'
-import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
+import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion, ageYearly, ageWarnings, careerStageOf } from './career.js'
 import { relevanceDaily } from './relevance.js'
 import { processEurekaDaily, edge as eurekaEdge } from './eureka.js'
 import { writeJournal } from './journal.js'
@@ -37,6 +37,8 @@ import { pushToast, pruneToasts } from './notify.js'
 import { fragmentsMonthly } from './fragments.js'
 import { travelDaily } from './travel.js'
 import { circuitEventOn, driftRegionalField } from './circuit.js'
+import { canBeginNewEra, beginNewEra, noteEraRelevance } from './era.js'
+import { maybeProdigyArrives, prodigiesDrift, successionWarning } from './succession.js'
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
@@ -393,6 +395,17 @@ function attendChance(save, player) {
   // you already serve barely moves this (see audienceMix), so the question is
   // never "can I afford a room", it is "whose room is this".
   p *= attractionDrawFactor(save)
+  // THE FAMOUS NAME (P5). A room that has actually produced champions is a
+  // place people make a trip to stand in — the game already pays an EVO
+  // winner's arcade for "sponsors & pilgrimage", and this is the same fact
+  // on the attendance side rather than the cash side.
+  //
+  // Deliberately small and hard-capped. It is the one thing a fifteen-year
+  // lineage carries that a first-year room cannot buy, which is exactly §0's
+  // "recoverable at cost, with a famous name" — but a legendary room that
+  // stops being run well must still empty, so this can never rescue a bad
+  // one. Titles only: being briefly popular is not a landmark.
+  p *= 1 + arcadeRenown(save)
   // FRESHNESS — is the game still worth showing up for? A hot, evolving scene
   // packs the room; one the world has moved on from empties it. Patches and a
   // living competitive scene keep this up; a stale build bleeds it away, and the
@@ -407,6 +420,25 @@ function attendChance(save, player) {
   if (mom === 'golden') p *= 1.12
   else if (mom === 'slump') p *= 0.92
   return clamp(p, 0.02, 0.9)
+}
+
+/**
+ * 0..0.35 — how much the building's HISTORY draws people on its own.
+ *
+ * Counts world and major titles won by this arcade's people, ever, across
+ * eras. It is the only attendance term that survives a sequel intact, which
+ * is what makes the second act of a long lineage feel different from the
+ * first rather than merely later. Capped low on purpose: a landmark that is
+ * dirty, overpriced and hostile still empties out, because every other term
+ * in the product is about how the place is run right now.
+ */
+export function arcadeRenown(save) {
+  const titles = Object.values(save.players || {})
+    .filter((p) => !p.npc)
+    .reduce((n, p) => n + (p.evoTitles || 0), 0)
+  const majors = (save.hallOfFame || []).filter((r) => r.circuitKind === 'major'
+    && (r.arcadeResults || []).some((a) => a.place === 1)).length
+  return Math.min(0.35, titles * 0.09 + majors * 0.035)
 }
 
 // 0.3..1 — how well-known the arcade is. Low on opening day, climbs with days
@@ -1681,6 +1713,19 @@ export function checkSceneCollapse(save, attendanceToday, events = null) {
     }
   }
   if (save.quietDays >= diff.collapseGrace) {
+    // WHY the room emptied decides whether this is an ending or a chapter.
+    // A quiet floor while the game is still relevant is a room you mismanaged
+    // — that stays a death. A quiet floor while the game itself is in the
+    // basement is the same Act 3 story the fade funnel tells, arriving
+    // through a different door: relevance collapses, attendance follows it
+    // down, and the room empties before the fade counter has finished
+    // counting. Measured, that race is why competent runs kept dying to
+    // 'dynamics' with a full cast and nothing they could have done.
+    if ((save.relevance ?? 55) <= 25 && canBeginNewEra(save)) {
+      beginNewEra(save)
+      save.quietDays = 0
+      return
+    }
     endRun(save, 'dynamics', 'The scene has run its course',
       `${save.arcade.name} has sat all but empty for ${save.quietDays} days straight. Word gets around that nobody goes there anymore, and that's the kind of thing a scene doesn't come back from.`)
     return
@@ -1701,6 +1746,17 @@ export function checkSceneCollapse(save, attendanceToday, events = null) {
     }
   }
   if (save.fadedDays >= diff.fadeGrace) {
+    // ACT 3, AND THE ONE DOOR OUT OF IT (REVISION §0, P5). The world losing
+    // interest in the game is not negotiable — nothing in this file softens
+    // that slope. What a famous name buys is a SEQUEL: the game ends, the
+    // arcade doesn't, and everyone starts again with your room already known.
+    // A scene that never achieved anything gets no such offer and dies here,
+    // because Act 1 failure has to stay real for the early game to mean
+    // anything. See era.js for the full argument.
+    if (canBeginNewEra(save)) {
+      beginNewEra(save)
+      return
+    }
     endRun(save, 'opinion', 'The world moved on',
       `${save.game.name} has been out of the conversation for ${save.fadedDays} days. No new blood, no coverage, no reason for anyone to care — the scene didn't blow up, it just faded out.`)
   }
@@ -2006,6 +2062,7 @@ export function advanceDay(save) {
   // by a tournament day. Both are guarded against running twice in a day.
   settleRecurring(save)
   relevanceDaily(save)
+  noteEraRelevance(save) // this era's own high-water mark — it buys its own sequel
   maybeWorldEvent(save)
   pruneToasts(save)
   // The road: away events rise, your people ask, trips resolve (travel.js).
@@ -2085,6 +2142,12 @@ export function advanceDay(save) {
   if (daysSincePatch(save) === 0) gravitateElites(save)
   // A visiting crew arrives, or goes home.
   invasionDaily(save)
+  // SUCCESSION (P5): the rare kid who could be somebody walks in, the one
+  // nobody took on drifts away, and once a year the room is told out loud
+  // that it has nobody coming up behind it.
+  maybeProdigyArrives(save)
+  prodigiesDrift(save)
+  successionWarning(save)
   // Legacy milestones: making it matters, growing matters — existing doesn't.
   if (save.settings.mode !== 'sandbox') {
     if ((save.stream?.followers || 0) >= 1000) awardMilestone(save, 'followers-1k', 2, 'A thousand people follow the channel now')
@@ -2120,6 +2183,23 @@ export function advanceDay(save) {
     save.year += 1
     driftEvoRoster(save)
     driftRegionalField(save) // the national board regresses and churns too
+    // EVERYBODY HAS A BIRTHDAY (P5). The one tick a year where the clock that
+    // nobody can top back up moves — and the succession problem gets one year
+    // closer whether or not the owner has been thinking about it.
+    {
+      const declined = ageYearly(save)
+      for (const p of ageWarnings(save)) {
+        const stage = careerStageOf(p)
+        pushToast(save, {
+          icon: '⏳',
+          text: `${pName(save, p)} is ${stage.label} now. ${stage.blurb}`,
+          see: { screen: 'players', params: { playerId: p.id } },
+        })
+      }
+      if (declined.length >= 2) {
+        chronicle(save, '⏳', `The core of ${save.arcade.name} is getting older. ${declined.slice(0, 2).map((p) => pName(save, p)).join(' and ')}${declined.length > 2 ? ' and others' : ''} aren't quite what they were, and everybody can see it.`)
+      }
+    }
     if (save.settings.mode !== 'sandbox' && save.year >= 2 && save.year <= 6) {
       awardMilestone(save, `year-${save.year}`, save.year, `${save.arcade.name} made it to Year ${save.year}`)
     }

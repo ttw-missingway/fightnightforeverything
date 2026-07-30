@@ -28,13 +28,13 @@
 // nobody streams them, so belief stays low, so their adversity converts to
 // burnout. The arcade is the growth engine — mechanically, not as flavour.
 
-import { clamp, rand, pairKey, displayName } from './util.js'
+import { clamp, rand, choice, pairKey, displayName } from './util.js'
 import {
   PERSONAL_KEYS, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, statLevel, absDayOf,
   STAT_UNIT, STAT_MAX_POINTS, ARCHETYPE_DEMANDS, SPIRIT_ROLL, talentBreadth,
   PERSONAL_STATS, SOCIAL_STATS,
 } from './constants.js'
-import { chronicle, remember, newEureka } from './model.js'
+import { chronicle, remember, newEureka, newInnovation } from './model.js'
 import { bumpPassion } from './career.js'
 import { rivalOf } from './social.js'
 import { writeJournal, openThread, threadOf, closeThread, isJournaled } from './journal.js'
@@ -375,7 +375,19 @@ export function checkEureka(save, player) {
   if (e.pending) return
   if (meterOf(e) < e.threshold) return
   const candidates = candidatesFor(player)
-  if (!candidates.length) return
+  // THE LATE-GAME PHASE TRANSITION (REVISION §1.9). A meter that fills with
+  // nothing left to spend it on is not a dead end — it is the moment the
+  // breakthrough changes KIND. "Young players grow themselves; veterans grow
+  // the scene your next generation comes up inside" (§0). The point cap
+  // delivers this with no new mechanism: when the sheet has no eligible
+  // pressured stat left, or the competitor has simply reached the ceiling
+  // their spirit allows (§1.6 — "a topped-out competitor is genuinely
+  // finished as a competitor"), the same pressure comes out as technique,
+  // teaching and meta instead of as a point.
+  if (!candidates.length || veteranTier(player)) {
+    veteranBreakthrough(save, player)
+    return
+  }
   const isCast = !player.npc && player.createdBy === 'user'
   if (isCast) {
     e.pending = { sinceAbs: abs(save), candidates }
@@ -394,6 +406,140 @@ export function checkEureka(save, player) {
   }
 }
 
+// ---------- Veteran tier: when growth stops being about you (§1.9) ----------
+
+/**
+ * Has this competitor reached the ceiling their spirit allows? §1.6's skill
+ * cap is immutable and hidden, and hitting it is supposed to arrive in
+ * fiction as "I don't think I'm getting any better at this" — never as a
+ * revealed number. This is the mechanical side of that sentence.
+ */
+export function toppedOut(player) {
+  const ceil = player.spiritCeil?.skill
+  if (!ceil) return false
+  const best = Math.max(0, ...Object.values(player.charSkill || {}), 0)
+  return best >= ceil - 1.5
+}
+
+/**
+ * Is this competitor in their second half?
+ *
+ * §1.9 says the point cap delivers this transition on its own — candidates
+ * thin until "a veteran has nothing left to glow". Measured, the literal
+ * version of that never fires: candidatesFor has a fallback that returns the
+ * most-pressured eligible stat even when nothing meets its glow requirement,
+ * so the list is never actually empty, and 24 stats × 5 points is far more
+ * sheet than a career ever fills. Zero veteran breakthroughs occurred across
+ * eight sixteen-year runs.
+ *
+ * So the reachable reading of the same sentence: the meter filled and NOTHING
+ * genuinely glowed — every candidate came from the fallback — in someone
+ * whose climbing years are behind them. That is precisely "nothing left to
+ * glow" as a career state rather than as a full sheet. Topping out on skill
+ * (§1.6) is the second door, and needs no age gate: a competitor who has
+ * reached the ceiling their spirit allows is finished as a competitor at any
+ * age, which is the sentence §1.6 makes a promise of.
+ */
+export function veteranTier(player) {
+  if (toppedOut(player)) return true
+  const past = (player.age ?? 22) - (player.peakAge ?? 28)
+  if (past < 1) return false
+  const e = player.eureka
+  if (!e) return false
+  const qualified = Object.entries(e.pressure)
+    .some(([stat, p]) => eligible(player, stat) && p >= glowRequirement(player, stat))
+  return !qualified
+}
+
+/** Everything a veteran's pressure can come out as instead of a stat point. */
+const VETERAN_OUTPUTS = ['technique', 'guide', 'coach', 'meta']
+
+/**
+ * The veteran breakthrough. Same pressure, same meter, same threshold growth —
+ * a different output. Each one leaves something behind in the world rather
+ * than on the sheet, which is the entire content of §0's promise that a
+ * career has a second half.
+ */
+export function veteranBreakthrough(save, player) {
+  const e = player.eureka
+  const today = abs(save)
+  const name = displayName(player, save)
+  // What they have to give depends on who is standing there: no protégé, no
+  // coaching; no main, no technique.
+  const protege = (player.protegeIds || [])
+    .map((id) => save.players[id])
+    .filter((p) => p && !p.retired && !p.banished)[0]
+  const pool = VETERAN_OUTPUTS.filter((k) => (k !== 'coach' || protege) && (k !== 'technique' || player.mainCharId))
+  const kind = pool.length ? pool[Math.floor(rand() * pool.length)] : 'meta'
+  let detail = {}
+
+  if (kind === 'technique' && player.mainCharId) {
+    // Tech the whole scene inherits — the same currency the innovation system
+    // already trades in, arriving from the top of a career instead of from a
+    // lucky night in the lab.
+    const inv = newInnovation({
+      charId: player.mainCharId,
+      creatorId: player.id,
+      day: save.day,
+      year: save.year,
+      name: `${name}'s ${choice(['Method', 'Setup', 'Answer', 'Loop', 'Read'])}`,
+      xp: 10,
+      difficulty: 7,
+    })
+    save.innovations.push(inv)
+    detail = { tech: inv.name }
+    chronicle(save, '🔬', `${name} has been sitting on something. It has a name now, and by the weekend everybody in the room is trying it.`)
+  } else if (kind === 'guide') {
+    player.guidesWritten = (player.guidesWritten || 0) + 1
+    const char = save.game.characters.find((c) => c.id === player.mainCharId)
+    detail = { char: char?.name || 'the game' }
+    chronicle(save, '📓', `${name} wrote it all down — everything they know, for anyone who wants it.`)
+  } else if (kind === 'coach' && protege) {
+    // The handoff, paid out. A veteran's breakthrough lands on the person
+    // they are building instead of on themselves.
+    const gained = 1.6 + rand() * 2.2
+    if (protege.mainCharId) {
+      protege.charSkill[protege.mainCharId] = (protege.charSkill[protege.mainCharId] || 0) + gained
+    }
+    protege.belief = clamp((protege.belief ?? 0) + 5, 0, 100)
+    edge(save, protege, {
+      weight: 1.5, stats: ['learning', 'analysis'],
+      why: `${name} showed me something I couldn't see`,
+    })
+    detail = { student: displayName(protege, save) }
+    writeJournal(save, protege, 'coached', { mentor: name, always: true })
+  } else {
+    // A read on where the whole game is going. The scene's tier list moves
+    // because somebody finally understood something.
+    save.freshMetaUntilAbs = Math.max(save.freshMetaUntilAbs || 0, today + 45)
+    detail = { game: save.game.name }
+    chronicle(save, '🧠', `${name} said something about ${save.game.name} this week that half the scene is still arguing about. The other half has already changed how they play.`)
+  }
+
+  player.techniques = [...(player.techniques || []), { kind, absDay: today, ...detail }]
+  writeJournal(save, player, `veteran_${kind}`, { ...detail, always: true })
+  bumpPassion(player, 7) // still having ideas is its own reason to keep coming in
+  player.mood = clamp(player.mood + 1.5, 0, 10)
+
+  // The meter is spent exactly as a normal breakthrough spends it, so a
+  // veteran keeps producing on the same cadence a young player improves on.
+  e.log.push({ absDay: today, stat: null, kind: `veteran:${kind}`, veteran: true })
+  e.count += 1
+  e.veteranCount = (e.veteranCount || 0) + 1
+  e.threshold = Math.round(e.threshold * EUREKA.GROWTH * 10) / 10
+  for (const k of Object.keys(e.pressure)) e.pressure[k] *= EUREKA.CARRY
+  e.pending = null
+  dismissToastByKey(save, `verge_${player.id}`)
+  if (!player.npc) {
+    pushToast(save, {
+      icon: '🔭',
+      text: `${name} isn't getting better any more — they're making everyone else better. Their journal has it.`,
+      see: { screen: 'players' },
+    })
+  }
+  return { kind, ...detail }
+}
+
 // ---------- The wound table at the point of a match result (§1.2) ----------
 
 /**
@@ -405,6 +551,20 @@ export function checkEureka(save, player) {
  */
 export function matchWound(save, loser, winner, { probSelf, stage = 'casual', streamed = false }) {
   if (!loser.eureka) return
+  // CHAMPION-AS-TARGET, the readable half (§0, P5). Being labbed is a
+  // performance penalty in match.js; here it is the thing it also has to be —
+  // a eureka trigger. The champion feels the scene solving them, and that
+  // pressure is what a title defence is actually made of. Said out loud once
+  // a year so it reads as a season's weight rather than a tic.
+  const titles = (loser.evoTitles || 0) + (loser.majorTitles || 0)
+  if (titles > 0 && stage !== 'casual') {
+    addPressure(save, loser, 'analysis', 0.5 + titles * 0.2,
+      'everybody has tape on me now', 'wound')
+    if (loser.targetNotedYear !== save.year) {
+      loser.targetNotedYear = save.year
+      writeJournal(save, loser, 'targeted', { always: true })
+    }
+  }
   let stat = null, alt = null, base = 0.9, why
   const h = loser.h2h?.[winner.id]
   const deficit = h ? h.l - h.w : 0

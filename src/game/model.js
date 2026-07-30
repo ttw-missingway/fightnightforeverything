@@ -111,6 +111,22 @@ export function ensureSpirit(player, key = null) {
   return player
 }
 
+/**
+ * One person's clock: how old they are, when they peak, and roughly when they
+ * are done. See the `age` block in newPlayer for why this is rolled per person
+ * rather than defaulted — a shared clock is the bulk-exodus bug (metric 5).
+ *
+ * Duplicated deliberately from career.js `rollAge`/`rollCareerClock`: career.js
+ * imports model.js, so the reverse edge would close a cycle. If you change the
+ * bands here, change them there.
+ */
+function rollLifeClock() {
+  const r = rand()
+  const age = r < 0.62 ? 16 + Math.floor(rand() * 7) : 23 + Math.floor(rand() * 9)
+  const peakAge = 25 + Math.floor(rand() * 7)
+  return { age, peakAge, hangUpAge: peakAge + 4 + Math.floor(rand() * 11) }
+}
+
 export function newPlayer(partial = {}) {
   return {
     id: uid('player'),
@@ -195,6 +211,19 @@ export function newPlayer(partial = {}) {
     evoTitles: 0, // EVO championships — the mark of a legend
     isRegular: false, // has discovered the arcade yet
     daysAttended: 0,
+    // THE OTHER CLOCK (P5). Passion asks "do they still want this"; age asks
+    // "can they still do it", and nothing tops age back up.
+    //
+    // ROLLED HERE, not defaulted here. A shared default is how metric 5's
+    // bulk-exodus bug comes back: a cast that all peaks at 28 and hangs up at
+    // 36 leaves in one clump, and the dispersion the metric measures goes to
+    // zero. Every construction path — creation form, generated walk-in,
+    // new-run reset — comes through newPlayer, so rolling at this one site is
+    // what guarantees nobody shares a clock. (career.js has the same rolls as
+    // rollCareerClock for callers that need them standalone; it cannot be
+    // imported here without closing a module cycle.)
+    ...rollLifeClock(),
+    peakSkill: 0, // high-water mark; age erodes toward a floor under it, never past
     passion: 80, // 0-100 love for the game; erodes with tenure, refilled by wins/content
     belief: 0, // 0-100 earned stage composure — grows from streamed/marquee reps; the EVO "choke" factor
     popularity: 0, // 0-100 public profile — grows from being featured on stream; feeds passion
@@ -971,6 +1000,18 @@ export function migrateSave(save) {
     // before the circuit get rough credit for the proof they already carry —
     // an EVO title or a shelf of local trophies was witnessed by somebody.
     p.roadGames ??= Math.min(40, (p.evoTitles || 0) * 16 + (p.tournamentWins || 0) * 2 + Math.floor((p.glory || 0) / 12))
+    // The other clock (P5). Pre-age saves get one rolled now, aged forward by
+    // the career they have already had — somebody with 600 nights behind them
+    // is not 22 — and their current skill stands as their peak.
+    if (p.age == null) {
+      p.age = clamp(18 + Math.floor((p.daysAttended || 0) / 168), 18, 34)
+      // Rolled inline rather than via career.js rollCareerClock: career.js
+      // imports model.js, and a second edge back would close a cycle (the
+      // same reason repairWorld lives in the store).
+      p.peakAge ??= 25 + Math.floor(rand() * 7)
+      p.hangUpAge ??= p.peakAge + 4 + Math.floor(rand() * 11)
+    }
+    p.peakSkill ??= Math.max(0, ...Object.values(p.charSkill || {}), 0)
   }
   trimVods(save) // replay data can outgrow localStorage in any era
   return save

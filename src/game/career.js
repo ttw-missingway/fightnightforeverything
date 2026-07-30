@@ -6,13 +6,81 @@
 // generation. This is the engine of the late-game: veterans you cultivated for
 // years start walking away, and you have to keep them engaged or replace them.
 
-import { clamp, chance, displayName } from './util.js'
+import { clamp, chance, displayName, rand, randInt } from './util.js'
 import { statLevel } from './constants.js'
 import { chronicle, remember } from './model.js'
 import { writeJournal, isJournaled } from './journal.js'
 import { pushToast } from './notify.js'
 
 export const PASSION_MAX = 100
+
+// ---------- AGE (P5) — the clock nobody argues with ----------
+//
+// Passion is the burnout arc: it answers "do they still want this?" and it can
+// be topped back up by a good night. Age answers a different question — "can
+// they still do it?" — and nothing tops it back up. That is what makes it the
+// engine of Act 3: a room can be perfectly run, beloved and solvent, and still
+// need a next generation, because the one you built is getting older whatever
+// you do.
+//
+// The two clocks must not collapse into one. If age simply drained passion,
+// metric 5 (retirement dispersion) would spike — everyone leaving in the same
+// narrow band — and the bulk-exodus bug the metric exists to catch would be
+// back wearing a hat. So age carries its OWN retirement pressure, and every
+// person rolls their own peak and their own ending: some are done at 28, some
+// are still turning up at 41, and the room can't tell you which in advance.
+
+/** Where a fresh arcade regular is in life. School and college kids, mostly. */
+export const rollAge = () => (chance(0.62) ? randInt(16, 22) : randInt(23, 31))
+
+/**
+ * The two ages that decide a career's shape, rolled per person so the cohort
+ * never moves as a block:
+ *  · `peakAge`  — when execution stops improving with time and starts eroding
+ *  · `hangUpAge`— roughly when this person, specifically, is done
+ * The spread on hangUpAge is deliberately wide (a decade) because that spread
+ * IS metric 5.
+ */
+export function rollCareerClock() {
+  const peakAge = randInt(25, 31)
+  return { peakAge, hangUpAge: peakAge + randInt(4, 14) }
+}
+
+/** How far past their peak they are, in years (0 while still climbing). */
+export const yearsPastPeak = (p) => Math.max(0, (p.age ?? 22) - (p.peakAge ?? 28))
+
+/**
+ * Execution decay: past the peak, the hands go before the head. Applied to
+ * charSkill yearly — small, compounding, and never below a floor, because a
+ * veteran does not become a beginner. They become someone whose reads are
+ * better than their hands, which is exactly the person who should be writing
+ * guides and coaching (veteran-tier eureka, §1.9).
+ */
+export const DECLINE_FLOOR = 0.55 // of their peak skill; below this, age stops taking
+
+export function ageDeclineFor(p) {
+  const past = yearsPastPeak(p)
+  if (past <= 0) return 0
+  // Gentle at first — the year after your peak is barely a year — then real.
+  return Math.min(0.045, 0.004 * past)
+}
+
+/**
+ * Where they are in a career, in words. Drives the legibility half of the
+ * task: retirement must stop being a surprise. This is what the player card
+ * reads out, and it is deliberately vague about the number — a room can tell
+ * that someone is past it without knowing their birthday.
+ */
+export function careerStageOf(p) {
+  const age = p.age ?? 22
+  const past = yearsPastPeak(p)
+  if (age <= 19) return { key: 'kid', label: 'a kid', blurb: 'Years of runway. Everything is still ahead of them.' }
+  if (past <= 0) return { key: 'rising', label: 'rising', blurb: 'Still climbing. The best is genuinely still coming.' }
+  if (past <= 2) return { key: 'peak', label: 'at their peak', blurb: 'Right at the top of what they have. Make it count.' }
+  if (past <= 5) return { key: 'veteran', label: 'a veteran', blurb: 'The hands have slowed a step. The reads have not.' }
+  if (past <= 9) return { key: 'late', label: 'late career', blurb: 'Running on craft now. Every season is a decision.' }
+  return { key: 'twilight', label: 'in their twilight', blurb: 'Nobody would blame them for stopping. They keep showing up.' }
+}
 
 export function passionLabel(v) {
   if (v >= 78) return 'obsessed'
@@ -81,16 +149,66 @@ export function passionDaily(save, player, ctx) {
 }
 
 /**
- * Once passion runs out, a veteran hangs it up for good. Newbies and casuals
- * don't "retire" — they just haven't caught the bug yet. Retirement frees
- * their roster slot and their team seat, and the greats get a send-off in the
- * chronicle. Returns true if they retired.
+ * A birthday for everyone in the building, run at the year rollover. Returns
+ * the cast members whose bodies noticed, so the caller can say so.
+ *
+ * The erosion is applied to charSkill rather than to a hidden modifier because
+ * the sheet is the thing the player reads and reasons about — a decline you
+ * cannot see on the card is a decline you cannot plan a succession around.
+ */
+export function ageYearly(save) {
+  const declined = []
+  for (const p of Object.values(save.players)) {
+    if (p.banished) continue
+    p.age = (p.age ?? 22) + 1
+    if (p.retired) continue
+    p.peakSkill = Math.max(p.peakSkill || 0, ...Object.values(p.charSkill || {}), 0)
+    const rate = ageDeclineFor(p)
+    if (rate <= 0) continue
+    const floor = (p.peakSkill || 0) * DECLINE_FLOOR
+    let took = 0
+    for (const [charId, v] of Object.entries(p.charSkill || {})) {
+      if (v <= floor) continue
+      const next = Math.max(floor, v * (1 - rate))
+      took += v - next
+      p.charSkill[charId] = next
+    }
+    if (took > 0.5 && !p.npc) declined.push(p)
+  }
+  return declined
+}
+
+/**
+ * Once passion runs out — or the years do — a veteran hangs it up for good.
+ * Newbies and casuals don't "retire"; they just haven't caught the bug yet.
+ * Retirement frees their roster slot and their team seat, and the greats get a
+ * send-off in the chronicle. Returns true if they retired.
+ *
+ * TWO INDEPENDENT DOORS (P5). Passion is "I don't want this any more"; age is
+ * "I can't do this any more", and a person can leave through either. Keeping
+ * them separate is what holds metric 5's dispersion up: the passion door fires
+ * on the run's events (a bad stretch, a toxic room), the age door fires on a
+ * clock that was rolled at birth, and the two never line up across a cast.
  */
 export function checkRetirement(save, player, events) {
   if (player.retired || !player.isRegular) return false
   const passion = player.passion ?? 80
-  if (passion >= 16 || (player.daysAttended || 0) < 90) return false
-  if (!chance(clamp((16 - passion) * 0.02, 0.02, 0.4))) return false
+  const age = player.age ?? 22
+  const hangUp = player.hangUpAge ?? 36
+  // The age door. Opens as they reach their own ending and widens past it —
+  // but never slams: someone can play on years past their hang-up age, and
+  // some do. Gated on a real career so a 30-year-old who just walked in
+  // doesn't retire before they have played a night.
+  const overdue = age - hangUp
+  const ageOdds = overdue >= 0 && (player.daysAttended || 0) >= 120
+    ? clamp(0.0006 + overdue * 0.0007, 0, 0.006)
+    : 0
+  const passionOpen = passion < 16 && (player.daysAttended || 0) >= 90
+  const passionOdds = passionOpen ? clamp((16 - passion) * 0.02, 0.02, 0.4) : 0
+  if (!passionOpen && ageOdds <= 0) return false
+  // Whichever door is open; if both are, the more insistent one.
+  if (!chance(Math.max(passionOdds, ageOdds))) return false
+  const viaAge = ageOdds > passionOdds
 
   player.retired = true
   player.retiredDay = save.day
@@ -107,8 +225,11 @@ export function checkRetirement(save, player, events) {
   }
 
   // The final entry — written before the book closes, whatever else the week
-  // held. The toast is for the owner; the entry is for the player.
-  writeJournal(save, player, 'retire', { days: player.daysAttended, wins: player.wins, always: true })
+  // held. The toast is for the owner; the entry is for the player. Which door
+  // they left through decides the page: burning out and ageing out are not the
+  // same ending and must not read like it.
+  writeJournal(save, player, viaAge ? 'retireAge' : 'retire',
+    { days: player.daysAttended, wins: player.wins, age: player.age, always: true })
   if (isJournaled(player)) {
     pushToast(save, {
       icon: '🏁',
@@ -121,13 +242,38 @@ export function checkRetirement(save, player, events) {
   const glorious = (player.glory || 0) >= 40
   events.push({
     type: 'retirement',
-    text: `🏁 ${name} is hanging it up — after ${player.daysAttended} nights and ${player.wins}–${player.losses}, the fire's gone out. ${glorious ? 'A legend of the scene steps away.' : 'One more regular moves on with life.'}`,
+    text: viaAge
+      ? `🏁 ${name} is calling it — ${player.daysAttended} nights, ${player.wins}–${player.losses}, and a body that's done arguing. ${glorious ? 'A legend of the scene steps away.' : 'They got further than most.'}`
+      : `🏁 ${name} is hanging it up — after ${player.daysAttended} nights and ${player.wins}–${player.losses}, the fire's gone out. ${glorious ? 'A legend of the scene steps away.' : 'One more regular moves on with life.'}`,
   })
   chronicle(save, '🏁', glorious
     ? `${name} retired — an all-time great of ${save.arcade.name}, walking away on their own terms`
-    : `${name} quietly retired from the game after ${player.daysAttended} nights`)
+    : viaAge
+      ? `${name} played their last night at ${save.arcade.name} after ${player.daysAttended} of them`
+      : `${name} quietly retired from the game after ${player.daysAttended} nights`)
   if (glorious) remember(save, player, 'retire', `retiring as a legend of ${save.arcade.name}`)
   return true
+}
+
+/**
+ * The warning shot. Once a year, the people who are visibly running out of
+ * road say so in their own journal — which is the whole legibility half of
+ * the task: the owner should never be told about a succession problem by the
+ * retirement notice. Returns who was warned.
+ */
+export function ageWarnings(save) {
+  const warned = []
+  for (const p of Object.values(save.players)) {
+    if (p.retired || p.banished || p.npc || !p.isRegular) continue
+    const stage = careerStageOf(p)
+    if (stage.key !== 'late' && stage.key !== 'twilight') continue
+    if (p.ageWarnedStage === stage.key) continue
+    p.ageWarnedStage = stage.key
+    writeJournal(save, p, stage.key === 'twilight' ? 'twilight' : 'slowingDown',
+      { age: p.age, days: p.daysAttended, always: true })
+    warned.push(p)
+  }
+  return warned
 }
 
 // Is this player active in the scene right now (not retired)?

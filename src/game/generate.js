@@ -17,6 +17,7 @@ import { deriveVoice } from './dialogue.js'
 import { applyArchetypeKit, STAGE_VIBES } from './design.js'
 import { selectableChars } from './forms.js'
 import { charPower } from './patch.js'
+import { rollCareerClock } from './career.js'
 
 export function rollStatBlock(keys) {
   return Object.fromEntries(keys.map((k) => [k, rollStat()]))
@@ -205,8 +206,17 @@ export function rollStatBuild(budget, cap = 5) {
 
 export function generatePlayer(save, overrides = {}) {
   const isNpc = !!overrides.npc
-  const tier = rollCeilingTier(isNpc)
-  const build = rollStatBuild(randInt(tier.budget[0], tier.budget[1]), isNpc ? NPC_STAT_CAP : 5)
+  // THE PRODIGY (P5). Filler is deliberately incapable of greatness — a
+  // passer-through tops out as a solid opponent and never as the story. But a
+  // lineage that runs for fifteen years needs a way for the story to CONTINUE
+  // when the cast that started it ages out, and "the owner may create six
+  // people on day one, ever" is not one. So once in a long while somebody
+  // walks in with the real thing, flagged loudly, and taking them on is the
+  // succession decision Act 3 is asking about. Rare on purpose: see
+  // maybeProdigyArrives for how seldom.
+  const prodigy = !!overrides.prodigy
+  const tier = prodigy ? CEILING_TIERS.find((t) => t.key === 'talent') : rollCeilingTier(isNpc)
+  const build = rollStatBuild(randInt(tier.budget[0], tier.budget[1]), isNpc && !prodigy ? NPC_STAT_CAP : 5)
   const { personal, social } = build
   const trow = TEMPERAMENTS.find((t) => t.key === build.temperament)
   const srow = SOCIAL_TEMPERAMENTS.find((t) => t.key === build.socialTemperament)
@@ -261,6 +271,7 @@ export function generatePlayer(save, overrides = {}) {
     otherGames: sample(STARTER_GAMES, 1),
     foods: sample(FOODS, 1),
     slob,
+    ceilingTier: tier.key, // what they could ever become — the scouting read
     ...overrides,
   })
   // Everyone walks in with something to argue about. Without this, filler only
@@ -445,6 +456,8 @@ export function makeRegionalCompetitor(save, { country, band, usedAliases = new 
     skill: randInt(band.skill[0], band.skill[1]),
     elo: randInt(band.elo[0], band.elo[1]),
     titles: 0,
+    age: randInt(17, 33),
+    ...rollCareerClock(),
   }
 }
 
@@ -482,6 +495,12 @@ export function makeElite(save, { tier, usedAliases = new Set() } = {}) {
     skill: randInt(band.skill[0], band.skill[1]),
     elo: randInt(band.elo[0], band.elo[1]),
     titles: 0,
+    // The world ages too (P5). A god is someone who has already had the years
+    // to become one; the contender tail is where the prodigies are, which is
+    // what makes the bottom of the list the interesting part of it.
+    age: tier === 'god' || tier === 'legend' ? randInt(24, 32)
+      : tier === 'killer' ? randInt(21, 30) : randInt(17, 27),
+    ...rollCareerClock(),
     ...rollEliteSpirit(tier),
   }
   // Their career is the proof of their ceiling: a god who measures 96 cannot
@@ -646,17 +665,52 @@ export function driftEvoRoster(save) {
   }
   gravitateElites(save)
 
-  // TURNOVER. Careers end and prospects arrive — two to four of the weakest
-  // hang it up every year and fresh names take their slots, so a long lineage
-  // keeps meeting new people instead of the same sixty-four forever. Retirees
-  // leave from the bottom: the gods do not quietly vanish.
-  const byElo = [...save.evoRoster].sort((a, b) => a.elo - b.elo)
+  // ---- The career arc, offscreen (P5) ----
+  //
+  // §0: "elites run the eureka machine offscreen at a cheap rate, age, and
+  // retire; new prodigies enter every year. Otherwise an endless game consumes
+  // its own world." The band regression above is the BACKBONE and stays
+  // untouched — it is what stops your cast from permanently wearing the world
+  // down, and it carries the §1.6 difficulty calibration. This rides on top of
+  // it as a per-person modulation: a 22-year-old killer drifts above their
+  // band's middle toward the ceiling their spirit allows, a 34-year-old drifts
+  // below it. Aggregate band shape holds; individual careers stop being flat.
+  for (const e of save.evoRoster) {
+    e.age = (e.age ?? 25) + 1
+    const past = (e.age ?? 25) - (e.peakAge ?? 28)
+    const ceil = e.spiritCeil?.skill ?? 99
+    if (past < 0) {
+      // Still climbing: the cheap offscreen eureka, bounded by their spirit.
+      const room = Math.max(0, ceil - e.skill)
+      e.skill = clamp(Math.round(e.skill + Math.min(room, randInt(0, 2))), 40, 99)
+    } else if (past > 1) {
+      e.skill = clamp(Math.round(e.skill - Math.min(3, (past - 1) * 0.5)), 40, 99)
+    }
+  }
+
+  // TURNOVER — now driven by the clock rather than by weakness. Careers end
+  // because they run out of years, which is why the name that drops off the
+  // list is sometimes still a great one, and why the tail is full of young
+  // people on the way up rather than a permanent underclass.
   const usedAliases = new Set(save.evoRoster.map((x) => x.alias))
-  const leaving = byElo.slice(0, randInt(2, 4))
+  const leaving = []
+  for (const e of save.evoRoster) {
+    const overdue = (e.age ?? 25) - (e.hangUpAge ?? 36)
+    if (overdue >= 0 && chance(clamp(0.2 + overdue * 0.16, 0.2, 0.9))) leaving.push(e)
+  }
+  // The world always turns over a little, even in a year when nobody's clock
+  // ran out — otherwise a lucky cohort ages in lockstep and the list freezes.
+  if (leaving.length < 2) {
+    const byElo = [...save.evoRoster].sort((a, b) => a.elo - b.elo)
+    for (const e of byElo.slice(0, 2 - leaving.length)) if (!leaving.includes(e)) leaving.push(e)
+  }
   for (const e of leaving) {
     const i = save.evoRoster.indexOf(e)
     if (i < 0) continue
+    // PRODIGIES ENTER. A replacement is a young unknown with room to grow into
+    // — makeElite already rolls the spirit ceiling that decides how far.
     const rookie = makeElite(save, { tier: 'contender', usedAliases })
+    rookie.age = randInt(16, 21)
     save.evoRoster[i] = rookie
   }
 }
