@@ -31,7 +31,7 @@ export default function EvoWeek({ record, onFinish }) {
 
   const set = (patch) => mutate((s) => {
     s.evoWeek = { ...(s.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }), ...patch }
-  })
+  }, { ack: true }) // stepping through the broadcast, not a choice
   const go = (next) => set({ step: next, openPool: null })
   const idx = steps.indexOf(step)
   const next = () => go(steps[Math.min(steps.length - 1, idx + 1)])

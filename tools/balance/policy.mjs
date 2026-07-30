@@ -34,6 +34,7 @@ import { applyMoveDescriptors, DAMAGE_TIERS } from '../../src/game/design.js'
 import { isUnlocked } from '../../src/game/achievements.js'
 import { selectableChars } from '../../src/game/forms.js'
 import { bindStream, newRngState } from '../../src/game/rng.js'
+import { noteDecision } from '../../src/game/attention.js'
 
 const { startingBudget, arcadeBuildCost } = eco
 
@@ -138,6 +139,7 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
     }
     legalizeBuild(p, budget)
     save.players[p.id] = p
+    noteDecision(save, 'create-player') // coarse: one decision per person made
   }
   populateRoster(save)
   save.evoRoster = generateEvoRoster(save)
@@ -187,6 +189,11 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
     if (fitsBandwidth(save, e)) save.arcade.schedule.push(e)
   }
   eco.seedFamilyCrew(save)
+  // Setup buys, coarsely: cabinets + foods + prices + rig + schedule. All of
+  // this lands in attention.total and none in steady — the doors aren't open.
+  const setupChoices = 1 + save.arcade.foods.length + 1 + save.arcade.otherGames.length
+    + (save.arcade.streamRig ? 1 : 0) + save.arcade.schedule.length
+  for (let i = 0; i < setupChoices; i++) noteDecision(save, 'setup-buy')
   return save
 }
 
@@ -210,18 +217,23 @@ function manage(save, policy) {
   if (employees < policy.maxEmployees && needHands && runway > 14 && cash > 300) {
     if (eco.trySpend(save, eco.HIRE_COST, 'hired an employee')) {
       save.staffing.staff.push(eco.newStaffMember('employee'))
+      noteDecision(save, 'hire')
     }
   }
   // One manager per four employees keeps the floor working (the game says so).
   if (policy.manager && managers < Math.floor(employees / 3) && runway > 20) {
     if (eco.trySpend(save, eco.HIRE_COST, 'hired a manager')) {
       save.staffing.staff.push(eco.newStaffMember('manager'))
+      noteDecision(save, 'hire')
     }
   }
   // Let staff go rather than go under — the last thing before foreclosure.
   if (runway < 6 && employees > 1) {
     const idx = save.staffing.staff.findIndex((x) => !x.family && x.role === 'employee')
-    if (idx >= 0) save.staffing.staff.splice(idx, 1)
+    if (idx >= 0) {
+      save.staffing.staff.splice(idx, 1)
+      noteDecision(save, 'layoff')
+    }
   }
   // GROW THE FLOOR. A setup is six matches a day and a token a match, so a
   // room with more people than cabinets is leaving money on the tables. This
@@ -230,6 +242,7 @@ function manage(save, policy) {
   if (policy.growSetups && att > save.settings.setups * 6 && runway > 25
       && save.settings.setups < 8 && eco.trySpend(save, eco.SETUP_COST, 'new setup cabinet')) {
     save.settings.setups += 1
+    noteDecision(save, 'setup')
   }
   // THE RIG, IF IT COULDN'T BE AFFORDED ON DAY ONE.
   //
@@ -242,6 +255,7 @@ function manage(save, policy) {
   if (policy.rig && !save.arcade.streamRig && runway > 20
       && eco.trySpend(save, STREAM_RIG_COST, 'streaming setup')) {
     save.arcade.streamRig = true
+    noteDecision(save, 'rig')
   }
   // Advertising is a weekly bill — only run what the books can carry, and
   // only channels this lineage has EARNED. The policy used to write
@@ -252,7 +266,9 @@ function manage(save, policy) {
     const c = AD_CHANNELS.find((x) => x.key === k)
     return c && (!c.unlock || isUnlocked(save, c.unlock))
   })
-  save.arcade.ads = runway > 30 ? legalAds : runway > 15 ? legalAds.slice(0, 1) : []
+  const nextAds = runway > 30 ? legalAds : runway > 15 ? legalAds.slice(0, 1) : []
+  if (nextAds.join() !== (save.arcade.ads || []).join()) noteDecision(save, 'ads')
+  save.arcade.ads = nextAds
   // A showcase night when the channel can carry one — followers and hype
   // cashing out through an event someone chose to stage. canStageExhibition
   // gates on followers, cooldown, cash and a headline-worthy roster.
@@ -261,6 +277,7 @@ function manage(save, policy) {
   if (policy.exhibit && runway > 12 && save.economy.money > EXHIBITION_COST * 3
       && canStageExhibition(save).ok) {
     runExhibition(save)
+    noteDecision(save, 'exhibition')
   }
   // AN ATTRACTION IS A CROWD YOU DO NOT HAVE YET, or it is furniture
   // (catalog.js). The room-builder buys into a pack it has EARNED, one room at
@@ -284,6 +301,7 @@ function manage(save, policy) {
       if (bought) {
         save.arcade.otherGames.push(item)
         save.arcade.gameTokens[item] ??= 1
+        noteDecision(save, 'attraction')
       }
     }
   }
@@ -297,7 +315,7 @@ function manage(save, policy) {
  * ordinary, sensible patch a designer ships — a couple of characters moved a
  * tier, nothing structural.
  */
-function maybePatch(save, policy) {
+export function maybePatch(save, policy) {
   if (!policy.patchEvery || !isUnlocked(save, 'studio')) return
   if (save.gameDraft) return
   if (daysSincePatch(save) < policy.patchEvery) return
@@ -324,6 +342,7 @@ function maybePatch(save, policy) {
   shift(ranked[ranked.length - 2].id, +1)
   save.gameDraft = draft
   releasePatch(save)
+  noteDecision(save, 'patch')
 }
 
 /** One day, played. Streams a match if the policy says to and the rig exists. */
@@ -344,7 +363,11 @@ export function playDay(save, policy = DEFAULT_POLICY) {
       const dip = save.dayInProgress
       const hour = dip?.hours?.[dip.hours.length - 1]
       if (hour && hour.streamedSetup == null) {
-        const idx = pickAutoStreamSetup(save, hour, 'closest')
+        // A policy may aim the camera itself (recovery.mjs points it at a
+        // burning-out star); the default is the auto-stream 'closest' pick.
+        const idx = policy.streamPick
+          ? policy.streamPick(save, hour)
+          : pickAutoStreamSetup(save, hour, 'closest')
         if (idx != null) {
           const ev = hour.events.find((e) => e.type === 'match' && e.setupIndex === idx)
           const a = ev && save.players[ev.aId]
@@ -353,6 +376,7 @@ export function playDay(save, policy = DEFAULT_POLICY) {
             hour.streamedSetup = idx
             ev.stream = buildStreamForPlayers(save, a, b, ev, 'daily')
             streamedToday = true
+            noteDecision(save, 'stream')
           }
         }
       }

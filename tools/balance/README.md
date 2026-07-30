@@ -23,6 +23,27 @@ node tools/balance/books.mjs normal        # month-by-month books of one run
 node tools/balance/unit.mjs normal         # where every dollar comes from and goes
 ```
 
+## The revision instruments (docs/REVISION.md §2)
+
+```bash
+node tools/balance/determinism.mjs 400        # seeded-RNG invariants — run after ANY randomness change
+node tools/balance/fingerprint.mjs 24 normal  # headline metrics → out/fingerprint.json, diffed vs baseline.json
+node tools/balance/fingerprint.mjs 24 normal --full   # + lever latency (8) and recovery (9); slow
+node tools/balance/fingerprint.mjs --commit   # bless the current out as the committed baseline
+node tools/balance/separation.mjs 12 10 normal # metric 1 — THE metric; must widen, never converge
+node tools/balance/eureka.mjs 12 normal       # metrics 3+4 — honest zeros until P1 builds the spine
+node tools/balance/latency.mjs stream|money|patch  # metric 8 — days from lever pull to measurable effect
+node tools/balance/recovery.mjs toxicity|burnout|irrelevance|plateau  # metric 9 — the S-curve hunt
+node tools/balance/attention.mjs 8 normal     # metric 6 — mutating decisions per week, by year
+node tools/balance/journal.mjs 0 4            # a content tool: one career's memory feed, readable
+```
+
+Fingerprints are fully seeded: two fingerprints of the same code are
+identical, so any diff vs `baseline.json` is the change under test. Every
+phase of the revision ends by running `fingerprint.mjs` and recording the
+diff in `BALANCE.md` §12 — a phase that moves a metric the wrong way is not
+finished.
+
 ## Two traps this harness exists to avoid
 
 **Measure the player, not the autopilot.** Half of what looked like brutal

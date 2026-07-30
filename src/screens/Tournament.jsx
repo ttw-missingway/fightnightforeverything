@@ -51,7 +51,7 @@ export default function Tournament() {
   const setRevealed = (val) => mutate((s) => {
     if (s.lastTournament && s.lastTournament.id === t.id) s.lastTournament.revealed = val
     for (const v of s.vods || []) if (v.id === t.id) v.revealed = val
-  })
+  }, { ack: true }) // a watch cursor, not a choice
   const playNext = () => setRevealed(revealedCount + 1)
   const skipAll = () => setRevealed(999999)
   // Watch in any order: clicking a later match fast-forwards the broadcast
@@ -304,7 +304,7 @@ function MoneyMatchVod({ t, nav, mutate }) {
   }
   const markWatched = () => {
     setFinished(true)
-    mutate((s) => { for (const v of s.vods || []) if (v.id === t.id) v.revealed = total })
+    mutate((s) => { for (const v of s.vods || []) if (v.id === t.id) v.revealed = total }, { ack: true })
   }
 
   return (

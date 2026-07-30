@@ -1,5 +1,6 @@
 import { uid, clamp } from './util.js'
 import { newRngState } from './rng.js'
+import { newAttention } from './attention.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, OPENING_DAY, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
@@ -510,6 +511,7 @@ export function newSave(partial = {}) {
     // this state in place, so a run replays identically from any point. The
     // harness passes a fixed seed; the browser seeds from entropy at creation.
     rng: newRngState(),
+    attention: newAttention(), // metric 6 — mutating decisions, see attention.js
     day: OPENING_DAY, // day of year, 1..336 — a run opens in mid-June
     year: 1,
     // The absolute day the doors opened. Everything asking "how old is this
@@ -796,6 +798,10 @@ const MEMORY_CAP = 12
  */
 export function remember(save, player, kind, text, opts = {}) {
   if (!player.memories) player.memories = []
+  // Lifetime count of moments written, surviving the cap below — the journal
+  // (P2) will be built on this feed, and metric 7 (journal volume) needs the
+  // write RATE, which a 12-slot shelf can't show.
+  player.memoriesWritten = (player.memoriesWritten || 0) + 1
   player.memories.push({
     day: save.day,
     year: save.year,
@@ -856,6 +862,7 @@ export function migrateSave(save) {
   // Saves from before seeded randomness get a stream now; their past is not
   // reproducible, but everything from here on is.
   if (!save.rng || typeof save.rng.state !== 'number') save.rng = newRngState()
+  save.attention ??= newAttention()
   save.hour ??= 0
   save.dayInProgress ??= null
   // A save written while the arcade was OPEN carries a live day whose shape is
@@ -1019,6 +1026,7 @@ export function migrateSave(save) {
     p.tasteRerolled ??= false
     p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
     p.memories ??= []
+    p.memoriesWritten ??= p.memories.length
     p.voice ??= deriveVoice(p)
     // Voice is cached on the player, so the roster of any save made before the
     // stat-scale fix is still carrying the one voice the broken thresholds

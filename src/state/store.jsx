@@ -9,6 +9,7 @@ import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '.
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
+import { noteDecision } from '../game/attention.js'
 
 const INDEX_KEY = 'fightnight:index'
 const saveKey = (id) => `fightnight:save:${id}`
@@ -472,10 +473,18 @@ export function StoreProvider({ children }) {
   const nav = useCallback((name, params = {}) => setScreen({ name, ...params }), [])
 
   // All game mutations go through here: clone current save, mutate, persist.
-  const mutate = useCallback((fn) => {
+  //
+  // This is also where attention (metric 6, REVISION §2.5) is measured: every
+  // mutation counts as one decision unless the caller passes { ack: true } —
+  // the explicit acknowledgement list (dismissing rumors and unlock notices,
+  // reveal cursors, the grand-opening curtain). Review that list whenever it
+  // grows. Day advancement never comes through mutate, so it is excluded by
+  // construction.
+  const mutate = useCallback((fn, opts = {}) => {
     const prev = saveRef.current
     if (!prev) return
     const next = structuredClone(prev)
+    if (!opts.ack) noteDecision(next, opts.kind || 'ui')
     fn(next)
     persistSave(next)
     setSave(next)

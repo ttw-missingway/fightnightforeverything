@@ -690,13 +690,13 @@ function RumorMill({ save, nav, limit = 5, title = '🗣 The Rumor Mill' }) {
     s.dismissedRumors ??= {}
     s.dismissedRumors[id] = heat
     pruneDismissed(s)
-  })
+  }, { ack: true })
   const clearAll = () => mutate((s) => {
     s.dismissedRumors ??= {}
     // Wave off the entire bounded set — clearing it truly empties the mill.
     for (const r of allRumors(s)) s.dismissedRumors[r.id] = r.heat
     pruneDismissed(s)
-  })
+  }, { ack: true })
 
   // Switched off, the room keeps its secrets. The feuds and the souring stars
   // are all still there and still doing what they do — nobody is telling you

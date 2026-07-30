@@ -59,7 +59,7 @@ export default function App() {
   // Opening night, before anything else — including the tab bar. A world's
   // first screen should be the door being unlocked, not a nav row.
   if (save.grandOpening) {
-    return <GrandOpening onDone={() => mutate((s) => { s.grandOpening = false })} />
+    return <GrandOpening onDone={() => mutate((s) => { s.grandOpening = false }, { ack: true })} />
   }
 
   const newVods = (save.vods || []).filter((v) => !isVodWatched(v)).length
@@ -184,7 +184,7 @@ function UnlockBanner() {
     .map((k) => ACHIEVEMENTS.find((a) => a.key === k))
     .filter(Boolean)
   if (!queued.length) return null
-  const dismiss = () => mutate((s) => { s.unlockNotices = [] })
+  const dismiss = () => mutate((s) => { s.unlockNotices = [] }, { ack: true })
   return (
     <div className="dangers">
       {queued.map((a) => (
