@@ -432,10 +432,17 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
             </p>
           )}
 
-          {(p.journal || []).length > 0 && (
+          {/* Cast only — filler and elites keep no journal. Shown even when
+              empty, or nobody can tell the feature exists on a save whose
+              entries haven't started accruing yet. */}
+          {!p.npc && p.createdBy === 'user' && (
             <>
-              <h3>📔 Journal <span className="dim small">— their own words · {p.journalWritten || p.journal.length} entries</span></h3>
-              {[...p.journal].slice(-14).reverse().map((e, i) => (
+              <h3>📔 Journal <span className="dim small">— their own words{(p.journalWritten || 0) > 0 ? ` · ${p.journalWritten} entries` : ''}</span></h3>
+              {(p.journal || []).length === 0 && (
+                <p className="dim small">Blank pages so far — entries arrive as things happen to them: losses that
+                  sting, streaks, fallings-out, breakthroughs. This is where the early warnings show up first.</p>
+              )}
+              {[...(p.journal || [])].slice(-14).reverse().map((e, i) => (
                 <p key={i} className="small" style={{ margin: '4px 0', borderLeft: '2px solid var(--border)', paddingLeft: 8 }}>
                   <span className="dim">{formatDay(e.day, e.year)}</span><br />
                   {e.text}

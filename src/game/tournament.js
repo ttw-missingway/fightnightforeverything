@@ -475,27 +475,48 @@ export function invitationScore(p) {
  * a venue genuinely stakes, which is where the event-heavy identity pays.
  */
 export const TOURNAMENT_POT_PER_HEAD = { weekly: 1, monthly: 4, yearly: 6 }
-export const tournamentPot = (entrants, cadence) =>
-  Math.round(entrants * (TOURNAMENT_POT_PER_HEAD[cadence] ?? 4))
 
-function dropoutChance(p) {
+/**
+ * THE POT LEVER (REVISION §0, "money's new job"). The house can stake past
+ * the minimum, and the pot is how money buys adversity in place: a real pot
+ * pulls ranked names through the door to take it from you, and your own best
+ * players stop turning up for scraps. An endless sink that scales with
+ * ambition — raising it once raises what everyone expects forever after.
+ */
+export const POT_STAKES = [
+  { key: 0, label: 'house minimum', mult: 1 },
+  { key: 1, label: 'a real pot', mult: 3 },
+  { key: 2, label: 'worth the drive', mult: 8 },
+  { key: 3, label: 'worth the flight', mult: 20 },
+]
+export const tournamentPot = (entrants, cadence, boost = 0) =>
+  Math.round(entrants * (TOURNAMENT_POT_PER_HEAD[cadence] ?? 4)
+    * (POT_STAKES.find((s) => s.key === boost)?.mult ?? 1))
+
+function dropoutChance(p, potPerHead = 1) {
   // Life gets in the way of the UNRELIABLE. The put-together player has never
   // missed a bracket in their life; the flake no-shows their own grudge match.
   let c = 0.035 + (5 - p.mood) * 0.008 + Math.max(0, 8 - statLevel(p.social?.reliability)) * 0.011
-  return clamp(c, 0.01, 0.16)
+  // Good players stop attending if the pot does not keep pace (§0). A star
+  // with real standing skips the scraps-tier weekly some weeks; nobody skips
+  // a pot worth winning. Reliability still argues for showing up.
+  const standing = Math.max(0, ((p.elo || 1200) - 1400) / 900) // 0 at 1400, ~0.33 at 1700
+  const appeal = clamp(potPerHead / 12, 0, 1) // per-head $12+ reads as worth it
+  c += standing * (1 - appeal) * 0.3 * clamp(1 - statLevel(p.social?.reliability) / 12, 0.3, 1)
+  return clamp(c, 0.01, 0.45)
 }
 
 /**
  * Fill `size` slots from the ranked invite list, narrating anyone whose life
  * gets in the way. Returns null (cancellation) if the bracket can't fill.
  */
-function fillBracket(save, ranked, size, storylines) {
+function fillBracket(save, ranked, size, storylines, potPerHead = 1) {
   if (ranked.length < size) return null
   const field = ranked.slice(0, size)
   const alternates = ranked.slice(size)
   for (let i = 0; i < field.length; i++) {
     const p = field[i]
-    if (chance(dropoutChance(p))) {
+    if (chance(dropoutChance(p, potPerHead))) {
       const sub = alternates.shift()
       if (sub) {
         storylines.push(`${pName(save, p)} dropped out — ${choice(LIFE_EVENTS)}. ${pName(save, sub)} slides into the bracket.`)
@@ -525,20 +546,60 @@ export function runSinglesTournament(save, scheduleEntry) {
     return { ok: false, reason: `${name} cancelled — only ${ranked.length} eligible, need at least ${size}.` }
   }
   const storylines = []
-  const field = fillBracket(save, ranked, size, storylines)
+  // The pot is decided BEFORE the field, because the pot decides the field:
+  // your stars skip a scraps-tier pot, and a real one pulls ranked names
+  // through the door to try to take it home.
+  const potCadence = scheduleEntry?.cadence || 'yearly'
+  const potBoost = scheduleEntry?.potBoost || 0
+  const pot = tournamentPot(size, potCadence, potBoost)
+  const potPerHead = pot / size
+  const field = fillBracket(save, ranked, size, storylines, potPerHead)
   if (!field) {
     return { ok: false, reason: `${name} cancelled — too many dropouts left the bracket short of ${size}.` }
   }
   // The house stakes the pot before a single game is played. A bracket the
   // venue can't fund doesn't run — which also stops a dying room from hyping
   // itself further into the hole with events it can't pay for.
-  const potCadence = scheduleEntry?.cadence || 'yearly'
-  const pot = tournamentPot(size, potCadence)
   if (pot > 0 && !trySpend(save, pot, `${name} — pot & trophies`)) {
     return { ok: false, reason: `${name} cancelled — the house couldn't put up the $${pot} pot.` }
   }
   storylines.push(`$${pot} on the line, staked by the house.`)
   const entrants = field.map((p) => arcadeEntrant(save, p))
+  // BETTER FIELDS COME TO YOU (§0): a pot worth travelling for draws outside
+  // names — the contender tail of the world list, hungry and better than your
+  // room. They take bracket slots, they can take the pot home, and losing to
+  // them is exactly the adversity the money was spent to buy.
+  if ((save.relevance ?? 55) >= 40 && save.evoRoster?.length) {
+    const outsiders = potPerHead >= 45 ? 3 : potPerHead >= 20 ? 2 : potPerHead >= 8 ? 1 : 0
+    if (outsiders > 0) {
+      const pool = save.evoRoster
+        .filter((e) => e.skill <= 72 && e.mainCharId)
+        .sort((a, b) => a.skill - b.skill)
+        .slice(0, 20)
+      const drawn = []
+      // THE RESURFACING (§0.6): someone you banished may walk back through
+      // the door behind a pot worth winning — sharper than you remember, and
+      // not friendly about it.
+      const exiles = Object.values(save.players).filter((p) =>
+        p.banished && !p.retired && p.mainCharId
+        && Math.max(0, ...Object.values(p.charSkill || {}), 0) >= 28)
+      if (exiles.length && rand() < 0.3) {
+        const back = exiles[Math.floor(rand() * exiles.length)]
+        const e = arcadeEntrant(save, back)
+        e.returnee = true
+        entrants.push(e)
+        storylines.push(`${pName(save, back)} — banned from this very room — came back for the pot.`)
+      }
+      for (let i = 0; i < outsiders - (entrants.length > size ? 1 : 0) && pool.length; i++) {
+        const pick = pool.splice(Math.floor(rand() * pool.length), 1)[0]
+        drawn.push(pick)
+        entrants.push(eliteEntrant(pick))
+      }
+      if (drawn.length) {
+        storylines.push(`The pot pulled ranked names through the door: ${drawn.map((e) => e.alias).join(', ')}.`)
+      }
+    }
+  }
   const format = scheduleEntry?.format || 'single'
   const { rounds, placements, champion } = runFormat(save, entrants, format)
 
@@ -552,6 +613,23 @@ export function runSinglesTournament(save, scheduleEntry) {
   const impact = Math.round(Math.min(25, finalsViewers / 40) * cadenceMult)
   const baseGlory = Math.max(2, Math.round(size * cadenceMult))
   for (const { entrant, place } of placements) {
+    if (entrant.kind === 'elite') {
+      // An outsider placing is the pot doing its job; an outsider WINNING is
+      // the bill arriving — the money leaves the building in their pocket.
+      if (place === 1) {
+        chronicle(save, '💸', `${entrant.name} came for the ${name} pot and took it home. The room watched every game of it.`)
+        eliteFragment(save, entrant.ref, 'beaten') // their side of the story, in character
+      }
+      continue
+    }
+    if (entrant.returnee) {
+      // The banished are not yours to reward — but the room remembers when
+      // one of them wins in your building.
+      if (place === 1) {
+        chronicle(save, '🚫', `${entrant.name} — the one you banned — won ${name} in your own room and walked out with the pot. Nobody said much after that.`)
+      }
+      continue
+    }
     const p = entrant.ref
     // A deep run is exactly what keeps a player in love with the game.
     bumpPassion(p, place === 1 ? 12 : place === 2 ? 7 : place <= 4 ? 4 : 1.5)

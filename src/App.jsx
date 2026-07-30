@@ -23,6 +23,8 @@ import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
 import { TAB_GATES, tabOpen, tabHint } from './game/tabs.js'
 import { setFacePalette } from './components/art.js'
 import { bannerToasts, liveToasts, dismissToast } from './game/notify.js'
+import { pendingAsks, fundAsk, denyAsk, daysUntil, TRAVEL_TIERS } from './game/travel.js'
+import { displayName } from './game/util.js'
 
 export default function App() {
   const { save, screen, nav, closeSave, mutate } = useStore()
@@ -150,6 +152,7 @@ export default function App() {
       {/* The nearly-too-late class persists HERE, on the arcade screen, until
           waved off (REVISION §0.4). Everywhere else it rides the overlay. */}
       {screen.name === 'arcade' && <ToastBanner />}
+      {screen.name === 'arcade' && <TravelBanner />}
 
       {screen.name === 'arcade' && <Arcade />}
       {screen.name === 'players' && <Players />}
@@ -192,6 +195,48 @@ function ToastBanner() {
           <button className="d-go" onClick={() => wave(t.id)}>✕</button>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * The ask/deny loop (travel.js): a player wants to be sent somewhere, the
+ * books are on the table, and both buttons are real decisions. Refusing
+ * while flush reads as a betrayal — the copy says so, because the game
+ * will act like it.
+ */
+function TravelBanner() {
+  const { save, mutate } = useStore()
+  const asks = pendingAsks(save)
+  const event = save.travel?.event
+  if (!asks.length || !event) return null
+  const cash = Math.round(save.economy?.money ?? 0)
+  return (
+    <div className="dangers">
+      {asks.map((a) => {
+        const p = save.players[a.playerId]
+        if (!p) return null
+        const flush = cash >= a.cost * 3
+        return (
+          <div key={a.id} className="danger unlock">
+            <span className="d-icon">✈️</span>
+            <div>
+              <div className="d-title">{displayName(p, save)} wants to go to {event.name}</div>
+              <div className="d-detail">
+                {TRAVEL_TIERS[event.tier].label} · in {daysUntil(save, event)} days · costs ${a.cost} of your ${cash}.
+                A placing recoups; an early exit is money burned.
+              </div>
+              {flush && <div className="d-fix">You can afford this, and they know it.</div>}
+            </div>
+            <button className="d-go" onClick={() => mutate((s) => fundAsk(s, a.id), { kind: 'travel' })}>
+              Fund it (${a.cost})
+            </button>
+            <button className="d-go" onClick={() => mutate((s) => denyAsk(s, a.id), { kind: 'travel' })}>
+              Not this time
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

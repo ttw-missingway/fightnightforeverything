@@ -2,14 +2,14 @@
 // patch commits it, generates patch notes from the real diff, and the
 // community reacts — to balance, to content, to boredom, and to cadence.
 
-import { uid, clamp, hash01, displayName, rand } from './util.js'
+import { uid, clamp, hash01, displayName, rand, randInt, chance } from './util.js'
 import { writeJournal } from './journal.js'
 import { eliteFragment } from './fragments.js'
 import { getMatchup, chronicle, bumpPeak } from './model.js'
 import { bumpPassion } from './career.js'
 import { applyPatchRelevance, franchiseFatigue, gameAgeYears } from './relevance.js'
 import { addHype } from './stream.js'
-import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf } from './constants.js'
+import { DAYS_PER_YEAR, absDayOf, dateOfAbs, formatDay, difficultyOf, statLevel } from './constants.js'
 import { postPatchReaction, postPatchAnnouncement } from './socialmedia.js'
 import { computeMatchups, observedPower } from './balance.js'
 import { selectableChars, charLabel } from './forms.js'
@@ -582,6 +582,40 @@ export function releasePatch(save) {
         p.mainCharId = null
         p.settledMain = false // back to the lab to find a new main
       }
+    }
+
+    // KNOWLEDGE INVALIDATION (P3, REVISION §0's lever table): a patch does
+    // not just change numbers — it invalidates a slice of what everyone KNEW
+    // about the changed characters. Setups stop working, routes drop, the
+    // matchup notes go stale. Learners re-learn fastest; everyone re-learns.
+    const changedIds = new Set([
+      ...diff.nerfed.map((n) => n.char.id),
+      ...diff.buffed.map((b) => b.char.id),
+    ])
+    if (changedIds.size) {
+      for (const p of Object.values(save.players)) {
+        if (p.retired || p.banished) continue
+        for (const id of changedIds) {
+          if ((p.charSkill?.[id] || 0) > 8) {
+            const keep = Math.min(0.985, 0.94 + statLevel(p.personal?.learning) * 0.004)
+            p.charSkill[id] = Math.round(p.charSkill[id] * keep * 100) / 100
+          }
+        }
+      }
+    }
+
+    // THE ONLY LEVER THAT REACHES THE ELITES (§0). The world's best play
+    // this build too: a nerfed main dips them (loyalists ride it all the way
+    // down), a buffed one lifts them, and the lab monsters treat every patch
+    // as a gift. This is the sole line in the game where an owner's decision
+    // moves the numbers of people who have never heard of the arcade.
+    for (const e of save.evoRoster || []) {
+      let d = 0
+      if (diff.nerfed.some((n) => n.char.id === e.mainCharId)) d -= e.persona === 'loyalist' ? randInt(2, 3) : 1
+      if (diff.buffed.some((b) => b.char.id === e.mainCharId)) d += randInt(1, 2)
+      if (e.persona === 'lab-monster') d += 1
+      if (e.persona === 'meta-chaser' && changedIds.size && chance(0.5)) d += 1
+      if (d !== 0) e.skill = clamp(e.skill + d, 40, 100)
     }
   }
 

@@ -33,9 +33,10 @@ import { releasePatch, daysSincePatch, charPower } from '../../src/game/patch.js
 import { applyMoveDescriptors, DAMAGE_TIERS } from '../../src/game/design.js'
 import { isUnlocked } from '../../src/game/achievements.js'
 import { selectableChars } from '../../src/game/forms.js'
-import { bindStream, newRngState } from '../../src/game/rng.js'
+import { bindStream, bindRng, newRngState } from '../../src/game/rng.js'
 import { noteDecision } from '../../src/game/attention.js'
 import { autoPickStat, chooseBreakthrough } from '../../src/game/eureka.js'
+import { pendingAsks, fundAsk, denyAsk } from '../../src/game/travel.js'
 
 const { startingBudget, arcadeBuildCost } = eco
 
@@ -277,6 +278,41 @@ function manage(save, policy) {
   const nextAds = runway > 30 ? legalAds : runway > 15 ? legalAds.slice(0, 1) : []
   if (nextAds.join() !== (save.arcade.ads || []).join()) noteDecision(save, 'ads')
   save.arcade.ads = nextAds
+  // THE ROAD (travel.js): back your people when the books can carry it. A
+  // competent owner funds the ask or says no promptly — sitting on one until
+  // it lapses is the timid owner's move, and the game reads it as a no.
+  // `moneyLever` pins both money moves for A/B instruments: 'off' spends
+  // nothing on competition, 'max' spends everything (latency.mjs).
+  for (const ask of pendingAsks(save)) {
+    const cashNow = save.economy.money
+    if (policy.moneyLever === 'off') {
+      denyAsk(save, ask.id)
+      noteDecision(save, 'travel')
+    } else if (policy.moneyLever === 'max' || (runway > 16 && cashNow > ask.cost * 2)) {
+      if (fundAsk(save, ask.id)) noteDecision(save, 'travel')
+      else if (policy.moneyLever !== 'max') { denyAsk(save, ask.id); noteDecision(save, 'travel') }
+    } else if (runway < 10 || cashNow < ask.cost * 1.2) {
+      denyAsk(save, ask.id)
+      noteDecision(save, 'travel')
+    }
+  }
+  // THE POT: stake past the minimum as the books allow — better fields come
+  // to you, and your own stars keep turning up. Ambition is a standing bill.
+  for (const e of save.arcade.schedule) {
+    if (e.type !== 'singles') continue
+    const cashNow = save.economy.money
+    // 'max' stakes the highest SUSTAINABLE tier, not the highest tier — a pot
+    // the house can't keep putting up cancels brackets, which buys less
+    // adversity than staking nothing (measured; the overreach arm read
+    // NEGATIVE on the money lever).
+    const want = policy.moneyLever === 'off' ? 0
+      : policy.moneyLever === 'max' ? (cashNow > 900 ? 2 : 1)
+      : cashNow > 3000 && runway > 30 ? 2 : cashNow > 1200 && runway > 20 ? 1 : 0
+    if ((e.potBoost || 0) !== want) {
+      e.potBoost = want
+      noteDecision(save, 'pot')
+    }
+  }
   // Exhibitions were cut by the revision (docs/DEPRECATED.md) — the competent
   // player no longer stages showcase nights.
   // AN ATTRACTION IS A CROWD YOU DO NOT HAVE YET, or it is furniture
@@ -347,6 +383,11 @@ export function maybePatch(save, policy) {
 
 /** One day, played. Streams a match if the policy says to and the rig exists. */
 export function playDay(save, policy = DEFAULT_POLICY) {
+  // Bind FIRST. The management phase below draws (hires mint ids, travel
+  // answers write journal lines) before any engine entry point rebinds — and
+  // a draw against a stale stream is invisible in one process but splits a
+  // serialize-and-resume from an uninterrupted run.
+  bindRng(save)
   const today = whatHappensToday(save)
   if (today === 'evo') { runEvo(save); advanceDay(save); return }
   if (today) {
@@ -389,7 +430,13 @@ export function playDay(save, policy = DEFAULT_POLICY) {
   // and it counts as a mutating decision (metric 6) because it is one.
   for (const p of Object.values(save.players)) {
     if (p.npc || p.createdBy !== 'user' || !p.eureka?.pending) continue
-    const stat = autoPickStat(p, p.eureka.pending.candidates)
+    // STEERING (§0's eureka lever): a crisis counterplay can name the stats
+    // it wants broken through — a toxic star pushed toward sensitivity, a
+    // burning-out one toward temperance. The glow list still decides what is
+    // ON OFFER; the policy only chooses among what arrived.
+    const prefer = policy.eurekaPrefer
+    const steered = prefer && p.eureka.pending.candidates.find((c) => prefer.includes(c.stat))?.stat
+    const stat = steered || autoPickStat(p, p.eureka.pending.candidates)
     if (stat) {
       chooseBreakthrough(save, p, stat)
       noteDecision(save, 'eureka')

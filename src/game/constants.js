@@ -387,25 +387,25 @@ export const DIFFICULTIES = [
   {
     key: 'easy', label: 'Easy', statPoints: 10,
     startingMoney: 2200, rentMult: 0.7, rentBase: 100, popularityMult: 1.35, receptionBias: 4,
-    collapseGrace: 60, fadeGrace: 120, foreclosureGrace: 30, rentEscalation: 0, relevanceDecayMult: 0.6,
+    collapseGrace: 60, fadeGrace: 120, foreclosureGrace: 50, rentEscalation: 0, relevanceDecayMult: 0.6,
     blurb: 'Generous funds, cheap rent, a forgiving community.',
   },
   {
     key: 'normal', label: 'Normal', statPoints: 5,
     startingMoney: 1500, rentMult: 1, rentBase: 95, popularityMult: 0.95, receptionBias: -1,
-    collapseGrace: 30, fadeGrace: 50, foreclosureGrace: 21, rentEscalation: 0.12, relevanceDecayMult: 1.32,
+    collapseGrace: 30, fadeGrace: 50, foreclosureGrace: 35, rentEscalation: 0.12, relevanceDecayMult: 1.32,
     blurb: 'The intended experience: a scene you have to keep alive on purpose.',
   },
   {
     key: 'difficult', label: 'Difficult', statPoints: 3,
     startingMoney: 1000, rentMult: 1.15, rentBase: 105, popularityMult: 0.8, receptionBias: -5,
-    collapseGrace: 21, fadeGrace: 38, foreclosureGrace: 17, rentEscalation: 0.16, relevanceDecayMult: 1.5,
+    collapseGrace: 21, fadeGrace: 38, foreclosureGrace: 28, rentEscalation: 0.16, relevanceDecayMult: 1.5,
     blurb: 'Thin margins, a skeptical internet, a hungry landlord.',
   },
   {
     key: 'master', label: 'Master', statPoints: 0,
     startingMoney: 700, rentMult: 1.25, rentBase: 115, popularityMult: 0.68, receptionBias: -9,
-    collapseGrace: 16, fadeGrace: 30, foreclosureGrace: 13, rentEscalation: 0.2, relevanceDecayMult: 1.7,
+    collapseGrace: 16, fadeGrace: 30, foreclosureGrace: 21, rentEscalation: 0.2, relevanceDecayMult: 1.7,
     blurb: 'Nearly impossible. The landlord is already drafting the notice.',
   },
 ]

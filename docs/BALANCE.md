@@ -1032,3 +1032,70 @@ of 80 elites carried one after two years; EVO, patch and monthly-drip
 sources), and the dialogue corpus was deliberately NOT mined for journal
 prose — single-voice entries sidestep the coherence problem, so they were
 written native.
+
+---
+
+## 17. P3 — the levers, built and measured (2026-07-30)
+
+REVISION §5-P3: money became pots (POT_STAKES ×1/×3/×8/×20 per schedule
+entry; outside entrants from the contender tail come for a pot worth the
+trip, and your own stars skip scraps-tier weeklies) plus the travel ask/deny
+loop (travel.js — away events on a cadence, asks with the books on the
+table, distance-scaled cost, placing recoups / early exit burns, denial = the
+§1.10 determination wound at weight 4, or 6 while flush). Streaming became
+affect influence (room mood drifts toward the streamed pair weighted by
+viewers; the recently-streamed pull ×1.6 in eureka's company channel — who
+is visible is who the room learns from). Patching gained knowledge
+invalidation (charSkill dents on changed characters; learners keep more) and
+elite reach (persona-driven skill shifts — the only lever that touches the
+world's best). Foreclosure demoted to guard rail (grace 50/35/28/21, was
+30/21/17/13). Banishment priced: relevance −2.5, friends take it personally
+in their journals, and the banished can resurface behind a big pot as
+returnee outsiders.
+
+### Metric 10 — money's job is changing ✅
+
+Competition share of spend by year: **0.09 / 0.22 / 0.26 / 0.29 / 0.30 /
+0.33** (survival 0.69 → 0.67). The baseline read a flat ~0.12 with survival
+rising to 0.88. Monotone climb every year of the run — the inversion has
+begun; the crossover waits on P4's calendar giving the money more to buy.
+
+### Metric 8 — the three latencies ✅ (with the money finding)
+
+stream **6d** (+308 followers) · patch **0d** (+58 relevance) · money **no
+clean day-count**. The money finding is the §17 headline: **money is the
+belief-gated lever.** Staked pots pulled at day 120 measurably REDUCE
+adversity intake — outsiders displace close peer matches with near-free
+underdog losses, exactly as §1.8 prescribes (no expectation, no suffering).
+Even pulled at day 400 the A/B effect is small against ~1000 ambient intake
+at n=6. And the tier-3 'max' arm read NEGATIVE outright: pots the house
+cannot keep staking CANCEL brackets — overreach buys less adversity than
+thrift. "Money ≥ a month" holds trivially; its real payoff compounds through
+belief and arrives with the P4 calendar.
+
+### Metric 9 — the cliff still does not exist ❌ (carried to P4)
+
+toxicity 0/0/0/0/0/0.17 · burnout 0.67/0.33/0.5/0.5/0.5/0.5 · irrelevance
+~0.33–0.5 flat · plateau 0.33→0.83 (rises WITH lag — later windows are
+richer rooms, not better counterplay). Even with the full §2.6 kit —
+eureka steering (policy.eurekaPrefer), spotlight starvation, targeted
+nerf/buff patches (shiftMain), pot-and-travel plateau breaking — no crisis
+resolves an S-curve. Two named suspects, in order: (1) instrument power
+(n=6 per lag cannot resolve differences under ~0.2; the burnout 0d:0.67 vs
+7d+:0.5 hint is one seed), and (2) injected feud triads at −80 outlive every
+lever inside 180 days — formed grudges currently have no counterplay and no
+untreated COMPOUNDING either, and a cliff needs the disease to progress.
+P4 owns both. Natural incidence stays honest (burnout 0.5, irrelevance 1.0,
+plateau 1.0; toxicity detector still reads 0 — threshold audit also carried).
+
+### Standing facts and watch items
+
+Survival median 1391d, all dead by y6; the killer funnel flipped to OPINION
+(17/24, was 7) — pots and trips spend the cash that used to sit against
+relevance decay, and the calendar (P4) is the structural answer. Metrics
+1/3/7 hold through P3 (local separation trough-and-restratify 1.78→1.82;
+cadence 9.9/career; journal in band, though y4+ runs hot at ~34/yr — trim
+in P4 if it holds). Watch: influence chosen-kind share is now the largest
+(730 vs wound 483) after the visibility multiplier — §1.2 wants wound
+dominant; dial the company base down when P4 recalibrates pacing. Cap
+realisation unchanged (skill 0 — careers still end before the wall).

@@ -10,6 +10,7 @@
 //   quirk:  a signature flavor that overrides lines ~half the time
 
 import { choice, chance } from './util.js'
+import { boundSave } from './rng.js'
 
 // NOTE ON IMPORTS: this file must not import social.js. model.js imports
 // dialogue.js (for deriveVoice) and social.js imports model.js, so reaching
@@ -977,14 +978,24 @@ function lineId(template) {
   return h.toString(36)
 }
 
-// The arcade's short-term memory. Not persisted: it only has to stop everyone
-// saying the same thing within one stretch of simulation.
-const roomRecent = []
+// The arcade's short-term memory — what the ROOM has heard lately, so two
+// people don't say the same thing in one stretch of simulation. It lives on
+// the SAVE (via the bound-save accessor) and not at module level: a module
+// ring survives across runs in one process, which made two same-seed runs
+// hear each other's echoes and pick different lines — the one determinism
+// break the seeded-RNG work didn't catch, because it wasn't randomness.
+const roomFallback = [] // menu-time speech with no save bound (UI-only)
+function roomRecentOf() {
+  const save = boundSave()
+  if (!save) return roomFallback
+  return (save.dialogueRecent ??= [])
+}
 
 function rememberLine(player, id) {
   if (!player.said) player.said = []
   player.said.push(id)
   while (player.said.length > SAID_RING) player.said.shift()
+  const roomRecent = roomRecentOf()
   roomRecent.push(id)
   while (roomRecent.length > ROOM_RING) roomRecent.shift()
 }
@@ -1122,7 +1133,7 @@ export function speak(player, kind, ctx = {}) {
 
   // Drop anything this person (or the room) has said lately. If that empties
   // the pool, fall back rather than going silent.
-  const stale = new Set([...(player.said || []), ...roomRecent])
+  const stale = new Set([...(player.said || []), ...roomRecentOf()])
   const fresh = candidates.filter((c) => !stale.has(lineId(c)))
   const pool = fresh.length ? fresh : candidates
 

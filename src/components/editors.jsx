@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Field, NumField, StringListEditor, PillPicker, Portrait } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
+import { POT_STAKES, tournamentPot } from '../game/tournament.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import {
   generateCharacter, generateGameTitle, generateArcadeName,
@@ -1975,6 +1976,18 @@ export function ScheduleEditor({ save, update }) {
                 ))}
               </select>
             </label>
+            {t.type === 'singles' && (
+              <label className="row small dim" title="Money's job: a real pot pulls ranked outsiders into your bracket to take it from you, and your own stars stop turning up for scraps. This is how money buys adversity.">
+                pot
+                <select value={t.potBoost || 0} onChange={(e) => patchEntry(t.id, (x) => { x.potBoost = Number(e.target.value) })}>
+                  {POT_STAKES.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      ${tournamentPot(Math.max(t.size || 8, minBracket(t.type)), t.cadence || 'weekly', s.key)} — {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button className="small danger" onClick={() => update((s) => {
               s.arcade.schedule = s.arcade.schedule.filter((y) => y.id !== t.id)
             })}>×</button>

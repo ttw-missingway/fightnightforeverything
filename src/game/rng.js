@@ -41,6 +41,7 @@ export function newRngState(seed) {
 // through every call because the engine is synchronous and single-threaded:
 // whoever bound last owns the draws until someone else binds.
 let current = null
+let currentSave = null
 
 /**
  * Bind the save's stream (creating it on saves that predate one). Returns the
@@ -51,8 +52,17 @@ export function bindRng(save) {
   if (!save) return current
   if (!save.rng || typeof save.rng.state !== 'number') save.rng = newRngState()
   current = save.rng
+  currentSave = save
   return current
 }
+
+/**
+ * The save whose stream is bound, for engine code that runs deep inside a
+ * call chain that never threaded the save through (dialogue's room-memory
+ * ring lives on the save via this, so two same-seed runs cannot hear each
+ * other's echoes across module state).
+ */
+export const boundSave = () => currentSave
 
 /** Bind a bare stream (tests, or drawing outside any save on purpose). */
 export function bindStream(stream) {

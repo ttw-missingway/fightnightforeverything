@@ -37,11 +37,24 @@ const LEVERS = {
     label: 'daily streaming begins → followers',
   },
   money: {
-    base: { ...DEFAULT_POLICY, ads: [], growSetups: false, exhibit: false },
-    treat: (policy) => ({ ...policy, ads: ['flyers'], growSetups: true }),
-    signal: (save) => save.economy.history.at(-1)?.attendance ?? 0,
-    threshold: 1.0,
-    label: 'money into ads + capacity → attendance',
+    // Money's REAL job since P3: buying adversity. The treatment stakes
+    // sustainable pots and funds every ask from the pull day on; the signal
+    // is cumulative BOUGHT adversity intake. Pulled in YEAR TWO on purpose:
+    // §1.8 gates adversity on belief (an underdog who expects nothing
+    // suffers nothing), so pots pulled at day 120 measurably REDUCE intake —
+    // outsiders displace close peer matches with near-free underdog losses.
+    // Money is the belief-gated lever; that is the §17 finding.
+    pullDay: 400,
+    base: { ...DEFAULT_POLICY, moneyLever: 'off' },
+    treat: (policy) => ({ ...policy, moneyLever: 'max' }),
+    // Denial-sourced adversity is subtracted: the control arm says no to
+    // every ask and "no" is eureka fuel too — without the split the control
+    // out-scores the treatment early and the lever reads backwards.
+    signal: (save) => Object.values(save.players)
+      .filter((p) => !p.npc && p.createdBy === 'user')
+      .reduce((s, p) => s + (p.eureka?.adversity || 0) - (p.eureka?.deniedAdversity || 0), 0),
+    threshold: 5,
+    label: 'pots staked + travel funded → bought adversity intake',
   },
   patch: {
     // The Studio unlocks at one year of run age, so this lever cannot be

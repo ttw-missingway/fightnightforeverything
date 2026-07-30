@@ -37,7 +37,7 @@ const r2 = (x) => Math.round(x * 100) / 100
 // so they read as survival here. Anything unmatched lands in `other` so a new
 // label can never silently vanish from the books.
 const SURVIVAL = [/monthly rent/, /payroll/, /upkeep & restocking/, /machine repair/, /health-code fine/]
-const COMPETITION = [/pot & trophies/, /exhibition/]
+const COMPETITION = [/pot & trophies/, /exhibition/, /trip to/]
 const GROWTH = [/new setup cabinet/, /hired/, /streaming setup/, /installed/, /advertis/]
 function spendBucket(label) {
   if (SURVIVAL.some((re) => re.test(label))) return 'survival'

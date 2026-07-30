@@ -35,6 +35,7 @@ import { processEurekaDaily, edge as eurekaEdge } from './eureka.js'
 import { writeJournal } from './journal.js'
 import { pushToast, pruneToasts } from './notify.js'
 import { fragmentsMonthly } from './fragments.js'
+import { travelDaily } from './travel.js'
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
@@ -1711,6 +1712,34 @@ export function endDay(save) {
   const events = []
   const attendees = dip.attendeeIds.map((id) => save.players[id]).filter(Boolean)
 
+  // THE STREAMING LEVER AS AFFECT (REVISION §0): whoever was on the screen
+  // tonight sets the room's temperature. A radiant winner lifts the place; a
+  // tilted star on blast sours it. Weighted by how many were actually
+  // watching — an empty channel infects nobody. (The other half of the lever
+  // — whose example the room LEARNS from — runs through eureka's company
+  // channel, amplified for the recently streamed.)
+  {
+    let streamed = null, viewers = 0
+    for (const hour of dip.hours || []) {
+      if (hour.streamedSetup == null) continue
+      const ev = (hour.events || []).find((e) => e.type === 'match' && e.setupIndex === hour.streamedSetup)
+      if (ev?.stream && ev.stream.viewers >= viewers) { streamed = ev; viewers = ev.stream.viewers }
+    }
+    if (streamed) {
+      const a = save.players[streamed.aId]
+      const b = save.players[streamed.bId]
+      const screenMood = ((a?.mood ?? 5) + (b?.mood ?? 5)) / 2
+      const reach = clamp(viewers / 250, 0, 1)
+      const drift = clamp((screenMood - 5) * 0.06, -0.3, 0.3) * reach
+      if (drift !== 0) {
+        for (const p of attendees) {
+          if (p.id === streamed.aId || p.id === streamed.bId) continue
+          p.mood = clamp(p.mood + drift, 0, 10)
+        }
+      }
+    }
+  }
+
   // Opinions meet reality — very gently. A take the game disagrees with loses
   // a sliver a day and nothing more, so somebody who decided a character was
   // broken is still saying it long after the patch that fixed it.
@@ -1966,6 +1995,8 @@ export function advanceDay(save) {
   relevanceDaily(save)
   maybeWorldEvent(save)
   pruneToasts(save)
+  // The road: away events rise, your people ask, trips resolve (travel.js).
+  travelDaily(save)
   // A monthly line of world texture — an interview quote, a tweet, a guide
   // sentence — attached to a ranked name. The fragment layer's idle drip.
   if (dayOfMonthOf(save.day) === 14) fragmentsMonthly(save)

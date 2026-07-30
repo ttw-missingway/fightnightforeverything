@@ -545,6 +545,10 @@ export function newTournamentEntry(partial = {}) {
     dayOfMonth: 1, // 1..28 (monthly cadence)
     dayOfYear: 28, // 1..336 (yearly cadence)
     size: 8, // bracket size: always a power of two; cancelled if it can't fill
+    // How far past the house minimum the pot is staked (POT_STAKES key).
+    // The money lever, in place: a real pot pulls better fields to you and
+    // keeps your own stars turning up (REVISION §0, money's new job).
+    potBoost: 0,
     ...partial,
   }
 }
@@ -694,6 +698,7 @@ export function newSave(partial = {}) {
     socialFeed: [], // fake posts about the scene — newest first, capped
     toasts: [], // the notification layer — see notify.js; dismissible everywhere
     lastWorldNo1: null, // elite/player id last seen at world #1 — change fires a toast
+    travel: { nextEventAbs: 0, event: null, asks: [] }, // the ask/deny loop — see travel.js
     dismissedRumors: {}, // rumorId -> heat-when-dismissed; hides it until it re-flares
     moneyMatches: [], // {id, aId, bId, dayOfYear, year, status, winnerId}
     players: {}, // id -> player
@@ -950,6 +955,8 @@ export function migrateSave(save) {
   save.attention ??= newAttention()
   save.toasts ??= []
   save.lastWorldNo1 ??= null
+  save.travel ??= { nextEventAbs: 0, event: null, asks: [] }
+  for (const t of save.arcade?.schedule || []) t.potBoost ??= 0
   for (const p of Object.values(save.players || {})) {
     p.memoriesWritten ??= (p.memories || []).length
     // The spirit layer and eureka spine (P1). Pre-P1 revision saves get their

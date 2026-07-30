@@ -130,6 +130,13 @@ export function applyStageReps(save, players, stream, context = 'daily', weight 
     // Crossing into real stage nerve is a career line, written once per climb.
     if (belief < 50 && ref.belief >= 50) writeJournal(save, ref, 'belief', {})
     noteBeliefSwing(save, ref, delta, viewers)
+    // WHO IS VISIBLE (REVISION §0, the streaming lever): the camera decides
+    // whose example the room learns from. The rolling record feeds eureka's
+    // company channel — a streamed player's pull on everyone else is
+    // amplified while their sets are what everybody watched this week.
+    save.stream.recentStreamedIds ??= []
+    save.stream.recentStreamedIds.unshift({ id: ref.id, absDay: (save.year - 1) * 336 + save.day })
+    if (save.stream.recentStreamedIds.length > 20) save.stream.recentStreamedIds.length = 20
     // Popularity climbs with eyeballs (fades slowly without them, in endDay).
     // The MANA CEILING (REVISION §1.6): the spirit roll bounds how famous this
     // person can get — the asymptote closes on their cap, not a flat 120, so

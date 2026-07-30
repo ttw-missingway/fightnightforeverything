@@ -543,12 +543,18 @@ function weeklyPass(save, player, e, today) {
   // COMPANY (§1.2): a sustained relationship — friend OR rival, it needs
   // intensity, not warmth — with someone materially stronger in a stat makes
   // that stat glow-eligible. Mentorship without a mentorship system.
+  const recentlyStreamed = new Set((save.stream?.recentStreamedIds || [])
+    .filter((r) => today - r.absDay <= 10).map((r) => r.id))
   for (const [otherId, rel] of Object.entries(player.relationships || {})) {
     if (Math.abs(rel) < 35) continue
     const other = save.players[otherId]
     if (!other || other.retired || other.banished || !other.personal) continue
     const intensity = Math.abs(rel) / 100
-    const pull = 1 + radianceOf(other, 'mana') * RADIANCE.MANA_ATTENTION
+    // VISIBILITY IS THE MULTIPLIER (the streaming lever, §0): whoever the
+    // camera showed this week is who the room is learning from — their
+    // temperament infects the place through what everyone watched them do.
+    const visible = recentlyStreamed.has(otherId) ? 1.6 : 1
+    const pull = (1 + radianceOf(other, 'mana') * RADIANCE.MANA_ATTENTION) * visible
     const standards = 1 + radianceOf(other, 'skill') * RADIANCE.SKILL_STANDARDS
     // Their two most commanding leads over you are what rubs off.
     const leads = []

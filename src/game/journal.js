@@ -423,6 +423,92 @@ const LINES = {
     ],
   },
 
+  // -------- the road (REVISION §0 — money's new job) --------
+  travelAsk: {
+    killer: [
+      `There's {event} coming up. I told the front counter I want in. If the answer's no, I want to hear somebody say it to my face.`,
+    ],
+    scholar: [
+      `{event} is in reach. I put the request in with the cost worked out to the dollar. The math says send me.`,
+    ],
+    natural: [
+      `Asked about getting sent to {event} today. Felt weird saying it out loud — like admitting I think I'm good.`,
+    ],
+    stoic: [
+      `Asked to be sent to {event}. The asking is its own kind of match.`,
+    ],
+  },
+  travelFunded: {
+    killer: [
+      `They're sending me to {event}. Somebody put real money on me. I intend to make that look like the easiest call they ever made.`,
+    ],
+    scholar: [
+      `Funded: {event}. The arcade just made an investment with a name on it — mine. Time to study the field.`,
+    ],
+    natural: [
+      `I'M GOING. {event}! Packed three days early like a kid before a school trip. No regrets.`,
+    ],
+    stoic: [
+      `The trip to {event} is paid. Someone believes the work is real. Now it has to be.`,
+    ],
+  },
+  travelDenied: {
+    killer: [
+      `No {event} for me. Money's tight — I've seen the register. Doesn't make the lock on that door feel any better.`,
+    ],
+    scholar: [
+      `Request declined: {event}. The books are thin right now; the decision is defensible. The disappointment is data anyway.`,
+    ],
+    natural: [
+      `Not going to {event}. The place can't swing it right now — I get it. Still went home early tonight.`,
+    ],
+    stoic: [
+      `Not this time. The arcade can't carry the fare. Understood. Filed. Not forgotten.`,
+    ],
+  },
+  travelDeniedFlush: {
+    killer: [
+      `They wouldn't send me to {place}. I've SEEN the register — the money's there. It just isn't for me. Fine. I'll remember exactly how this feels.`,
+    ],
+    scholar: [
+      `Declined for {event}. Note: current cash on hand comfortably covers the cost — this was a choice, not a constraint. Updating some assumptions about my standing here.`,
+    ],
+    natural: [
+      `The arcade's doing fine and I'm still not going to {place}. That one got under my skin and I can't laugh it off yet.`,
+    ],
+    stoic: [
+      `The money was there. The answer was still no. I heard what was actually said.`,
+    ],
+  },
+  awayPlaced: {
+    killer: [
+      `{event}: {place}. Walked into somebody else's room and took what I came for. Tell everyone.`,
+    ],
+    scholar: [
+      `{event}: {place}. The field was better than home and the result held anyway — which answers the question I actually travelled to ask.`,
+    ],
+    natural: [
+      `Went to {event} and {place}!! Slept the whole ride home with the bracket printout in my jacket.`,
+    ],
+    stoic: [
+      `{event}. {place}. The road agrees with the work.`,
+    ],
+  },
+  awayOut: {
+    killer: [
+      `{event}: {place}. The arcade paid for that. I flew all that way to find out what I'm not yet. I'll pay it back with interest.`,
+    ],
+    scholar: [
+      `{event}: {place}. Expensive data — the gap between home form and road form is now measured, and it's mine to close.`,
+    ],
+    natural: [
+      `So {event} happened. {place}. The ride home was very quiet and very long.`,
+    ],
+    stoic: [
+      `{event}. {place}. The money is spent either way; the lesson only pays if I collect it.`,
+    ],
+  },
+
   // -------- the world --------
   patchNerf: {
     killer: [
@@ -578,6 +664,21 @@ const LINES = {
     ],
     puttogether: [
       `Taking {opp} on. A curriculum, a schedule, expectations. They'll thank me by winning.`,
+    ],
+  },
+  friendBanished: {
+    social: true,
+    warm: [
+      `{opp} got banned today. My friend. I keep looking at the door like they might still walk through it. The room feels smaller and I feel complicit.`,
+    ],
+    gracious: [
+      `{opp} was asked to leave for good. Maybe it was deserved. I shook their hand on the way out anyway — somebody had to.`,
+    ],
+    dramatic: [
+      `They BANNED {opp}. Just like that — years of sets, gone with a word. Everyone's pretending it's fine. It is not fine.`,
+    ],
+    puttogether: [
+      `{opp}: banned, effective today. Noted without comment. The comment would be unprofessional.`,
     ],
   },
   grudgeOpen: {

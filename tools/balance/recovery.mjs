@@ -28,6 +28,32 @@ import { pickAutoStreamSetup } from '../../src/game/stream.js'
 import { availableAttractions } from '../../src/game/catalog.js'
 import { gameItem, trySpend } from '../../src/game/economy.js'
 import { clamp } from '../../src/game/util.js'
+import { pendingAsks, fundAsk } from '../../src/game/travel.js'
+import { releasePatch } from '../../src/game/patch.js'
+import { isUnlocked } from '../../src/game/achievements.js'
+import { applyMoveDescriptors, DAMAGE_TIERS } from '../../src/game/design.js'
+
+// A targeted balance change aimed at ONE person's character — the §2.6 move
+// "nerf the dominant player's character to break the hierarchy they are
+// poisoning" (and its mirror, buffing a burning-out star's main). Needs the
+// Studio; a no-op before it unlocks, which is itself part of the finding.
+function shiftMain(save, playerId, dir) {
+  if (!isUnlocked(save, 'studio') || save.gameDraft) return false
+  const charId = save.players[playerId]?.mainCharId
+  if (!charId) return false
+  const draft = structuredClone(save.game)
+  const c = draft.characters.find((x) => x.id === charId)
+  const mv = c && [...c.moves].sort((a, b) => (b.damage || 0) - (a.damage || 0))[0]
+  if (!mv) return false
+  const i = DAMAGE_TIERS.indexOf(mv.d?.damage ?? 'normal')
+  const next = DAMAGE_TIERS[Math.min(DAMAGE_TIERS.length - 1, Math.max(0, i + dir))]
+  if (!next || next === mv.d.damage) return false
+  mv.d = { ...mv.d, damage: next }
+  applyMoveDescriptors(mv)
+  save.gameDraft = draft
+  releasePatch(save)
+  return true
+}
 
 const LAGS = [0, 7, 14, 28, 56, 112]
 const SEEDS = [31, 32, 33, 34, 35, 36]
@@ -85,13 +111,14 @@ export const CRISES = {
         members: activeCast(save).map((p) => p.id),
       }
     },
-    // Post-deprecation, the surviving counterplay is "remove the spotlight —
-    // never reward toxicity with attention": the camera skips any match
-    // involving the current worst offender. (Warnings and separations are in
-    // the lane; the baseline's flat zero was measured WITH them.)
+    // §2.6's counterplay, with the REAL levers now: remove the spotlight
+    // (never reward toxicity with attention), steer breakthroughs into
+    // sensitivity/politeness/community, and if they cannot be kept out of
+    // the spotlight, sabotage them — nerf their character.
     policy(signal) {
       return {
         ...DEFAULT_POLICY,
+        eurekaPrefer: ['sensitivity', 'politeness', 'community', 'temperance'],
         streamPick: (save, hour) => {
           const chief = worstOffender(save)
           const idx = pickAutoStreamSetup(save, hour, 'closest')
@@ -106,7 +133,14 @@ export const CRISES = {
         },
       }
     },
-    counterplayDay() {},
+    counterplayDay(save, signal) {
+      // Three weeks of starving the spotlight not working → the sabotage.
+      const abs = (save.year - 1) * 336 + save.day
+      if (!signal.nerfedAbs && abs - (signal.startAbs ??= abs) > 21) {
+        const chief = worstOffender(save)
+        if (chief && shiftMain(save, chief.id, -1)) signal.nerfedAbs = abs
+      }
+    },
     recovered(save, signal) {
       const still = new Set(activeCast(save).map((p) => p.id))
       const nobodyLeft = signal.members.every((id) => still.has(id))
@@ -129,9 +163,11 @@ export const CRISES = {
       return { starId: star.id }
     },
     policy(signal) {
-      // More spotlight, not less: the camera finds the star's match first.
+      // §2.6: more spotlight, not less; steer breakthroughs into temperance
+      // (last-ditch, mojo/xfactor and hope a spike buys a win).
       return {
         ...DEFAULT_POLICY,
+        eurekaPrefer: ['temperance', 'mojo', 'xfactor'],
         streamPick: (save, hour) => {
           const ev = hour.events.find((e) => e.type === 'match'
             && (e.aId === signal.starId || e.bId === signal.starId))
@@ -139,7 +175,16 @@ export const CRISES = {
         },
       }
     },
-    counterplayDay() {},
+    counterplayDay(save, signal) {
+      // Fund EVERY opportunity that arises for them, whatever the books say,
+      // and buff their character once the Studio can.
+      for (const ask of pendingAsks(save)) {
+        if (ask.playerId === signal.starId) fundAsk(save, ask.id)
+      }
+      if (!signal.buffedAbs && shiftMain(save, signal.starId, +1)) {
+        signal.buffedAbs = (save.year - 1) * 336 + save.day
+      }
+    },
     recovered(save, signal) {
       const star = save.players[signal.starId]
       return !!star && !star.retired && !star.banished
@@ -198,15 +243,22 @@ export const CRISES = {
       }
     },
     counterplayDay(save, signal, policy) {
-      // Destroy the solved state and raise the stakes: patch on a fast
-      // cadence, add a monthly double-elim (a bigger pot than the weekly).
+      // §2.6 with the P3 levers: RAISE THE POT (outsiders break the sealed
+      // room's zero-sum elo), FUND TRAVEL (elo imported from outside), and
+      // patch to destroy the solved matchup state.
       const abs = (save.year - 1) * 336 + save.day
       if (abs - signal.patchedAbs > 56) {
         maybePatch(save, { ...policy, patchEvery: 1 })
         signal.patchedAbs = abs
       }
+      for (const e of save.arcade.schedule) {
+        if (e.type === 'singles' && (e.potBoost || 0) < 3 && save.economy.money > 800) e.potBoost = 3
+      }
+      for (const ask of pendingAsks(save)) {
+        if (save.economy.money > ask.cost * 1.2) fundAsk(save, ask.id)
+      }
       if (!signal.scheduled) {
-        const e = newTournamentEntry({ name: 'Monthly', type: 'singles', format: 'doubleelim', cadence: 'monthly', dayOfMonth: 14, size: 8 })
+        const e = newTournamentEntry({ name: 'Monthly', type: 'singles', format: 'doubleelim', cadence: 'monthly', dayOfMonth: 14, size: 8, potBoost: 2 })
         if (fitsBandwidth(save, e)) save.arcade.schedule.push(e)
         signal.scheduled = true
       }
