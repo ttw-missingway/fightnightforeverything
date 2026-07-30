@@ -2,7 +2,7 @@ import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid
 import { bindRng } from './rng.js'
 import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, runAge, seasonOf, seasonFactor, statusOf, difficultyOf, statLevel } from './constants.js'
 import { driftEvoRoster, topUpNpcs, worldMatchesDaily, gravitateElites } from './generate.js'
-import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, rungAllowanceLeft, getMatchup, bumpPeak } from './model.js'
+import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, getMatchup, bumpPeak } from './model.js'
 import { checkAchievements } from './achievements.js'
 import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
 import { castScene, sceneBeats, SCENE_CHANCE } from './scenes.js'
@@ -30,7 +30,6 @@ import {
   sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf,
 } from './social.js'
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
-import { areSeparated, pruneSeparations } from './discipline.js'
 import { relevanceDaily } from './relevance.js'
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
@@ -1099,7 +1098,6 @@ function runInteraction(save, group, where, events, results = {}) {
     let totalDelta = 0
     for (const b of group) {
       if (a.id === b.id) continue
-      if (areSeparated(save, a.id, b.id)) continue // kept apart — they don't engage
       const before = getRel(a, b)
       const delta = socialDelta(a, b)
       shiftRel(a, b, delta)
@@ -1401,7 +1399,6 @@ export function simHour(save) {
         const rel = getRel(a, b)
         if (rel < -40) s += 2 // grudge matches happen
         if (rel > 40) s += 1.5 // friendlies too
-        if (areSeparated(save, a.id, b.id)) s -= 1000 // owner is keeping these two apart
         if (s > bestScore) { bestScore = s; bIdx = i }
       }
       const b = pool.splice(bIdx, 1)[0]
@@ -1950,7 +1947,6 @@ export function advanceDay(save) {
   // through (normal, tournament, EVO, idle catch-up), so neither can be skipped
   // by a tournament day. Both are guarded against running twice in a day.
   settleRecurring(save)
-  pruneSeparations(save)
   relevanceDaily(save)
   maybeWorldEvent(save)
   // Daily economic snapshot for the Manage-tab income graph and foot-traffic
@@ -2012,34 +2008,9 @@ export function advanceDay(save) {
     if ((save.stream?.followers || 0) >= 1000) awardMilestone(save, 'followers-1k', 2, 'A thousand people follow the channel now')
     if ((save.economy?.money ?? 0) >= 3000) awardMilestone(save, 'bank-3k', 2, 'Three grand in the register — the arcade is a real business')
 
-    // EARLY RUNGS. Every milestone above is pitched at a scene that got
-    // somewhere — a thousand followers, skill 50, Year 2 — so a run on
-    // Difficult or Master banked exactly nothing, and those tiers could never
-    // fund their way out of themselves. That's not because nothing happened:
-    // a bank-0 Difficult run is a 92-day scene with forty regulars and four
-    // tournament wins. The ladder just had no bottom rungs.
-    //
-    // ANTI-FARM: cheap rungs must not make "start a run, grab the points,
-    // reset, repeat" the best way to play. Two defences. The first rung costs
-    // SIX WEEKS, so resetting on a whim earns nothing at all; and the rungs are
-    // a one-time bootstrap ALLOWANCE per lineage (see RUNG_ALLOWANCE), so
-    // farming them simply runs out and only real milestones pay after that.
-    //
-    // Both are needed. Uncapped, resetting every 90 days beat playing properly
-    // by nearly 2x on Normal. Gating on beating your best run instead killed
-    // farming AND progression — Difficult froze at 5 points forever, because
-    // beating your record is exactly what a player short on points cannot do.
-    const absDay = runAge(save)
-    if (rungAllowanceLeft(save) > 0) {
-      if (absDay >= 42) awardMilestone(save, 'six-weeks', 1, `Six weeks and ${save.arcade.name} is still standing`)
-      if (absDay >= 84) {
-        awardMilestone(save, 'season-1', 2, `A full season at ${save.arcade.name} — the regulars have regulars now`)
-        if (Object.values(save.players).some((p) => !p.npc && (p.tournamentWins || 0) > 0)) {
-          awardMilestone(save, 'first-trophy', 2, 'A player you made won a bracket')
-        }
-      }
-      if (absDay >= 168) awardMilestone(save, 'half-year', 3, "Half a year in. This place is somebody's routine.")
-    }
+    // The bootstrap rungs went to the deprecation lane with prestige-as-power
+    // (docs/DEPRECATED.md): they existed to fund a stronger cast on the hard
+    // tiers, and banked points no longer buy stats.
     // Permanent unlocks. Milestones above pay the RUN's pot and bank at reset;
     // these are lineage facts and land the moment they are proved. Announced
     // through the chronicle, like every other legacy award — advanceDay is the

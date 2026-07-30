@@ -1,12 +1,27 @@
 import { useRef, useState } from 'react'
-import { useStore, loadIndex, deleteSaveById, exportSaveById, importSaveFromText, resetSaveById } from '../state/store.jsx'
+import { useStore, loadIndex, deleteSaveById, exportSaveById, importSaveFromText, resetSaveById, saveRefusalReason, salvageCastById } from '../state/store.jsx'
 import { formatDay } from '../game/constants.js'
 
 export default function MainMenu() {
   const { nav, openSave } = useStore()
   const [saves, setSaves] = useState(loadIndex)
   const [notice, setNotice] = useState(null) // { kind: 'ok' | 'err', text }
+  // Saves the schema gate refused this session — their rows swap Open for
+  // Salvage. Pre-revision saves are refused, never migrated (DEPRECATED.md).
+  const [refused, setRefused] = useState(() => new Set())
   const fileRef = useRef(null)
+
+  const tryOpen = (id) => {
+    if (openSave(id)) return
+    const reason = saveRefusalReason(id)
+    setRefused((prev) => new Set(prev).add(id))
+    setNotice({
+      kind: 'err',
+      text: reason === 'pre-revision'
+        ? 'That save is from before the revision and can\'t be opened. Its cast can still be salvaged — 🧬 Salvage cast downloads the players as a file you can import into a new world.'
+        : 'That save could not be read.',
+    })
+  }
 
   const onImportFile = async (e) => {
     const file = e.target.files?.[0]
@@ -49,11 +64,20 @@ export default function MainMenu() {
           <table>
             <tbody>
               {saves.map((s) => (
-                <tr key={s.id} className="clickable" onClick={() => openSave(s.id)}>
-                  <td><strong>{s.saveName}</strong><br /><span className="dim small">{s.gameName} @ {s.arcadeName}</span></td>
+                <tr key={s.id} className="clickable" onClick={() => tryOpen(s.id)}>
+                  <td><strong>{s.saveName}</strong>{refused.has(s.id) && <span className="small red"> · pre-revision</span>}<br /><span className="dim small">{s.gameName} @ {s.arcadeName}</span></td>
                   <td className="dim small">{formatDay(s.day, s.year)}</td>
                   <td>
                     <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                      {refused.has(s.id) && (
+                        <button className="small" title="download this save's cast as a players file — import it into a new world" onClick={(e) => {
+                          e.stopPropagation()
+                          const res = salvageCastById(s.id)
+                          setNotice(res.ok
+                            ? { kind: 'ok', text: `Salvaged ${res.count} player${res.count === 1 ? '' : 's'} — import the file on the Players step of a new world.` }
+                            : { kind: 'err', text: res.error })
+                        }}>🧬 Salvage cast</button>
+                      )}
                       <button className="small" title="download this world as a file you can share" onClick={(e) => {
                         e.stopPropagation()
                         exportSaveById(s.id)
@@ -64,7 +88,7 @@ export default function MainMenu() {
                         const res = resetSaveById(s.id)
                         setSaves(loadIndex())
                         setNotice(res.ok
-                          ? { kind: 'ok', text: `Running it back at "${s.saveName}" — +${res.prestigeGain} prestige earned (${res.points} total to spend on player creation).` }
+                          ? { kind: 'ok', text: `Running it back at "${s.saveName}" — +${res.prestigeGain} prestige earned (${res.points} banked).` }
                           : { kind: 'err', text: res.error })
                       }}>♻ Run it back</button>
                       <button className="small danger" onClick={(e) => {

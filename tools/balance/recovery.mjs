@@ -12,18 +12,21 @@
 // Two halves, per §2.6: INJECTION starts every run at identical severity so
 // lag is the only variable; DETECTION lets runs play naturally and reports
 // how often each crisis actually arises, so the curve is known to measure a
-// real problem. The counterplays are TODAY'S tools on purpose — the baseline
-// measures the game the playtests complained about (for toxicity that means
-// warn and separate; P3 replaces this table when the levers replace the
-// tools).
+// real problem. The counterplays are TODAY'S tools on purpose. The committed
+// baseline (BALANCE.md §14) was measured with the discipline toolkit still
+// live — warn weekly, separate the worst pair — and read a flat zero at every
+// lag. That toolkit is now in the deprecation lane, so the live counterplay
+// here is what actually survives: starve the instigator of the spotlight,
+// patch, and the attraction kick-start. P3 replaces this table when the
+// levers land, and gets judged against both readings.
 
 import { DEFAULT_POLICY, makeRun, playDay, maybePatch, isDead } from './policy.mjs'
 import { mean, stddev } from './metrics.mjs'
-import { warnPlayer, separate, chiefInstigator } from '../../src/game/discipline.js'
 import { newTournamentEntry } from '../../src/game/model.js'
 import { fitsBandwidth } from '../../src/game/bandwidth.js'
 import { pickAutoStreamSetup } from '../../src/game/stream.js'
-import { canStageExhibition, runExhibition } from '../../src/game/tournament.js'
+import { availableAttractions } from '../../src/game/catalog.js'
+import { gameItem, trySpend } from '../../src/game/economy.js'
 import { clamp } from '../../src/game/util.js'
 
 const LAGS = [0, 7, 14, 28, 56, 112]
@@ -38,6 +41,20 @@ const activeRegulars = (save) => Object.values(save.players)
 const trailingAttendance = (save, days = 14) => {
   const h = (save.economy.history || []).slice(-days)
   return h.length ? mean(h.map((x) => x.attendance || 0)) : 0
+}
+
+// Who is dragging the room down — feuds carried and hostility radiated. A
+// local read (the engine's toxicityBlame went to the deprecation lane with
+// the rest of discipline; this is the counterplay's own judgement call).
+function worstOffender(save) {
+  let worst = null, worstScore = 3
+  for (const p of activeRegulars(save)) {
+    const rels = Object.values(p.relationships || {})
+    const score = rels.filter((v) => v <= -60).length * 3
+      + rels.filter((v) => v <= -30 && v > -60).length
+    if (score > worstScore) { worstScore = score; worst = p }
+  }
+  return worst
 }
 
 // ---------- the four crises ----------
@@ -66,25 +83,30 @@ export const CRISES = {
         // NPCs), so counting NPCs would make recovery unsatisfiable by
         // construction rather than by the game.
         members: activeCast(save).map((p) => p.id),
-        weekWarned: -1,
       }
     },
-    counterplayDay(save, signal) {
-      // Weekly: warn the chief instigator, keep the worst pair apart.
-      const week = Math.floor(((save.year - 1) * 336 + save.day) / 7)
-      if (week === signal.weekWarned) return
-      signal.weekWarned = week
-      const chief = chiefInstigator(save)
-      if (chief) warnPlayer(save, chief, 'toxicity')
-      let worst = null
-      for (const a of activeRegulars(save)) {
-        for (const [otherId, rel] of Object.entries(a.relationships || {})) {
-          if (!save.players[otherId]) continue
-          if (!worst || rel < worst.rel) worst = { aId: a.id, bId: otherId, rel }
-        }
+    // Post-deprecation, the surviving counterplay is "remove the spotlight —
+    // never reward toxicity with attention": the camera skips any match
+    // involving the current worst offender. (Warnings and separations are in
+    // the lane; the baseline's flat zero was measured WITH them.)
+    policy(signal) {
+      return {
+        ...DEFAULT_POLICY,
+        streamPick: (save, hour) => {
+          const chief = worstOffender(save)
+          const idx = pickAutoStreamSetup(save, hour, 'closest')
+          if (idx == null || !chief) return idx
+          const ev = hour.events.find((e) => e.type === 'match' && e.setupIndex === idx)
+          if (ev && (ev.aId === chief.id || ev.bId === chief.id)) {
+            const other = hour.events.find((e) => e.type === 'match'
+              && e.setupIndex !== idx && e.aId !== chief.id && e.bId !== chief.id)
+            return other ? other.setupIndex : null
+          }
+          return idx
+        },
       }
-      if (worst && worst.rel < -50) separate(save, worst.aId, worst.bId)
     },
+    counterplayDay() {},
     recovered(save, signal) {
       const still = new Set(activeCast(save).map((p) => p.id))
       const nobodyLeft = signal.members.every((id) => still.has(id))
@@ -130,17 +152,26 @@ export const CRISES = {
     inject(save) {
       save.relevance = 20
       save.fadedDays = 0
-      return { attendanceAtSignal: trailingAttendance(save), patchedAbs: -999 }
+      return { attendanceAtSignal: trailingAttendance(save), patchedAbs: -999, kickStarted: false }
     },
     counterplayDay(save, signal, policy) {
       // Patch to address the staleness, immediately and again when the
-      // cadence allows; keep every ad the books can carry running.
+      // cadence allows — and the §2.6 kick-start: a new attraction, once,
+      // if the books can carry one.
       const abs = (save.year - 1) * 336 + save.day
       if (abs - signal.patchedAbs > 56) {
         maybePatch(save, { ...policy, patchEvery: 1 })
         signal.patchedAbs = abs
       }
-      if (canStageExhibition(save).ok && save.economy.money > 400) runExhibition(save)
+      if (!signal.kickStarted && save.economy.money > 700) {
+        const owned = new Set(save.arcade.otherGames)
+        const item = availableAttractions(save).find((name) => !owned.has(name))
+        if (item && trySpend(save, gameItem(item).price, `installed ${item}`)) {
+          save.arcade.otherGames.push(item)
+          save.arcade.gameTokens[item] ??= 1
+          signal.kickStarted = true
+        }
+      }
     },
     recovered(save, signal) {
       return trailingAttendance(save) >= signal.attendanceAtSignal

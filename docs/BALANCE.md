@@ -856,3 +856,41 @@ capacity) and the effect is negative — the dirt/staffing feedback documented
 in constants.js eats the extra traffic. When P3 gives money its real job
 (pots + travel), latency.mjs's money lever definition changes with it; the
 baseline keeps the old reading for comparison.
+
+### P0.4 addendum — what the deprecation cost, measured (2026-07-30)
+
+The six §4 moves landed after the baseline was captured, and the fingerprint
+diff is the blast radius (fully seeded, so every line is the change, not the
+weather):
+
+- **Runs die about a year earlier.** Median lasted 1660 → 1394 days; year-5
+  survivors 18/24 → 1/24; the opinion funnel takes 9 runs instead of 7.
+  Cutting exhibitions removed a working relevance pump and nothing has
+  replaced it yet — that replacement IS P3's job, and this number is what its
+  levers must beat just to break even with the old crutch.
+- **Money's competition share collapses 0.13 → 0.03** (only tournament pots
+  remain). Metric 10's inversion is now entirely ahead of us.
+- **Toxicity recovery stays flat 0** under the surviving counterplay
+  (spotlight starvation only). Irrelevance drifts down (~0.9 → ~0.5–0.67)
+  without the showcase kick-start; the attraction kick-start carries it alone.
+- Separation, attention, journal volume: unchanged within noise. The disease
+  does not care which levers exist.
+
+Also in P0.4: schema v2 — pre-revision saves are refused with a working
+salvage path (main menu → 🧬 Salvage cast, raw read, no migration);
+migrateSave shrank from ~270 lines of era archaeology to a version gate plus
+revision-era backfills; prestige is cosmetic currency only, on every path
+(PlayerForm, RosterEditor, policy, lineage).
+
+### P0 exit — met
+
+Ten-year run in ~14s. Baseline in git covering all ten metrics and the elite
+band. `npm run lint` fails on any live import from `src/game/deprecated/`,
+and there are none. Dev suite: fast-forward (competent player in the
+browser), seven committed fixtures, journal viewer, eureka inspector
+(scaffold with an honest empty state until P1), event timeline — all
+operating on copies, verified stripped from the production bundle.
+
+**Next: P1, the eureka spine.** The number to move is separation — flat 1.53
+at n=24 — and §14's elite-band table is the input the spirit-roll range must
+be calibrated against.

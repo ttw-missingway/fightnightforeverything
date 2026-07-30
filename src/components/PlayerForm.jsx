@@ -11,7 +11,6 @@ import { SpritePicker } from './SpritePicker.jsx'
 import { playerSpriteCatalog, playerArtFor, FACE_PALETTES } from './art.js'
 import { DEFAULT_PALETTE } from '../game/palettes.js'
 import { selectableChars } from '../game/forms.js'
-import { isUnlocked, CHAMPION_POINTS } from '../game/achievements.js'
 
 const STAT_DESC = Object.fromEntries([...PERSONAL_STATS, ...SOCIAL_STATS])
 const uiVal = (v) => Math.round((v || 0) / STAT_UNIT)
@@ -41,11 +40,11 @@ function pointsSpent(player) {
 export default function PlayerForm({ save, player, patch }) {
   const consequential = save.settings.mode !== 'sandbox'
   const diff = difficultyOf(save)
-  const prestigeBonus = save.prestige?.points || 0
-  // The one unlock that is pure power rather than a tool: an EVO title buys
-  // every future build a permanently bigger allowance.
-  const championBonus = isUnlocked(save, 'points') ? CHAMPION_POINTS : 0
-  const budget = consequential ? diff.statPoints + prestigeBonus + championBonus : null
+  // The budget is the difficulty's, full stop. Banked prestige and the
+  // champion bonus used to add to it; the revision deprecated the whole
+  // prestige-as-power path (docs/DEPRECATED.md) — a returning run must never
+  // start stronger, or "my player beat an elite" dies permanently.
+  const budget = consequential ? diff.statPoints : null
   const spent = pointsSpent(player)
 
   return (
@@ -242,8 +241,6 @@ export default function PlayerForm({ save, player, patch }) {
                 <PointDots compact value={Math.max(0, budget - spent)} max={budget} />
                 <span className={`small ${spent > budget ? 'red' : 'dim'}`} style={{ marginLeft: 8, fontWeight: 'normal' }}>
                   {spent > budget ? `${spent - budget} over budget` : `${budget - spent} left`}
-                  {prestigeBonus > 0 && <span className="gold"> · +{prestigeBonus} legacy</span>}
-                  {championBonus > 0 && <span className="gold"> · +{championBonus} champion</span>}
                 </span>
               </span>
             )}

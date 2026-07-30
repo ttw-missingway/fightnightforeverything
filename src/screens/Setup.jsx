@@ -84,8 +84,7 @@ export default function Setup() {
               <li>
                 <strong className="gold">{difficultyOf(draft).label}</strong> difficulty —
                 opening with <strong className="green">${Math.max(0, startingBudget(draft) - arcadeBuildCost(draft))}</strong> after the build,
-                {' '}{difficultyOf(draft).statPoints} creation points per player on top of the two temperament rows — legacy points from past runs add more
-                {(draft.prestige?.points || 0) > 0 && <> (+{draft.prestige.points} prestige)</>}
+                {' '}{difficultyOf(draft).statPoints} creation points per player on top of the two temperament rows
               </li>
             )}
           </ul>

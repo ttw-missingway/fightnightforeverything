@@ -5,7 +5,7 @@ import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNex
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
 import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
-import { migrateSave, newSave, resetPlayerForNewRun, rungPointsThisRun } from '../game/model.js'
+import { migrateSave, newSave, resetPlayerForNewRun, SAVE_SCHEMA_VERSION } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
@@ -96,6 +96,40 @@ export function loadSaveById(id) {
   }
 }
 
+/** Why a stored save can't be opened — 'pre-revision' | 'corrupt' — or null. */
+export function saveRefusalReason(id) {
+  const raw = localStorage.getItem(saveKey(id))
+  if (!raw) return 'corrupt'
+  try {
+    const save = JSON.parse(raw)
+    return (save.schemaVersion || 1) < SAVE_SCHEMA_VERSION ? 'pre-revision' : null
+  } catch {
+    return 'corrupt'
+  }
+}
+
+/**
+ * Salvage the cast out of a save too old to open: read the RAW stored JSON —
+ * no migration, which is what makes this work on saves migrateSave refuses —
+ * and download the user-created players in the same `fightnight-players`
+ * format the roster editor imports. Progress is stripped on import anyway
+ * (resetPlayerForNewRun), so identities and builds are exactly what survives.
+ */
+export function salvageCastById(id) {
+  const raw = localStorage.getItem(saveKey(id))
+  if (!raw) return { ok: false, error: 'Save not found.' }
+  try {
+    const save = JSON.parse(raw)
+    const players = Object.values(save.players || {}).filter((p) => p.createdBy === 'user' && !p.npc)
+    if (!players.length) return { ok: false, error: 'No user-created players in this save.' }
+    downloadJson(`${fileStem(save.saveName, 'cast')}.players.fightnight.json`,
+      { format: 'fightnight-players', formatVersion: 1, exportedAt: Date.now(), players })
+    return { ok: true, count: players.length }
+  } catch {
+    return { ok: false, error: 'That save could not be read at all.' }
+  }
+}
+
 /**
  * The world roster has grown twice — 24 → 64 → 80-with-full-profiles — and a
  * save can date from any era of it. repairEvoRoster does the whole job:
@@ -159,14 +193,13 @@ export function resetSaveById(id) {
     // carry-over list can't quietly drop it.)
     grandOpening: true,
     evoRoster: structuredClone(save.evoRoster || []),
-    // `rungPoints` is how much of the one-time early-rung allowance this
-    // lineage has already spent. It has to survive the reset that ends a run,
-    // or the bootstrap rungs would pay out again every restart — which is
-    // exactly the farm this cap exists to prevent.
+    // Points are the lineage's COSMETIC currency now — the revision
+    // deprecated prestige-as-power (docs/DEPRECATED.md), so nothing here buys
+    // creation stats. They still accrue and still carry, because P6's
+    // unlockables (palettes, sprite packs, rosters, stages) spend them.
     prestige: {
       points: (save.prestige?.points || 0) + prestigeGain,
       runs: runNumber,
-      rungPoints: (save.prestige?.rungPoints || 0) + rungPointsThisRun(save),
       // Earned unlocks are the point of a lineage: whatever the run cost you,
       // the tools you proved you could do without are still yours. (The run
       // counters those claims were built from do NOT carry — a new run has to
@@ -244,8 +277,9 @@ export function importSaveFromText(text) {
   }
   try {
     migrateSave(save)
-  } catch {
-    return { ok: false, error: 'That save could not be migrated to this version of the game.' }
+  } catch (err) {
+    // migrateSave's refusal message says what to do about it (cast salvage).
+    return { ok: false, error: err?.message || 'That save could not be migrated to this version of the game.' }
   }
   save.id = uid('save')
   // The idle clock must not "catch up" across however long the file sat on
@@ -515,9 +549,11 @@ export function StoreProvider({ children }) {
     setScreen({ name: 'feed' })
   }, [setSave])
 
+  // Returns false when the save can't be opened (pre-revision or corrupt) so
+  // the menu can say why instead of silently doing nothing.
   const openSave = useCallback((id) => {
     const loaded = loadSaveById(id)
-    if (!loaded) return
+    if (!loaded) return false
     // This is not a game that plays itself while you're gone. Idle mode is a
     // fast-forward you WATCH — it only advances with the tab open — so closing
     // the save stops time cold. Reopening just restarts the clock from now; the
@@ -526,6 +562,7 @@ export function StoreProvider({ children }) {
     persistSave(loaded) // write migrations back immediately
     setSave(loaded)
     setScreen({ name: 'arcade' })
+    return true
   }, [setSave])
 
   const closeSave = useCallback(() => {
@@ -614,11 +651,7 @@ export function StoreProvider({ children }) {
     setSave(reloaded)
     setScreen({
       name: 'arcade',
-      // Say WHERE. This notice promised points to spend for a long time
-      // without mentioning that the window closes when the doors open.
-      notice: res.points > 0
-        ? `♻ New run started. +${res.prestigeGain} prestige earned — ${res.points} point${res.points === 1 ? '' : 's'} to spend. Rebuild your crew on the Players tab before you open the arcade.`
-        : `♻ New run started. +${res.prestigeGain} prestige earned.`,
+      notice: `♻ New run started. +${res.prestigeGain} prestige earned (${res.points} banked). Your crew crossed over — set them up on the Players tab before you open the arcade.`,
     })
   }, [setSave])
 

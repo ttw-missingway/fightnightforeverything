@@ -1,23 +1,24 @@
 // HOW MANY RUNS TO AN EVO CHAMPION?
 //
-// Every other harness here plays ONE run from a fresh lineage. That cannot
-// answer the question the roguelike loop is built around — whether banking
-// creation points across runs eventually produces a world champion — because
-// the answer lives entirely in what happens BETWEEN runs.
+// HISTORY NOTE: this harness was built to measure the roguelike legacy loop —
+// banked points buying a stronger cast each run. The revision REVERSED that
+// (docs/REVISION.md §0.1, docs/DEPRECATED.md): a single run must be able to
+// produce an EVO champion, and a returning run never starts stronger. What a
+// lineage still is: the same identities, unlocks and cosmetic prestige,
+// starting over. This now measures that — the "champion in N runs" question
+// has become "does any run of a lineage get there", which is the P1 question.
 //
-// This plays a lineage: run, reset, carry the prestige, build a better cast,
-// run again. It mirrors resetSaveById in state/store.jsx exactly, because a
-// harness that resets differently from the game measures a different game.
+// This plays a lineage: run, reset, carry what carries, run again. It mirrors
+// resetSaveById in state/store.jsx exactly, because a harness that resets
+// differently from the game measures a different game.
 //
 //   node tools/balance/lineage.mjs [lineages] [maxRuns] [years]
 
 import { makeRun, playDay, isDead, DEFAULT_POLICY, mean } from './policy.mjs'
-
-const SRC = new URL('../../src/game', import.meta.url).pathname
-const { newSave, migrateSave, resetPlayerForNewRun, rungPointsThisRun } = await import(`${SRC}/model.js`)
-const { prestigeEarned, seedFamilyCrew } = await import(`${SRC}/economy.js`)
-const { difficultyOf, runAge, formatDay } = await import(`${SRC}/constants.js`)
-const { bestRanked } = await import(`${SRC}/world.js`)
+import { newSave, migrateSave, resetPlayerForNewRun } from '../../src/game/model.js'
+import { prestigeEarned, seedFamilyCrew } from '../../src/game/economy.js'
+import { difficultyOf, runAge } from '../../src/game/constants.js'
+import { bestRanked } from '../../src/game/world.js'
 
 /**
  * The headless twin of resetSaveById. Anything that diverges here makes every
@@ -38,7 +39,6 @@ function resetLineage(save, { spendPoints }) {
   const prestige = {
     points: (save.prestige?.points || 0) + prestigeGain,
     runs: runNumber,
-    rungPoints: (save.prestige?.rungPoints || 0) + rungPointsThisRun(save),
     achievements: structuredClone(save.prestige?.achievements || {}),
     unlocks: structuredClone(save.prestige?.unlocks || {}),
     milestonesEver: structuredClone(save.prestige?.milestonesEver || {}),
@@ -78,7 +78,8 @@ export function runLineage({ difficulty = 'normal', maxRuns = 10, years = 4, spe
     } else {
       save = prestige.__carried
     }
-    const budget = difficultyOf(save).statPoints + (save.prestige?.points || 0)
+    // Points no longer buy stats — the budget is the difficulty's alone.
+    const budget = difficultyOf(save).statPoints
 
     let champ = false
     for (let d = 0; d < 336 * years; d++) {
@@ -111,7 +112,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const MAXRUNS = Number(process.argv[3] || 8)
   const YEARS = Number(process.argv[4] || 4)
   for (const spendPoints of [false, true]) {
-    console.log(`\n=== ${spendPoints ? 'AS INTENDED (banked points rebuild the cast)' : 'AS IT SHIPS (points unspendable)'} ===`)
+    console.log(`\n=== ${spendPoints ? 'REBUILT CAST (fresh roster each run, same budget)' : 'CARRIED CAST (identities cross, progress wiped)'} ===`)
     console.log('difficulty  champion in   median runs   pts by last run   best rank reached')
     for (const difficulty of ['easy', 'normal', 'difficult', 'master']) {
       const results = []

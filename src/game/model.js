@@ -131,7 +131,6 @@ export function newPlayer(partial = {}) {
     passion: 80, // 0-100 love for the game; erodes with tenure, refilled by wins/content
     belief: 0, // 0-100 earned stage composure — grows from streamed/marquee reps; the EVO "choke" factor
     popularity: 0, // 0-100 public profile — grows from being featured on stream; feeds passion
-    warnings: [], // {absDay, behavior:'toxicity'|'hygiene', backfired} — disciplinary history
     banished: false, // kicked out for good — gone from the scene, not coming back
     banishedDay: null,
     banishedYear: null,
@@ -255,33 +254,10 @@ export function legalizeBuild(player, budgetUi) {
  * when the run ends. Deeper runs → more points → stronger created players next
  * run. Losing is expected; the cast you can build grows anyway.
  */
-/**
- * The bottom rungs of the legacy ladder, and how much each is worth.
- *
- * These exist so Difficult and Master can fund their way out of themselves —
- * every other milestone is pitched at a scene that got somewhere, so those
- * tiers used to bank literally nothing and could never escape.
- *
- * They are a BOOTSTRAP ALLOWANCE, not an income. A lineage can collect
- * `RUNG_ALLOWANCE` points from them in total, ever; past that they pay zero and
- * only the real milestones count. That cap is what stops "start a run, grab the
- * cheap points, reset, repeat" from being the best way to play — measured, an
- * uncapped version beat playing properly by nearly 2x on Normal.
- */
-export const EARLY_RUNGS = { 'six-weeks': 1, 'season-1': 2, 'first-trophy': 2, 'half-year': 3 }
-export const RUNG_ALLOWANCE = 24
-
-/** Rung points banked by THIS run so far. */
-export function rungPointsThisRun(save) {
-  return Object.keys(save.milestones || {})
-    .reduce((sum, k) => sum + (EARLY_RUNGS[k] || 0), 0)
-}
-
-/** Whether the lineage has any bootstrap allowance left to spend. */
-export function rungAllowanceLeft(save) {
-  const spent = (save.prestige?.rungPoints || 0) + rungPointsThisRun(save)
-  return Math.max(0, RUNG_ALLOWANCE - spent)
-}
+// The bootstrap-rung allowance (EARLY_RUNGS, RUNG_ALLOWANCE) went to the
+// deprecation lane with the rest of prestige-as-power — see docs/DEPRECATED.md
+// and src/game/deprecated/rungs.js. Milestones still pay prestigePending;
+// what died is points buying creation stats.
 
 /**
  * The per-run counters that achievements are judged on.
@@ -501,9 +477,21 @@ export function newTournamentEntry(partial = {}) {
   }
 }
 
+/**
+ * The revision bumped this to 2 and PRE-REVISION SAVES ARE REFUSED, not
+ * migrated (decided 2026-07-29, docs/DEPRECATED.md). Migrating through a
+ * change that size would mean holding dead shapes here indefinitely — the
+ * exact thing the deprecation lane exists to prevent. migrateSave() from here
+ * on only backfills fields added SINCE the revision. Identities in an old
+ * save can still be salvaged via the main menu's cast export, which reads the
+ * raw stored JSON and never migrates.
+ */
+export const SAVE_SCHEMA_VERSION = 2
+
 export function newSave(partial = {}) {
   return {
     id: uid('save'),
+    schemaVersion: SAVE_SCHEMA_VERSION,
     saveName: 'New Save',
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -587,6 +575,7 @@ export function newSave(partial = {}) {
       cleanliness: 80, // 0-100 — dirt accrues with traffic, staff clean it back
       streamRig: false, // camera + encoder. Bought PER RUN, never carries over — see stream.js
       letdowns: 0, // rolling share of the room let down by sellouts & cabinet lines
+      crowding: 0, // rolling turned-away share — see sim.js
       closedUntilAbs: null, // absolute day the health-department shutdown lifts (null = open)
     },
     staffing: newStaffing(),
@@ -620,7 +609,6 @@ export function newSave(partial = {}) {
     peakAttendance: 0, // busiest night this run — the yardstick a decline is measured against
     quietDays: 0, // consecutive days the floor was effectively empty — the dynamics funnel
     fadedDays: 0, // consecutive days nobody outside cares anymore — the opinion funnel
-    separations: [], // {key, aId, bId, untilAbs} — pairs the owner is keeping apart to cool a feud
     // Everything on this object outlives the run. `achievements` and `unlocks`
     // are the lineage's permanent record — see achievements.js — and
     // resetSaveById carries the whole thing forward.
@@ -857,278 +845,36 @@ export function chronicle(save, icon, text) {
   if (save.chronicle.length > 250) save.chronicle.pop()
 }
 
-// Fill in fields added after a save was created, so old saves keep working.
+
+/**
+ * Bring a save up to the current schema — or refuse it.
+ *
+ * Pre-revision saves (no schemaVersion, or one below SAVE_SCHEMA_VERSION)
+ * THROW rather than migrate: the deprecation lane took warnings, separations,
+ * exhibitions, the rung allowance and the prestige power path out of the
+ * schema, and carrying those shapes forward forever is exactly what the lane
+ * exists to prevent. The 260-line ancestor of this function — which migrated
+ * every save era back to the 24-elite world — died with that decision; it
+ * lives in git history, not here.
+ *
+ * Everything below this guard is a REVISION-ERA backfill: fields added after
+ * schema 2 get their ??= here, and when the next big break comes, the version
+ * bumps and this list resets again.
+ */
 export function migrateSave(save) {
-  // Saves from before seeded randomness get a stream now; their past is not
-  // reproducible, but everything from here on is.
+  if ((save.schemaVersion || 1) < SAVE_SCHEMA_VERSION) {
+    throw new Error(
+      'This save is from before the revision and cannot be opened. '
+      + 'Its cast can still be salvaged from the main menu (identities and builds; run progress does not carry).')
+  }
+  // Seeded randomness and the attention counter arrived with the revision but
+  // shortly before the schema bump, so the earliest revision-era saves may
+  // lack them.
   if (!save.rng || typeof save.rng.state !== 'number') save.rng = newRngState()
   save.attention ??= newAttention()
-  save.hour ??= 0
-  save.dayInProgress ??= null
-  // A save written while the arcade was OPEN carries a live day whose shape is
-  // whatever the build that wrote it used. Every map the hour loop writes into
-  // has to be backfilled here, or the first match of the day dereferences
-  // undefined and takes the rest of the day down with it — which is exactly
-  // what `charToday` did. Setting the day to null instead would be worse: it
-  // would silently discard a day the player is in the middle of.
-  if (save.dayInProgress) {
-    const dip = save.dayInProgress
-    dip.attendeeIds ??= []
-    dip.newcomers ??= []
-    dip.staysUntil ??= {}
-    dip.results ??= {}
-    dip.gamesToday ??= {}
-    dip.charToday ??= {}
-    dip.hours ??= []
-    dip.openingEvents ??= []
-  }
-  save.charMilestones ??= []
-  save.stream ??= { channelName: 'ArcadeTV', followers: 0, hype: 0, totalStreams: 0, peakViewers: 0 }
-  save.stream.fatigue ??= 0
-  save.stream.recentChars ??= [] // rolling record of what has been broadcast (character fatigue)
-  save.economy ??= { money: 500, log: [] }
-  save.economy.history ??= []
-  save.economy.lastDayMoney ??= save.economy.money
-  save.economy.todayAttendance ??= null
-  save.economy.redDays ??= 0
-  save.economy.foreclosed ??= false
-  // Start the recurring-bill ledgers at the CURRENT week/month so existing
-  // saves aren't retroactively billed for every month they've already played.
-  save.economy.lastRentMonth ??= Math.floor((absDayOf(save.day, save.year) - 1) / DAYS_PER_MONTH)
-  save.economy.lastUpkeepWeek ??= Math.floor((absDayOf(save.day, save.year) - 1) / 7)
-  save.socialFeed ??= []
-  save.dismissedRumors ??= {}
-  save.moneyMatches ??= []
-  save.settings.mode ??= 'consequential'
-  save.settings.difficulty ??= 'normal'
-  save.arcade.prices ??= { token: 1 }
-  // Old saves charged exactly one token a match, so that is what they keep.
-  save.arcade.prices.play ??= 1
-  // Per-item pricing: migrate the old single food price to per-food, default
-  // side-cabinet token costs, then retire the flat food price.
-  save.arcade.foodPrices ??= {}
-  const legacyFoodPrice = save.arcade.prices.food ?? DEFAULT_FOOD_PRICE
-  for (const f of save.arcade.foods) save.arcade.foodPrices[f] ??= legacyFoodPrice
-  save.arcade.gameTokens ??= {}
-  for (const g of save.arcade.otherGames) save.arcade.gameTokens[g] ??= DEFAULT_GAME_TOKENS
-  save.arcade.ads ??= []
-  delete save.arcade.prices.food
-  save.arcade.cleanliness ??= 80
-  // Old saves were streaming before the rig existed; they keep their channel.
-  save.arcade.streamRig ??= true
-  save.arcade.letdowns ??= 0
-  save.arcade.closedUntilAbs ??= null
-  save.staffing ??= newStaffing()
-  save.prestige ??= { points: 0, runs: 0 }
-  save.prestige.achievements ??= {}
-  save.prestige.unlocks ??= {}
-  save.settings.helpers ??= { tips: true, vitals: true, rumors: true }
-  save.openedAbs ??= 1 // saves from before the summer start opened on January 1
-  save.milestones ??= {}
-  save.prestigePending ??= 0
-  // A save that predates the counters starts them now rather than backfilling:
-  // an achievement is something you did, not something the migration decided
-  // you must have done at some point.
-  save.tally = { ...newTally(), ...(save.tally || {}) }
-  save.unlockNotices ??= []
-  save.freeInstalls ??= {}
-  save.evoWeek ??= null
-  save.invasion ??= null
-  save.nextInvasionAbs ??= 0
-  save.rosterCollapsed ??= false
-  save.momentum ??= { state: 'steady', untilAbs: 0 }
-  save.attentionDrift ??= { untilAbs: 0, value: 0 }
-  save.worldEffects ??= []
-  save.lastWorldEventAbs ??= 0
-  save.freshMetaUntilAbs ??= 0
-  save.lastExhibitionAbs ??= 0
-  save.arcade.crowding ??= 0
-  save.gameOver ??= null
-  save.peakAttendance ??= 0
-  save.quietDays ??= 0
-  save.fadedDays ??= 0
-  // REPAIR: `resetPlayerForNewRun` used to drop the `npc` flag, so every run
-  // after a reset promoted the entire filler pool into the user's cast — a
-  // six-person roster coming back as seventy. Filler is still identifiable
-  // after the fact because `createdBy` DID survive, so put them back.
-  //
-  // Gated on having actually reset, because a pre-NPC save legitimately carries
-  // a seeded CPU cast that is part of that run's history and must stay put.
-  if ((save.prestige?.runs || 0) > 0) {
-    for (const p of Object.values(save.players)) {
-      if (p.createdBy === 'cpu' && p.npc === false) p.npc = true
-    }
-  }
-  // Pre-NPC saves carry a full seeded CPU cast. Those people stay exactly as
-  // they are — they're already part of that run's history — but from here on
-  // filler is generated on demand instead.
-  for (const p of Object.values(save.players)) {
-    p.npc ??= false
-    p.npcLastSeenAbs ??= null
-    p.temperament ??= null
-    p.socialTemperament ??= null
-    p.slob ??= false
-    // Hygiene grew up into reliability (same slot, new meaning); the old joke
-    // lives on as the `slob` quirk on the rare gross passer-through.
-    if (p.social && p.social.reliability == null) {
-      p.social.reliability = p.social.hygiene ?? 0
-      delete p.social.hygiene
-    }
-    // Stats added after this player was made land at neutral — and since the
-    // temperament rework, neutral is 0. Handing them 5 was two and a half
-    // creation points of free investment nobody chose.
-    if (p.personal) {
-      p.personal.adaptation ??= 0
-      p.personal.presence ??= 0
-    }
-    // One FAVORITE each now — tastes are identity, not a shopping list.
-    if (Array.isArray(p.foods) && p.foods.length > 1) p.foods = p.foods.slice(0, 1)
-    if (Array.isArray(p.otherGames) && p.otherGames.length > 1) p.otherGames = p.otherGames.slice(0, 1)
-    delete p.tasteRoll
-    delete p.tasteRerolled
-  }
-  save.separations ??= []
-  save.archives ??= []
-  // The origin snapshot (old "reset to first created") is retired — reset now
-  // keeps the design and roster instead. Reclaim the space it doubled.
-  delete save.origin
-  save.game.version ??= '1.0'
-  save.gameDraft ??= null
-  save.scheduledPatch ??= null
-  save.patches ??= []
-  save.patchMorale ??= 0
-  save.relevance ??= 55
-  save.lastRelevanceAbs ??= 0
-  save.scene ??= { rivalries: 0, toxic: 0, regulars: 0, rivalryIndex: 0, toxicity: 0, rivalIds: [], feudIds: [] }
-  save.lastPatch ??= { day: save.day, year: save.year }
-  save.chronicle ??= []
-  save.tierLists ??= []
-  save.guides ??= []
-  save.pendingTierList ??= null
-  // Existing saves get data credit for time already played on their build.
-  save.patchGames ??= Math.min(300, ((save.year - 1) * 336 + save.day - ((save.lastPatch.year - 1) * 336 + save.lastPatch.day)) * 10)
-  for (const st of save.game.stages) st.vibe ??= 'hype'
-  save.settings.nameDisplay ??= 'alias'
-  save.game.playerTags ??= []
-  for (const p of Object.values(save.players)) {
-    p.settledMain ??= !!p.mainCharId // pre-exploration players keep their mains
-    p.exploredChars ??= p.mainCharId ? [p.mainCharId] : []
-    // Stats added after this save was written land EMPTY, not rolled. rollStat
-    // is the retired 1-10 roll (mean ~7); under the temperament point buy that
-    // is three and a half free creation points on a stat nobody chose.
-    p.personal.stamina ??= 0
-    p.personal.composure ??= 0
-    p.social.hygiene ??= 0
-    // Income moved from a standalone field into the social stats (so it's
-    // point-bought and capped like the rest) — carry over the old value.
-    p.social.income ??= (p.income != null ? p.income : 0)
-    delete p.income
-    p.tasteRerolled ??= false
-    p.h2h ??= {} // opponentId -> {w, l} lifetime head-to-head
-    p.memories ??= []
-    p.memoriesWritten ??= p.memories.length
-    p.voice ??= deriveVoice(p)
-    // Voice is cached on the player, so the roster of any save made before the
-    // stat-scale fix is still carrying the one voice the broken thresholds
-    // could produce (chill/dry/terse, for everybody). Re-derive once so the
-    // fix reaches people already playing, not just new arrivals.
-    if (!save.voiceRescaled) p.voice = deriveVoice(p)
-    p.catchphrase ??= ''
-    p.playerTags ??= []
-    p.attractedPlayerTags ??= []
-    p.repelledPlayerTags ??= []
-    p.charRecord ??= {}
-    // Existing veterans start a little worn — passion reflects their tenure.
-    p.passion ??= clamp(88 - (p.daysAttended || 0) * 0.04, 40, 90)
-    p.retired ??= false
-    p.retiredDay ??= null
-    p.retiredYear ??= null
-    // Mid-game overhaul fields.
-    p.pocketPicks ??= []
-    p.currentInterest ??= null
-    // A main that is also a pocket pick predates setMain(); switching onto a
-    // character already held in reserve never cleaned the reserve list.
-    if (p.mainCharId) p.pocketPicks = p.pocketPicks.filter((id) => id !== p.mainCharId)
-    p.form ??= []
-    p.evoTitles ??= 0
-    p.belief ??= 0
-    p.popularity ??= 0
-    p.warnings ??= []
-    p.banished ??= false
-    p.banishedDay ??= null
-    p.banishedYear ??= null
-  }
-  for (const t of Object.values(save.teams)) {
-    t.history ??= []
-    t.lastGrowth ??= (save.year - 1) * 336 + save.day // fresh clock on migration
-  }
-  // Character overhaul: legacy moves gain frame data, characters gain combos,
-  // and the matchup chart is recomputed from the designs — the movesets are
-  // the source of truth for power now.
-  for (const game of [save.game, save.gameDraft].filter(Boolean)) {
-    // Universal mechanics: a save from before they existed keeps playing by
-    // the defaults, which are deliberately the behaviour it already had.
-    game.rules = migrateRules(game.rules)
-    for (const c of game.characters) {
-      c.tags ??= []
-      // Nobody was anybody's form before forms existed.
-      c.formOf ??= null
-      c.skins ??= []
-      // Descriptor overhaul: everyone was a "normal" body before it existed,
-      // so old casts keep the balance they had.
-      c.vitality ??= 'normal'
-      c.size ??= 'normal'
-      // migrateMove backfills `d` from the hand-written numbers and re-derives
-      // them, so descriptors and frame data agree from here on.
-      c.moves = (c.moves || []).map(migrateMove)
-      if (!c.combos) {
-        c.combos = []
-        for (let i = 0; i < 2; i++) {
-          const combo = generateCombo(c, c.combos.map((x) => x.name))
-          if (combo) c.combos.push(combo)
-        }
-      }
-    }
-    pruneForms(game)
-    computeMatchups(game)
-  }
-  // Dialogue infrastructure: people who have already played each other are
-  // NOT strangers, so seed `met` from the head-to-head record. Without this a
-  // two-year save would have everyone introducing themselves again.
   for (const p of Object.values(save.players || {})) {
-    p.said ??= []
-    p.takes ??= []
-    if (!p.met) {
-      p.met = {}
-      for (const [otherId, h] of Object.entries(p.h2h || {})) {
-        const games = (h?.w || 0) + (h?.l || 0)
-        if (games > 0) p.met[otherId] = { firstDay: 0, count: games }
-      }
-    }
+    p.memoriesWritten ??= (p.memories || []).length
   }
-  // Set only after the loop above has re-derived every cached voice, so a crash
-  // partway through does not leave half the roster on the old flat voice.
-  save.voiceRescaled = true
-  save.game.techniques ??= [] // dormant — designed techniques are retired
-  for (const t of save.arcade.schedule) {
-    t.cadence ??= 'yearly' // old entries were yearly by construction
-    t.format ??= 'single'
-    t.weekday ??= 0
-    t.dayOfMonth ??= 1
-    t.dayOfYear ??= 28
-    t.size ??= 8
-  }
-  // Old tournament records predate progressive reveal — show them finished.
-  // (A large finite number: Infinity would not survive JSON round-trips.)
-  if (save.lastTournament && save.lastTournament.revealed == null) {
-    save.lastTournament.revealed = 999999
-  }
-  save.arcade.location ??= { city: '', state: '', country: '' }
-  save.vods ??= []
-  save.grandOpening ??= false // a save that already exists has already opened
-  trimVods(save) // existing saves may hold far more replay data than fits localStorage
-  save.tournamentInProgress ??= null
-  save.idle ??= newIdleState()
-  save.idle.autoStream ??= newIdleState().autoStream
+  trimVods(save) // replay data can outgrow localStorage in any era
   return save
 }

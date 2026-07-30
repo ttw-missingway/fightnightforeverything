@@ -22,9 +22,10 @@ export default function RosterEditor({ save, update }) {
   })
 
   // In consequential mode, fresh players must be legal out of the box:
-  // per-stat cap and total point budget (difficulty + banked prestige).
-  // Every player also comes with a random roll of food/arcade tastes — that
-  // roll is free; changing it later costs stat points (tracked vs tasteRoll).
+  // per-stat cap and the difficulty's point budget (banked prestige no longer
+  // adds power — docs/DEPRECATED.md). Every player also comes with a random
+  // roll of food/arcade tastes — that roll is free; changing it later costs
+  // stat points (tracked vs tasteRoll).
   const addPlayer = (make) => update((s) => {
     if (consequential && Object.keys(s.players).length >= 48) return
     const p = make(s)
@@ -34,8 +35,7 @@ export default function RosterEditor({ save, update }) {
       p.otherGames = prefs.otherGames
     }
     if (consequential) {
-      const d = difficultyOf(s)
-      legalizeBuild(p, d.statPoints + (s.prestige?.points || 0))
+      legalizeBuild(p, difficultyOf(s).statPoints)
     }
     s.players[p.id] = p
   })

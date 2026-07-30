@@ -20,7 +20,7 @@ const pName = (save, p) => displayName(p, save)
 
 // ---------- Entrants (arcade players and EVO elites share one shape) ----------
 
-function arcadeEntrant(save, player) {
+export function arcadeEntrant(save, player) {
   // Your people compete under YOUR flag — whatever country the arcade is in.
   const flag = arcadeFlag(save)
   const name = pName(save, player)
@@ -95,7 +95,7 @@ function entrantPersonality(e) {
   return e.kind === 'arcade' ? personalityOf(e.ref) : elitePersonality(e.ref)
 }
 
-function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' } = {}) {
+export function resolveEntrantMatch(save, a, b, { long = true, context = 'tournament' } = {}) {
   const perfA = entrantPerformance(save, a, context)
   const perfB = entrantPerformance(save, b, context)
   // Matchup chart only really bites at high-level play.
@@ -417,15 +417,10 @@ export function invitationScore(p) {
   return 1200 + (p.elo - 1200) * proven + p.respect * 6 + p.glory * 1.5
 }
 
-// ---------- Staged exhibitions: the showrunner's lever ----------
-//
-// An exhibition is an event you BOOK: pay for the venue night, invite your
-// four biggest names, and put the whole card on the channel. The payoff scales
-// with the audience you've built — a huge channel turns a good card into a
-// national moment — which is what makes a media-first playstyle real: followers
-// and hype finally cash out, but only through an event someone chose to stage.
-export const EXHIBITION_COST = 140
-export const EXHIBITION_COOLDOWN = 28
+// Staged exhibitions were CUT by the revision — see docs/DEPRECATED.md and
+// src/game/deprecated/exhibition.js. Streaming already showcases; the P4
+// calendar generates the low-stakes matches. (EVO Media Day below is a
+// different thing and stays.)
 
 /**
  * THE POT. Staging a bracket costs the house real money — somebody pays for
@@ -447,101 +442,6 @@ export const EXHIBITION_COOLDOWN = 28
 export const TOURNAMENT_POT_PER_HEAD = { weekly: 1, monthly: 4, yearly: 6 }
 export const tournamentPot = (entrants, cadence) =>
   Math.round(entrants * (TOURNAMENT_POT_PER_HEAD[cadence] ?? 4))
-
-/**
- * An audience to put the card in front of.
- *
- * A showcase is a broadcast — the payoff below is literally scaled by who tuned
- * in — so staging one into an empty channel isn't an event, it's four people
- * playing on a Tuesday for $140. The number is MEASURED against a run that
- * buys the rig and streams: followers read 20 at run day 30, 143 at day 60 and
- * 403 at day 90, so 150 lands in the second month. Early-mid, a thing you grow
- * into rather than a wall — and it means the streaming rig has a second payoff
- * beyond the one it advertises.
- */
-export const EXHIBITION_MIN_FOLLOWERS = 150
-
-export function canStageExhibition(save) {
-  if (save.settings.mode === 'sandbox') return { ok: true }
-  const followers = save.stream?.followers || 0
-  if (followers < EXHIBITION_MIN_FOLLOWERS) {
-    return {
-      ok: false,
-      reason: `nobody would tune in yet — a showcase needs ${EXHIBITION_MIN_FOLLOWERS} followers on the channel (you have ${followers})`,
-    }
-  }
-  const abs = (save.year - 1) * 336 + save.day
-  const since = abs - (save.lastExhibitionAbs || 0)
-  if (since < EXHIBITION_COOLDOWN) return { ok: false, reason: `the scene needs ${EXHIBITION_COOLDOWN - since} more days between showcases` }
-  if (save.economy.money < EXHIBITION_COST) return { ok: false, reason: `booking the night costs $${EXHIBITION_COST}` }
-  const candidates = Object.values(save.players)
-    .filter((p) => p.isRegular && !p.retired && !p.banished && p.mainCharId)
-  if (candidates.length < 4) return { ok: false, reason: 'you need at least 4 established players to headline a card' }
-  return { ok: true }
-}
-
-export function runExhibition(save) {
-  bindRng(save)
-  const can = canStageExhibition(save)
-  if (!can.ok) return { ok: false, reason: can.reason }
-  if (!trySpend(save, EXHIBITION_COST, 'staged an exhibition night')) return { ok: false, reason: 'not enough cash' }
-
-  // The four biggest draws in the building, seeded 1v4 / 2v3.
-  const stars = Object.values(save.players)
-    .filter((p) => p.isRegular && !p.retired && !p.banished && p.mainCharId)
-    .sort(castFirst)
-    .slice(0, 4)
-    .map((p) => arcadeEntrant(save, p))
-  const semi1 = resolveEntrantMatch(save, stars[0], stars[3], { long: true, context: 'tournament' })
-  const semi2 = resolveEntrantMatch(save, stars[1], stars[2], { long: true, context: 'tournament' })
-  const w1 = stars.find((e) => e.id === semi1.winnerId)
-  const w2 = stars.find((e) => e.id === semi2.winnerId)
-  const final = resolveEntrantMatch(save, w1, w2, { long: true, context: 'tournament' })
-  const champ = [w1, w2].find((e) => e.id === final.winnerId)
-
-  const viewers = (semi1.stream?.viewers || 0) + (semi2.stream?.viewers || 0) + (final.stream?.viewers || 0)
-  // The showcase payoff: relevance scaled by how many actually tuned in — but
-  // an exhibition of a STALE game is a rerun. Event-making amplifies a living
-  // game; it can't substitute for one, so the showrunner still needs patches.
-  const staleDays = (save.year - save.lastPatch.year) * 336 + (save.day - save.lastPatch.day)
-  const freshness = clamp(1 - Math.max(0, staleDays - 70) / 180, 0.4, 1)
-  // Scaled by HEADROOM, same shape as the champion dividend and for the same
-  // reason: a showcase REVIVES a conversation, it cannot pin one at the top.
-  // Flat, this was the one relevance pump with no age fade and no ceiling —
-  // measured (n=16, 1008d, normal), an event-heavy style held relevance 98 for
-  // three straight years and the death march simply never arrived: its pumps
-  // (~0.46/day with monthly showcases) outran maximum old-age decay
-  // (~0.34/day) forever. Decline must stay inevitable; a showcase buys WHEN,
-  // not WHETHER.
-  const rel0 = save.relevance ?? 55
-  const headroom = 0.25 + 0.75 * (100 - rel0) / 100
-  const relGain = Math.round(clamp(2 + viewers / 110, 2, 7) * freshness * headroom)
-  save.relevance = clamp(rel0 + relGain, 0, 100)
-  addHype(save, 5)
-  champ.ref.glory += 6
-  champ.ref.respect += 4
-  save.lastExhibitionAbs = (save.year - 1) * 336 + save.day
-
-  const record = {
-    id: uid('t'),
-    type: 'singles',
-    format: 'single',
-    name: 'Exhibition Showcase',
-    day: save.day, year: save.year, dateLabel: formatDay(save.day, save.year),
-    storylines: [`${save.arcade.name} put its four biggest names under the lights — ${viewers} watched live.`],
-    revealed: 999999,
-    rounds: [
-      { title: 'Showcase Semifinals', matches: [semi1, semi2] },
-      { title: 'Showcase Final', matches: [final] },
-    ],
-    placements: [{ place: 1, name: champ.name }],
-    champion: champ.name,
-    entrantCount: 4,
-  }
-  pushVod(save, record)
-  chronicle(save, '🎪', `Exhibition night: ${champ.name} took the showcase in front of ${viewers} viewers — the scene felt BIG tonight.`)
-  return { ok: true, viewers, relGain, record }
-}
 
 function dropoutChance(p) {
   // Life gets in the way of the UNRELIABLE. The put-together player has never

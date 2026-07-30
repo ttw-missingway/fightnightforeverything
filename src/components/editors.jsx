@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react'
 import { Field, NumField, StringListEditor, PillPicker, Portrait } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
-import { canStageExhibition, runExhibition, EXHIBITION_COST, EXHIBITION_MIN_FOLLOWERS } from '../game/tournament.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import {
   generateCharacter, generateGameTitle, generateArcadeName,
@@ -326,40 +325,8 @@ export function ArcadeManagement({ save, update }) {
         <IncomeChart save={save} />
         <FootTraffic save={save} />
       </div>
-      <ExhibitionCard save={save} update={update} />
       <PricesEditor save={save} update={update} />
       <ArcadeEditor save={save} update={update} live={live} />
-    </div>
-  )
-}
-
-// Stage an exhibition night: an event you book. Your four biggest names, the
-// whole card on stream — the payoff (relevance, hype, a VOD) scales with the
-// audience you've built. The media-first playstyle's main lever.
-export function ExhibitionCard({ save, update }) {
-  const can = canStageExhibition(save)
-  const [last, setLast] = useState(null)
-  return (
-    <div className="card">
-      <h3>🎪 Exhibition Night <span className="dim small">— book a showcase card</span></h3>
-      <p className="dim small">
-        ${EXHIBITION_COST} books the night. Your four biggest names run a bracket under the lights,
-        the whole card streams, and the buzz scales with your channel — a packed broadcast puts
-        the scene back in the national conversation. Needs {EXHIBITION_MIN_FOLLOWERS} followers
-        first: a showcase is only a showcase if somebody is watching.
-      </p>
-      <div className="row">
-        <button className="primary" disabled={!can.ok}
-          onClick={() => update((s) => { const r = runExhibition(s); if (r.ok) setLast(r) })}>
-          Stage an exhibition (${EXHIBITION_COST})
-        </button>
-        {!can.ok && <span className="dim small">{can.reason}</span>}
-      </div>
-      {last && (
-        <p className="small" style={{ marginBottom: 0 }}>
-          🎉 {last.viewers} watched live — the scene's profile jumped. The full card is in VODs.
-        </p>
-      )}
     </div>
   )
 }

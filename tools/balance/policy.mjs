@@ -23,7 +23,7 @@ import {
 } from '../../src/game/constants.js'
 import { computeMatchups } from '../../src/game/balance.js'
 import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../../src/game/sim.js'
-import { runSinglesTournament, runTeamTournament, runEvo, canStageExhibition, runExhibition, EXHIBITION_COST } from '../../src/game/tournament.js'
+import { runSinglesTournament, runTeamTournament, runEvo } from '../../src/game/tournament.js'
 import { audienceMix, hasFreeInstall, claimFreeInstall } from '../../src/game/catalog.js'
 import { ATTRACTION_PACKS } from '../../src/game/names.js'
 import * as eco from '../../src/game/economy.js'
@@ -62,10 +62,6 @@ export const DEFAULT_POLICY = {
   monthly: 0,             // monthly bracket size (0 = none)
   hireAt: [600, 1400, 2600], // cash thresholds for employees 1..3
   managerAt: 2200,
-  // Stage a showcase whenever the channel can carry one. Exhibitions are the
-  // cash-out for followers/hype, and until 2026-07-28 NO harness ever staged
-  // one — the whole media payoff loop was unmeasured (trap #3).
-  exhibit: true,
   // Buy into unlocked attraction packs (new audiences first) once the books
   // can carry the build. Off by default: it is the room-builder's move.
   attractions: false,
@@ -96,9 +92,10 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
   // YOUR cast. Without these the harness measures a room full of strangers:
   // created players attend far more readily, are the only ones teams form
   // around, and are the only ones who can qualify for EVO.
-  // Banked creation points make a later lineage's cast better — the entire
-  // point of the legacy loop. See tools/balance/lineage.mjs.
-  const budget = difficultyOf(save).statPoints + (save.prestige?.points || 0)
+  // The budget is the difficulty's alone — prestige-as-power was deprecated
+  // by the revision (docs/DEPRECATED.md); a returning run never starts
+  // stronger.
+  const budget = difficultyOf(save).statPoints
   const rows = policy.rows || null // ablation: restrict which temperaments exist
   for (let i = 0; i < (policy.cast ?? 6); i++) {
     const p = newPlayer({ createdBy: 'user', npc: false })
@@ -269,16 +266,8 @@ function manage(save, policy) {
   const nextAds = runway > 30 ? legalAds : runway > 15 ? legalAds.slice(0, 1) : []
   if (nextAds.join() !== (save.arcade.ads || []).join()) noteDecision(save, 'ads')
   save.arcade.ads = nextAds
-  // A showcase night when the channel can carry one — followers and hype
-  // cashing out through an event someone chose to stage. canStageExhibition
-  // gates on followers, cooldown, cash and a headline-worthy roster.
-  // A $140 night is a luxury, not a lifeline — stage it out of a real buffer,
-  // never out of the rent money.
-  if (policy.exhibit && runway > 12 && save.economy.money > EXHIBITION_COST * 3
-      && canStageExhibition(save).ok) {
-    runExhibition(save)
-    noteDecision(save, 'exhibition')
-  }
+  // Exhibitions were cut by the revision (docs/DEPRECATED.md) — the competent
+  // player no longer stages showcase nights.
   // AN ATTRACTION IS A CROWD YOU DO NOT HAVE YET, or it is furniture
   // (catalog.js). The room-builder buys into a pack it has EARNED, one room at
   // a time, preferring an audience the floor doesn't serve — and takes the

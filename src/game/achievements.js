@@ -452,7 +452,7 @@ export function checkAchievements(save) {
       save.freeInstalls[a.unlock] = true
     }
     save.prestige.points = (save.prestige.points || 0) + a.points
-    const pay = a.points > 0 ? ` (+${a.points} creation point${a.points === 1 ? '' : 's'})` : ''
+    const pay = a.points > 0 ? ` (+${a.points} prestige)` : ''
     chronicle(save, a.icon, `${a.name} — ${a.unlockLabel} is yours for good${pay}`)
     save.unlockNotices.push(a.key)
     earned.push(a)

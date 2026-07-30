@@ -167,7 +167,7 @@ function LegacyLadder({ save, earned }) {
       </p>
       <div className="card">
         <div className="row spread">
-          <span><span className="gold" style={{ fontSize: 22, fontWeight: 700 }}>{points}</span> <span className="dim">creation points banked</span></span>
+          <span><span className="gold" style={{ fontSize: 22, fontWeight: 700 }}>{points}</span> <span className="dim">prestige banked — spent on unlockables, never on power</span></span>
           <span className="dim small">{earned} of {ACHIEVEMENTS.length} earned · {runs === 0 ? 'first run' : `${runs} run${runs === 1 ? '' : 's'} behind you`}</span>
         </div>
       </div>
