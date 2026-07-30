@@ -35,12 +35,19 @@ import { isUnlocked } from '../../src/game/achievements.js'
 import { selectableChars } from '../../src/game/forms.js'
 import { bindStream, newRngState } from '../../src/game/rng.js'
 import { noteDecision } from '../../src/game/attention.js'
+import { autoPickStat, chooseBreakthrough } from '../../src/game/eureka.js'
 
 const { startingBudget, arcadeBuildCost } = eco
 
 export const DEFAULT_POLICY = {
   rig: true,              // buy the streaming setup on day one
   stream: true,           // put a match on the channel every day
+  // WHO gets the camera is the first real cultivation decision (REVISION
+  // §1.8: exposure is a prerequisite for growth — belief gates the eureka
+  // split). 'closest' spread the spotlight evenly and the cast rose as one
+  // block; a competent owner building toward an elite win streams their
+  // best, and the divergence that starts is the separation metric moving.
+  streamSelector: 'best',
   foods: 3,               // how many lines to stock
   foodPrice: 3,
   // THE PRICE IS costPerPlay = tokenPrice × playTokens. The overhaul that
@@ -356,7 +363,7 @@ export function playDay(save, policy = DEFAULT_POLICY) {
         // burning-out star); the default is the auto-stream 'closest' pick.
         const idx = policy.streamPick
           ? policy.streamPick(save, hour)
-          : pickAutoStreamSetup(save, hour, 'closest')
+          : pickAutoStreamSetup(save, hour, policy.streamSelector || 'closest')
         if (idx != null) {
           const ev = hour.events.find((e) => e.type === 'match' && e.setupIndex === idx)
           const a = ev && save.players[ev.aId]
@@ -372,6 +379,18 @@ export function playDay(save, policy = DEFAULT_POLICY) {
     }
   }
   endDay(save)
+  // Answer any breakthrough the day armed. The cast waits for the OWNER —
+  // in the browser that is a real choice on the Players screen; here the
+  // competent player answers promptly with the same heuristic the sim uses,
+  // and it counts as a mutating decision (metric 6) because it is one.
+  for (const p of Object.values(save.players)) {
+    if (p.npc || p.createdBy !== 'user' || !p.eureka?.pending) continue
+    const stat = autoPickStat(p, p.eureka.pending.candidates)
+    if (stat) {
+      chooseBreakthrough(save, p, stat)
+      noteDecision(save, 'eureka')
+    }
+  }
 }
 
 export const isDead = (save) => !!(save.gameOver || save.economy?.foreclosed)

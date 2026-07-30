@@ -1,7 +1,8 @@
 import { clamp, rand, displayName } from './util.js'
 import { getMatchup, awardMilestone } from './model.js'
 import { areRivals, rivalOf } from './social.js'
-import { competitiveIntensity, statLevel } from './constants.js'
+import { competitiveIntensity, statLevel, absDayOf } from './constants.js'
+import { matchWound, matchEdge, EUREKA } from './eureka.js'
 
 // ---------- Character skill & learning curve ----------
 
@@ -96,13 +97,27 @@ export function skillCeiling(save, player, charId) {
   // Knowing the character's discovered tech lifts the very top a little.
   cult += Math.min(0.10, techniqueBonus(save, player, charId) * 0.012)
   ceiling += (100 - ceiling) * clamp(cult, 0, 0.5)
+  // THE SPIRIT WALL (REVISION §1.6). The formula above is the ceiling DERIVED
+  // from the sheet — and since breakthroughs raise the sheet, eureka raises
+  // this ceiling all career: practice fills toward it, eureka moves it. The
+  // spirit roll is the wall behind all of it: hidden, permanent, and the
+  // thing a topped-out player discovers in fiction, never as a number. It
+  // only bites the heavily cultivated — everyone here is capable; what you
+  // discover is the shape.
+  const spiritCap = player.spiritCeil?.skill
+  if (spiritCap != null) ceiling = Math.min(ceiling, spiritCap)
   // Filler stays filler: a passer-through can be genuinely good — a real rival,
   // a real weekly threat — but the story of this arcade belongs to the players
-  // the user MADE, so nobody who wandered in ever grows past a step behind the
-  // cast's best. (Already-earned skill is never clawed back; they just stall.)
+  // the user MADE. The tether used to be castTop − 4, which quietly welded the
+  // whole room to the cast's best and manufactured the very convergence the
+  // revision exists to cure (measured: local separation 2.78 → 1.6 over six
+  // years WITH the eureka spine running). Under §1.8 filler stalls naturally —
+  // nobody streams them, belief never comes, adversity converts to burnout —
+  // so the clamp is a backstop now, set loose enough for a genuine local
+  // threat and tight enough that no stranger headlines the story.
   if (player.npc) {
     const castTop = save.scene?.castTopSkill ?? 0
-    ceiling = Math.min(ceiling, Math.max(42, castTop - 4))
+    ceiling = Math.min(ceiling, Math.max(42, castTop - 12))
   }
   return clamp(ceiling, 20, 100)
 }
@@ -237,6 +252,9 @@ export function performance(save, player, charId) {
   // only upsets in the game came from whoever happened to have the stat.
   perf += rand() * statLevel(player.personal.xfactor) * 1.2
   perf += techniqueBonus(save, player, charId)
+  // The purple patch: for a couple of weeks after a breakthrough, everything
+  // works. The permanent gain is the stat point; this is the glow.
+  if ((player.eureka?.purpleUntilAbs || 0) > absDayOf(save.day, save.year)) perf += EUREKA.PURPLE_PERF
   return perf
 }
 
@@ -344,9 +362,10 @@ export function pickMatchChar(save, player, oppCharId) {
  * Resolve a match between two live players. Mutates elo, mood, W/L, respect.
  * Char ids default to each player's main but may be overridden (counterpicks,
  * pocket-pick labbing). Skill gains are handled by the caller so watching etc.
- * can share logic.
+ * can share logic. `context` carries the eureka stage — {stage, streamed,
+ * viewers} — so the wound and edge land AT the point of the result.
  */
-export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mainCharId) {
+export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mainCharId, context = {}) {
   const probA = winProbability(save, a, aCharId, b, bCharId)
   const aWins = rand() < probA
   const winner = aWins ? a : b
@@ -397,6 +416,18 @@ export function resolveMatch(save, a, b, aCharId = a.mainCharId, bCharId = b.mai
   }
 
   winner.respect += probA > 0.5 === aWins ? 1 : 3 // upsets earn extra respect
+
+  // THE EUREKA SPINE'S INTAKE (REVISION §1.2): the wound and the edge are
+  // attributed here, at the moment of the result, with the odds still in
+  // hand. Elites and visitors pass through this function without an eureka
+  // bag and are skipped inside.
+  const stage = context.stage || 'casual'
+  const streamed = !!context.streamed
+  matchWound(save, loser, winner, { probSelf: aWins ? 1 - probA : probA, stage, streamed })
+  matchEdge(save, winner, loser, {
+    probSelf: aWins ? probA : 1 - probA, stage, streamed,
+    viewers: context.viewers || 0, rivals: areRivals(save, winner, loser),
+  })
 
   return { aWins, probA, eloDelta, winner, loser, wGain, lGain, winnerChar, loserChar, aCharId, bCharId }
 }

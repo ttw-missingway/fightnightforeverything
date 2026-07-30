@@ -128,8 +128,12 @@ export function applyStageReps(save, players, stream, context = 'daily', weight 
     ref.belief = clamp(belief + delta, 0, 100)
     noteBeliefSwing(save, ref, delta, viewers)
     // Popularity climbs with eyeballs (fades slowly without them, in endDay).
+    // The MANA CEILING (REVISION §1.6): the spirit roll bounds how famous this
+    // person can get — the asymptote closes on their cap, not a flat 120, so
+    // a Fool's fame comes easily and a Hero's stays stubbornly modest.
     const shine = 0.55 + (ref.personal?.presence ?? 5) * 0.09 // the camera finds some people
-    ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * shine * (1 - (ref.popularity ?? 0) / 120), 0, 100)
+    const popCap = ref.spiritCeil?.popularity ?? 100
+    ref.popularity = clamp((ref.popularity ?? 0) + base * viewerFactor * 0.9 * shine * (1 - (ref.popularity ?? 0) / (popCap * 1.2)), 0, popCap)
     // Recognition rekindles the fire — being seen is why a lot of people play.
     // Being on the channel is a thrill that wears off like every other one —
     // this was the single biggest passion fountain in the game, handing a

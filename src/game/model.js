@@ -1,7 +1,7 @@
-import { uid, clamp } from './util.js'
-import { newRngState } from './rng.js'
+import { uid, clamp, rand } from './util.js'
+import { newRngState, bindRng } from './rng.js'
 import { newAttention } from './attention.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, OPENING_DAY, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from './constants.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, DEFAULT_FOOD_PRICE, DEFAULT_GAME_TOKENS, DAYS_PER_MONTH, absDayOf, OPENING_DAY, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, SPIRITS, SPIRIT_AXES, SPIRIT_ROLL, spiritOf } from './constants.js'
 import { deriveVoice } from './dialogue.js'
 import { generateMoveData, migrateMove, generateCombo } from './design.js'
 import { defaultRules, migrateRules } from './rules.js'
@@ -59,6 +59,58 @@ export function blankStats(keys, value = 5) {
   return Object.fromEntries(keys.map((k) => [k, value]))
 }
 
+/** The eureka spine's per-player state (REVISION §1). One bag, one shape. */
+export function newEureka() {
+  return {
+    pressure: {}, // stat -> accumulated productive pressure
+    sources: {}, // stat -> recent {absDay, why, amt} (capped ring) — the inspector's evidence
+    threshold: 25, // pressure sum that arms a breakthrough; ×1.35 each time
+    count: 0, // career breakthroughs
+    perStat: {}, // stat -> times broken through (same-stat repeats escalate)
+    crossRowBy: {}, // temperament-row key -> cross-row breakthroughs landed there
+    pending: null, // {sinceAbs, candidates:[{stat,kind,pressure}]} — a user player waiting on YOU
+    log: [], // {absDay, stat, kind, cross, forced} — the career's breakthrough record
+    adversity: 0, // lifetime intake — metric 4 reads its cohort off this
+    burnout: 0, // lifetime passion the split sent the other way
+    purpleUntilAbs: 0, // the purple patch after a breakthrough
+    feudSeen: [], // pair keys already counted as ruptures
+    lastWeeklyAbs: 0, // weekly-channel bookkeeping (company, plateau)
+    weekSkillMark: 0, // best skill at the last weekly check — plateau detection
+  }
+}
+
+/** Roll the three hidden magnitudes: uniform on SPIRIT_ROLL, sorted desc. */
+export function rollSpiritMagnitudes() {
+  const [lo, hi] = SPIRIT_ROLL
+  const rolls = [0, 0, 0].map(() => Math.round((lo + rand() * (hi - lo)) * 10) / 10)
+  return rolls.sort((a, b) => b - a)
+}
+
+/** Map rolls through the spirit's order onto the three capped quantities. */
+export function spiritCeilOf(spiritKey, rolls) {
+  const spirit = spiritOf(spiritKey)
+  if (!spirit || !rolls) return null
+  const ceil = {}
+  spirit.order.forEach((axis, i) => { ceil[SPIRIT_AXES[axis].caps] = rolls[i] })
+  return ceil
+}
+
+/**
+ * Give a player their spirit if they lack one, and keep the derived ceilings
+ * consistent. The player chooses the SHAPE and the game rolls the MAGNITUDE —
+ * so changing spirit (creation-window only) remaps the same rolls onto the
+ * new order rather than rerolling; there is nothing to fish for.
+ */
+export function ensureSpirit(player, key = null) {
+  if (key) player.spirit = key
+  if (!player.spirit) player.spirit = SPIRITS[Math.floor(rand() * SPIRITS.length)].key
+  if (!player.spiritRolls) player.spiritRolls = rollSpiritMagnitudes()
+  player.spiritCeil = spiritCeilOf(player.spirit, player.spiritRolls)
+  player.eureka ??= newEureka()
+  player.community ??= 0
+  return player
+}
+
 export function newPlayer(partial = {}) {
   return {
     id: uid('player'),
@@ -85,6 +137,15 @@ export function newPlayer(partial = {}) {
     social: blankStats(SOCIAL_KEYS, 0), // includes `income` — spending money they walk in with
     temperament: null, // TEMPERAMENTS key — the competitive row they lead with
     socialTemperament: null, // SOCIAL_TEMPERAMENTS key
+    // The third layer (REVISION §1.6): what they could become. Chosen at
+    // creation, set in stone. The ROLLS are hidden and never surfaced — what
+    // you discover over a career is the shape, through the journal, never a
+    // number.
+    spirit: null, // SPIRITS key
+    spiritRolls: null, // [high, mid, low] — rolled once; a spirit change remaps, never rerolls
+    spiritCeil: null, // {skill, community, popularity} — order mapped onto the rolls
+    community: 0, // 0-100 — the scene's connective tissue, love-capped; see social.js
+    eureka: newEureka(), // the breakthrough spine's per-player state — see eureka.js
     slob: false, // the rare filler quirk: the arcade is a small room, people notice
     defaultMood: 5,
     mood: 5,
@@ -162,6 +223,11 @@ export function resetPlayerForNewRun(p) {
     // every passer-through into a member of your cast on reset, and a roster
     // that should have been six people came back as seventy.
     npc: !!p.npc,
+    // Spirit is identity — set in stone, so it crosses runs with the person.
+    // The eureka STATE does not (that's progress); newPlayer starts it fresh.
+    spirit: p.spirit || null,
+    spiritRolls: p.spiritRolls ? [...p.spiritRolls] : null,
+    spiritCeil: p.spirit && p.spiritRolls ? spiritCeilOf(p.spirit, p.spiritRolls) : null,
     personal: structuredClone(p.personal),
     social: structuredClone(p.social), // includes income
     voice: p.voice ? structuredClone(p.voice) : null,
@@ -776,6 +842,7 @@ export function setMatchup(game, aId, bId, winPctForA) {
 // there long after a routine upset has faded.
 const MEMORY_WEIGHT = {
   evo: 100, moneymatch: 70, tournament: 60, upset: 40, team: 35, retire: 90, witness: 25,
+  eureka: 75, // a breakthrough is among the largest things that happens to a person here
 }
 const MEMORY_CAP = 12
 
@@ -871,9 +938,13 @@ export function migrateSave(save) {
   // shortly before the schema bump, so the earliest revision-era saves may
   // lack them.
   if (!save.rng || typeof save.rng.state !== 'number') save.rng = newRngState()
+  bindRng(save) // backfills below may draw (spirit rolls) — draw from the save's own stream
   save.attention ??= newAttention()
   for (const p of Object.values(save.players || {})) {
     p.memoriesWritten ??= (p.memories || []).length
+    // The spirit layer and eureka spine (P1). Pre-P1 revision saves get their
+    // shapes rolled now, from their own stream.
+    ensureSpirit(p)
   }
   trimVods(save) // replay data can outgrow localStorage in any era
   return save

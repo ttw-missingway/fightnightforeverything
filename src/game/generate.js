@@ -1,8 +1,8 @@
 import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
 import { bindRng } from './rng.js'
-import { newPlayer, newCharacter } from './model.js'
+import { newPlayer, newCharacter, ensureSpirit, rollSpiritMagnitudes, spiritCeilOf } from './model.js'
 import { seedTakes } from './takes.js'
-import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT } from './constants.js'
+import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, SPIRITS } from './constants.js'
 import {
   FIRST_NAMES, LAST_NAMES, ALIASES, CHARACTER_NAMES, MOVE_NAME_PARTS,
   ELITE_ALIASES, FOODS, STARTER_GAMES, APPEARANCES, CATCHPHRASES,
@@ -267,6 +267,10 @@ export function generatePlayer(save, overrides = {}) {
   // ever forms opinions by LOSING, so the whole room ends up believing exactly
   // one thing: that everything is broken.
   seedTakes(save, player)
+  // Everyone has a shape, filler included — a passer-through with a Guru's
+  // spirit quietly makes the room better, which is exactly the kind of person
+  // an owner learns to spot and keep.
+  ensureSpirit(player)
   return player
 }
 
@@ -426,7 +430,7 @@ export function makeElite(save, { tier, usedAliases = new Set() } = {}) {
   const region = rollCountry(rand)
   const persona = choice(ELITE_PERSONAS)
   const who = identityForCountry(region)
-  return {
+  const elite = {
     id: uid('elite'),
     alias,
     ...who,
@@ -447,7 +451,34 @@ export function makeElite(save, { tier, usedAliases = new Set() } = {}) {
     skill: randInt(band.skill[0], band.skill[1]),
     elo: randInt(band.elo[0], band.elo[1]),
     titles: 0,
+    ...rollEliteSpirit(tier),
   }
+  // Their career is the proof of their ceiling: a god who measures 96 cannot
+  // carry a skill cap of 78. Reconciled upward, never down.
+  if (elite.spiritCeil.skill < elite.skill) {
+    elite.spiritCeil.skill = Math.min(100, elite.skill + randInt(1, 4))
+  }
+  return elite
+}
+
+/**
+ * An elite's spirit, consistent with what their career already proves. The
+ * top of the world is mostly skill-primary — you do not become a god on a
+ * Healer's ordering — while the contender tail is every shape. The skill roll
+ * is reconciled upward to at least their measured skill: their existence IS
+ * the evidence of their ceiling. P5 makes these live (offscreen eureka);
+ * until then the fields exist so radiance and the world model read one shape.
+ */
+function rollEliteSpirit(tier) {
+  const skillFirst = ['hero', 'outlaw', 'king']
+  const pool = tier === 'god' || tier === 'legend'
+    ? skillFirst
+    : tier === 'killer'
+      ? [...skillFirst, ...skillFirst, 'guru', 'fool', 'healer']
+      : SPIRITS.map((s) => s.key)
+  const spirit = choice(pool)
+  const rolls = rollSpiritMagnitudes()
+  return { spirit, spiritRolls: rolls, spiritCeil: spiritCeilOf(spirit, rolls) }
 }
 
 /** Creation-point pools by tier — gods read like the maxed builds they are. */
@@ -507,6 +538,12 @@ export function repairEvoRoster(save) {
     e.catchphrase ??= choice(CATCHPHRASES)
     if (!e.personal) {
       Object.assign(e, rollStatBuild(ELITE_BUILD_BUDGET[e.tier] ? randInt(...ELITE_BUILD_BUDGET[e.tier]) : 20))
+    }
+    // Elites from before the spirit layer get a shape now (P1). Reconcile the
+    // skill roll upward to their measured skill — their career is the proof.
+    if (!e.spirit) Object.assign(e, rollEliteSpirit(e.tier))
+    if (e.spiritCeil && e.spiritCeil.skill < (e.skill || 0)) {
+      e.spiritCeil.skill = Math.min(100, (e.skill || 0) + randInt(1, 4))
     }
   }
   while (save.evoRoster.length < EVO_ROSTER_SIZE) {

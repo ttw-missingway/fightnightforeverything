@@ -5,7 +5,7 @@ import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNex
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
 import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
-import { migrateSave, newSave, resetPlayerForNewRun, SAVE_SCHEMA_VERSION } from '../game/model.js'
+import { migrateSave, newSave, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION } from '../game/model.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
@@ -530,6 +530,9 @@ export function StoreProvider({ children }) {
     // Seed the whole finite cast now — they discover the arcade over time, and
     // nobody is ever generated again. Running out of them ends the run.
     populateRoster(next)
+    // Anyone who left the spirit choose-one untouched gets their shape rolled
+    // now — everyone has one (REVISION §1.6); only the choosing is optional.
+    for (const p of Object.values(next.players)) ensureSpirit(p)
     if (!next.evoRoster.length) next.evoRoster = generateEvoRoster(next)
     // Consequential worlds: you spent your starting budget building the
     // arcade during setup — whatever's left is your opening cash.

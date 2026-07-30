@@ -1,8 +1,9 @@
 import { Field, NumField, PillPicker, PointDots, Portrait } from './ui.jsx'
 import {
   PERSONAL_STATS, SOCIAL_STATS, GENDERS, difficultyOf,
-  TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS,
+  TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, SPIRITS,
 } from '../game/constants.js'
+import { ensureSpirit } from '../game/model.js'
 import { clamp } from '../game/util.js'
 import { FOODS, OTHER_GAMES } from '../game/names.js'
 import { randomIdentity, randomPreferences } from '../game/generate.js'
@@ -266,6 +267,7 @@ export default function PlayerForm({ save, player, patch }) {
         />
         <PointStats player={player} patch={patch} group="social" rows={SOCIAL_TEMPERAMENTS}
           budget={budget} spent={spent} chosenRow={player.socialTemperament} />
+        <SpiritPicker player={player} patch={patch} />
       </div>
 
       <div className="card sub">
@@ -300,6 +302,45 @@ export default function PlayerForm({ save, player, patch }) {
  * The temperament cards. Picking one grants a free point in each of its stats;
  * switching moves the grant (each old row stat drops a point, floored at zero).
  */
+/**
+ * The third choose-one (REVISION §1.6): competitive temperament is how they
+ * play, social temperament is how they relate, SPIRIT is what they could
+ * become. You choose the shape; the game rolls the magnitude — the rolls are
+ * hidden, rolled once, and a change of heart here remaps the same rolls onto
+ * the new ordering, so there is nothing to fish for. Set in stone once the
+ * doors open.
+ */
+function SpiritPicker({ player, patch }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <h4 className="gold" style={{ marginBottom: 6 }}>Spirit — what they could become</h4>
+      <p className="dim small" style={{ margin: '0 0 6px' }}>
+        Everyone here is capable. Spirit decides the <em>shape</em> of it — how far the play, the
+        people, and the fame can each go. You will never see a number; a career is how you find out.
+      </p>
+      <div className="grid2">
+        {SPIRITS.map((s) => (
+          <div key={s.key}
+            className="card sub clickable"
+            style={{
+              cursor: 'pointer', margin: 0,
+              borderColor: player.spirit === s.key ? 'var(--gold)' : 'var(--border)',
+              opacity: player.spirit && player.spirit !== s.key ? 0.75 : 1,
+            }}
+            onClick={() => patch((p) => { ensureSpirit(p, s.key) })}>
+            <div className="row spread">
+              <strong style={{ color: 'var(--gold)' }}>{s.emoji} {s.label}</strong>
+              {player.spirit === s.key && <span className="small gold">✓ chosen</span>}
+            </div>
+            <p className="dim small" style={{ margin: '4px 0 6px' }}>{s.blurb}</p>
+            <div className="small" style={{ color: 'var(--cyan)' }}>{s.order.join(' · ')}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TemperamentPicker({ title, list, group, chosen, field, patch }) {
   return (
     <div style={{ marginBottom: 10 }}>

@@ -23,7 +23,11 @@ export const SOCIAL_STATS = [
   ['sportsmanship', 'How gracefully they handle losses'],
   ['persona', 'Polarizing — people either love or hate them'],
   ['community', 'Mentors weaker players, builds teams'],
-  ['sensitivity', 'How much social interactions swing their mood'],
+  // Deliberately double-edged (decided 2026-07-29, REVISION §1.2): the same
+  // number that lets someone read and settle a room is the number that makes
+  // a bad night land twice as hard. Kept its key and its name; only the
+  // definition widened to carry empathy alongside the volatility it had.
+  ['sensitivity', 'Reads the room and is moved by it — considerate, and easily wounded'],
   ['reliability', 'Shows up when it counts — steady weekday turnout, never drops from a bracket'],
   ['income', 'Spending money they walk in with — buys tokens and food, resists high prices'],
 ]
@@ -84,6 +88,77 @@ export const SOCIAL_TEMPERAMENTS = [
 ]
 export const temperamentOf = (key, list = TEMPERAMENTS) => list.find((t) => t.key === key) || null
 
+// ---------- Spirit — the third temperament layer (REVISION §1.6) ----------
+// Six choose-ones: the COMPLETE set of orderings of three axes, so nothing is
+// missing and nothing is redundant. Spirit is SET IN STONE — never grows,
+// never rerolled, one per player. Competitive temperament is how they play,
+// social temperament is how they relate, spirit is what they could become.
+//
+// Each axis ceilings one of the player's own quantities AND radiates an
+// effect onto everyone around them. Caps and radiances are tuned on separate
+// knobs (see eureka.js RADIANCE) — conflated, tuning one silently breaks the
+// other.
+export const SPIRIT_AXES = {
+  skill: { label: 'skill', caps: 'skill', radiates: 'standards — proximity raises what the room believes normal is' },
+  love: { label: 'love', caps: 'community', radiates: 'cohesion — suppresses hatred and burnout in others' },
+  mana: { label: 'mana', caps: 'popularity', radiates: 'attention — people want to be like them' },
+}
+
+export const SPIRITS = [
+  {
+    key: 'guru', label: 'The Guru', emoji: '🕯', order: ['love', 'skill', 'mana'],
+    blurb: 'The room comes first, and the room notices. Good — genuinely good — but their real gift is what everyone around them becomes.',
+  },
+  {
+    key: 'fool', label: 'The Fool', emoji: '🎈', order: ['mana', 'love', 'skill'],
+    blurb: 'Beloved and unbothered. The crowd adores them, their friends would die for them, and the bracket will never quite be theirs.',
+  },
+  {
+    key: 'king', label: 'The King', emoji: '👑', order: ['mana', 'skill', 'love'],
+    blurb: 'Famous first, great second. The camera finds them before the results do — and the results usually come. It gets lonely at the top.',
+  },
+  {
+    key: 'hero', label: 'The Hero', emoji: '⚔️', order: ['skill', 'love', 'mana'],
+    blurb: 'The real thing. The blade comes first, the people close behind — the world just takes a while to notice either.',
+  },
+  {
+    key: 'outlaw', label: 'The Outlaw', emoji: '🃏', order: ['skill', 'mana', 'love'],
+    blurb: 'Great, watchable, and impossible. The talent is enormous, the legend grows — and the room never quite feels like theirs.',
+  },
+  {
+    key: 'healer', label: 'The Healer', emoji: '🌿', order: ['love', 'mana', 'skill'],
+    blurb: 'The heart of any scene lucky enough to have them. Everyone is better for knowing them; the trophy shelf stays modest.',
+  },
+]
+export const spiritOf = (key) => SPIRITS.find((s) => s.key === key) || null
+
+// Three hidden values, uniform on this range, assigned highest-to-lowest in
+// the spirit's order. The range is the ONLY lever on how much the third slot
+// bites (§1.6: no axis gets an additional penalty). It is a claim about the
+// elite band and calibrated against BALANCE.md §14's measurements: champion
+// skill ~95, top-8 ~89, top-64 cutoff ~55. At [75,100] a primary (E≈94) is
+// world-champion material and a tertiary (E≈81) makes the leaderboard and
+// never wins EVO — the essential shape. (Deviation on record: a tertiary
+// lands nearer top-20 than "fringe of top 64", because the measured cutoff
+// sits at 55, not the ~85 the original sketch assumed. Revisit only with
+// fingerprint numbers in hand.)
+export const SPIRIT_ROLL = [75, 100]
+
+/**
+ * Talent breadth — how many stats glow at once (§1.1's K). Derived from how
+ * LOPSIDED the roll is, not how high: a 94/85/76 is a specialist with few,
+ * focused glows; a 90/88/86 is a generalist with wide ones. Orthogonal to
+ * power, so there is no rich-get-richer loop, and it makes roll variance do
+ * real work instead of sitting there as noise.
+ */
+export function talentBreadth(player) {
+  const rolls = player.spiritRolls
+  if (!rolls || rolls.length < 3) return 2
+  const spread = rolls[0] - rolls[2] // 0..25 on the current range
+  return clampBreadth(4 - Math.floor(spread / 7))
+}
+const clampBreadth = (k) => Math.max(1, Math.min(4, k))
+
 // Stats are stored internally on the same 0–10 scale the engine has always
 // used; creation works in 0–5 display points (1 point = 2 internal). This is
 // why old saves, exports, and every formula keep working untouched.
@@ -116,6 +191,30 @@ export const ARCHETYPES = [
   'Setplay', 'Footsies', 'Mix-up', 'Glass Cannon', 'All-Rounder', 'Big Body',
   'Weapon Master', 'Aerial', 'Stance Switch', 'Counter-Puncher',
 ]
+
+// What a character DEMANDS of the person playing it — the character half of
+// the eureka influence channel (REVISION §1.2). Playing against the grain of
+// your own sheet generates more friction and opens glows otherwise out of
+// reach, which turns pocket-pick rotation and character crisis into build
+// decisions rather than flavour.
+export const ARCHETYPE_DEMANDS = {
+  'Shoto': ['mastery', 'loyalty'],
+  'Grappler': ['dominance', 'composure', 'temperance'],
+  'Zoner': ['analysis', 'mastery'],
+  'Rushdown': ['mojo', 'spark', 'xfactor'],
+  'Charge': ['temperance', 'loyalty'],
+  'Puppet': ['aptitude', 'analysis', 'mastery'],
+  'Setplay': ['innovation', 'analysis'],
+  'Footsies': ['composure', 'analysis'],
+  'Mix-up': ['xfactor', 'mojo'],
+  'Glass Cannon': ['xfactor', 'composure'],
+  'All-Rounder': ['adaptation', 'learning'],
+  'Big Body': ['temperance', 'determination'],
+  'Weapon Master': ['mastery', 'adaptation'],
+  'Aerial': ['spark', 'aptitude'],
+  'Stance Switch': ['aptitude', 'learning', 'adaptation'],
+  'Counter-Puncher': ['analysis', 'composure', 'temperance'],
+}
 
 // The move type that turns one character into another. It lives here rather
 // than in design.js because forms.js needs it and must not depend on the

@@ -4,7 +4,8 @@ import { StatBar, PointDots, moodFace, Portrait } from '../components/ui.jsx'
 import { playerArt, lookArt } from '../components/art.js'
 import { lookOf } from '../game/skins.js'
 import PlayerForm from '../components/PlayerForm.jsx'
-import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS } from '../game/constants.js'
+import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, spiritOf } from '../game/constants.js'
+import { chooseBreakthrough } from '../game/eureka.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
 import { passionLabel } from '../game/career.js'
 import { INTEREST_LABEL } from '../game/interest.js'
@@ -149,7 +150,9 @@ export default function Players() {
                 <td>
                   <span className="row" style={{ gap: 8, flexWrap: 'nowrap', alignItems: 'center' }}>
                     <Portrait url={playerArt(p)} size={26} alt={displayName(p, save)} />
-                    <span><strong>{displayName(p, save)}</strong>{p.retired && <span className="dim small"> 🏁</span>}<br />
+                    <span><strong>{displayName(p, save)}</strong>
+                      {p.eureka?.pending && !p.retired && <span title="on the verge of a breakthrough — open them and choose"> ✨</span>}
+                      {p.retired && <span className="dim small"> 🏁</span>}<br />
                       <span className="dim small">{p.firstName} {p.lastName}</span></span>
                   </span>
                 </td>
@@ -345,6 +348,12 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
           <CharSlots save={save} p={p} lookOf={lookOf} />
           {team && <span className="pill gold">{team.name} [{team.acronym}]</span>}
           {p.tournamentWins > 0 && <span className="pill gold">🏆 ×{p.tournamentWins}</span>}
+          {(() => {
+            // Spirit shows its NAME, never its numbers — the rolls are the
+            // career's discovery (REVISION §1.6).
+            const s = spiritOf(p.spirit)
+            return s ? <span className="pill" style={{ color: 'var(--gold)' }} title={s.blurb}>{s.emoji} {s.label}</span> : null
+          })()}
         </div>
       </div>
 
@@ -354,6 +363,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
         </div>
       )}
 
+      <EurekaPanel save={save} player={p} mutate={mutate} />
       <BanishPanel save={save} player={p} mutate={mutate} />
       {!p.retired && !p.banished && <ComparePanel save={save} player={p} mutate={mutate} goTo={goTo} />}
 
@@ -491,6 +501,65 @@ function ComparePanel({ save, player: p, mutate, goTo }) {
           {drama && <p className="small" style={{ margin: '6px 0 0', color: drama.color }}>{drama.text}</p>}
         </div>
       )}
+    </div>
+  )
+}
+
+// How a candidate reads at the moment of choosing (REVISION §1.3): wounds and
+// edges must be visually distinct, because the choice between fixing the flaw
+// and sharpening the blade IS the system.
+const EUREKA_KIND = {
+  wound: { icon: '🩹', label: 'the wound', color: 'var(--red)', verb: 'Fix what keeps costing them' },
+  edge: { icon: '🗡', label: 'the edge', color: 'var(--gold)', verb: 'Sharpen what keeps working' },
+  influence: { icon: '🌊', label: 'the company', color: 'var(--cyan)', verb: 'Grow into who they’re around' },
+}
+
+/**
+ * The breakthrough choice (REVISION §1). You cannot call a eureka, only
+ * answer it when it arrives — and leaving one unanswered has a deadline:
+ * pressure keeps building, and past ~2.5× the threshold it stops being a
+ * choice. The WHY under each candidate is the inspector's evidence, so the
+ * most opaque system in the game stays defensible.
+ */
+function EurekaPanel({ save, player: p, mutate }) {
+  const pending = p.eureka?.pending
+  if (!pending || p.retired || p.banished) return null
+  const doChoose = (stat) => {
+    mutate((s) => {
+      const live = s.players[p.id]
+      if (live?.eureka?.pending) chooseBreakthrough(s, live, stat)
+    }, { kind: 'eureka' })
+  }
+  return (
+    <div className="card" style={{ borderColor: 'var(--gold)' }}>
+      <h3 style={{ marginTop: 0 }}>✨ Breakthrough — {displayName(p, save)} is on the verge</h3>
+      <p className="small dim" style={{ marginTop: 0 }}>
+        Something has been building. Choose what clicks — the point is permanent, and everything
+        else keeps simmering. Sit on it too long and it resolves itself, badly.
+      </p>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
+        {pending.candidates.map((c) => {
+          const kind = EUREKA_KIND[c.kind] || EUREKA_KIND.wound
+          const sources = (p.eureka.sources?.[c.stat] || []).slice(-3)
+          return (
+            <div key={c.stat} className="card sub" style={{ margin: 0, borderColor: kind.color, maxWidth: 300 }}>
+              <div className="row spread">
+                <strong style={{ color: kind.color }}>{kind.icon} {c.stat}</strong>
+                <span className="small" style={{ color: kind.color }}>{kind.label}</span>
+              </div>
+              <p className="dim small" style={{ margin: '4px 0' }}>
+                {kind.verb}{c.inRow ? '' : ' — outside who they are today'}.
+              </p>
+              {sources.map((s, i) => (
+                <p key={i} className="small" style={{ margin: '1px 0', color: 'var(--dim)' }}>· {s.why}</p>
+              ))}
+              <button className="primary small" style={{ marginTop: 6 }} onClick={() => doChoose(c.stat)}>
+                Break through on {c.stat}
+              </button>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

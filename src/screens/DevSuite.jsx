@@ -5,7 +5,8 @@ import { ArcadeChampion } from './EvoWeek.jsx'
 import { TAB_GATES, tabOpen, tabHint } from '../game/tabs.js'
 import { canStream, STREAM_RIG_COST } from '../game/stream.js'
 import { rosterOpen } from '../game/model.js'
-import { runAge, OPENING_DAYS, formatDay, absDayOf } from '../game/constants.js'
+import { runAge, OPENING_DAYS, formatDay, absDayOf, talentBreadth } from '../game/constants.js'
+import { glowingStats, glowRequirement } from '../game/eureka.js'
 import { uid, displayName, fullName } from '../game/util.js'
 import { playDay, isDead } from '../../tools/balance/policy.mjs'
 
@@ -355,11 +356,12 @@ function JournalViewer() {
 // ---------- Eureka inspector ----------
 
 /**
- * The debugger for the most opaque system in the game — WHEN it exists. The
- * eureka spine is P1: per-stat pressure fed by wound/edge/influence channels,
- * a meter that is their sum, and glows chosen from history. This panel is its
- * window: it renders a player's pressure map and meter as soon as the fields
- * appear on the save, and says so plainly until then.
+ * The debugger for the most opaque system in the game (REVISION §3). Shows
+ * everything the fiction hides: the meter against its threshold, every
+ * pressured stat with WHAT fed it and when, glow state, the spirit rolls the
+ * player will never see, and the breakthrough log. If a stat is glowing, this
+ * panel can say exactly why — that property is the point of per-stat
+ * pressure.
  */
 function EurekaInspector() {
   const { save } = useStore()
@@ -367,26 +369,48 @@ function EurekaInspector() {
   if (!save) return <p className="dim" style={{ marginTop: 12 }}>No save loaded.</p>
   const people = Object.values(save.players || {}).filter((p) => !p.npc)
   const p = save.players[pid] || people[0]
-  const eureka = p?.eureka
+  const e = p?.eureka
+  if (!e) return <p className="dim" style={{ marginTop: 12 }}>Nobody with an eureka bag in this save.</p>
+  const meter = Object.values(e.pressure || {}).reduce((s, v) => s + v, 0)
+  const glowing = new Set(glowingStats(p).map((g) => g.stat))
+  const rows = Object.entries(e.pressure || {})
+    .filter(([, v]) => v > 0.05)
+    .sort((a, b) => b[1] - a[1])
   return (
     <div style={{ marginTop: 12 }}>
-      {people.length > 0 && (
-        <select value={p?.id || ''} onChange={(e) => setPid(e.target.value)}>
-          {people.map((x) => <option key={x.id} value={x.id}>{displayName(x, save)}</option>)}
+      <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select value={p.id} onChange={(ev) => setPid(ev.target.value)}>
+          {people.map((x) => <option key={x.id} value={x.id}>{displayName(x, save)} · {x.eureka?.count || 0} bt</option>)}
         </select>
-      )}
-      {!eureka ? (
+        <span className="small">meter <strong>{meter.toFixed(1)}</strong> / threshold <strong>{e.threshold}</strong></span>
+        <span className="small dim">breadth K={talentBreadth(p)} · spirit {p.spirit} rolls {JSON.stringify(p.spiritRolls)} · ceil {JSON.stringify(p.spiritCeil)}</span>
+        {e.pending && <span className="small gold">✨ CHOICE PENDING since abs {e.pending.sinceAbs}</span>}
+      </div>
+      <div className="card" style={{ marginTop: 8 }}>
+        {rows.length === 0 && <p className="dim">No pressure anywhere — nothing has happened to this person yet.</p>}
+        {rows.map(([stat, v]) => (
+          <div key={stat} style={{ borderBottom: '1px solid var(--border)', padding: '4px 0' }}>
+            <div className="row spread">
+              <strong>{glowing.has(stat) ? '✨ ' : ''}{stat}</strong>
+              <span className="small">{v.toFixed(1)} / needs {glowRequirement(p, stat).toFixed(1)}
+                <span className="dim"> · broken through ×{e.perStat?.[stat] || 0}</span></span>
+            </div>
+            {(e.sources?.[stat] || []).slice(-4).map((s, i) => (
+              <p key={i} className="small dim" style={{ margin: '1px 0 1px 12px' }}>
+                [{s.kind}] +{s.amt} — {s.why} <span style={{ opacity: 0.6 }}>(abs {s.absDay})</span>
+              </p>
+            ))}
+          </div>
+        ))}
+      </div>
+      {(e.log || []).length > 0 && (
         <div className="card" style={{ marginTop: 8 }}>
-          <p className="dim" style={{ margin: 0 }}>
-            ✨ The eureka spine lands in P1 (docs/REVISION.md §1). When it does, this inspector shows:
-            the meter and its threshold, per-stat pressure with WHAT fed each stat and when
-            (wound / edge / influence), which stats are glowing and why, and the breakthrough log.
-            Nothing on this save carries eureka state yet.
-          </p>
-        </div>
-      ) : (
-        <div className="card" style={{ marginTop: 8 }}>
-          <pre className="small" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(eureka, null, 2)}</pre>
+          <h4 style={{ marginTop: 0 }}>Breakthrough log · burnout ledger {Math.round(e.burnout)} of {Math.round(e.adversity)} adversity</h4>
+          {e.log.map((l, i) => (
+            <p key={i} className="small" style={{ margin: '2px 0' }}>
+              abs {l.absDay} — <strong>{l.stat}</strong> [{l.kind}]{l.cross ? ' · cross-row' : ''}{l.forced ? ' · FORCED' : ''}
+            </p>
+          ))}
         </div>
       )}
     </div>

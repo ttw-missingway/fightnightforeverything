@@ -31,6 +31,7 @@ import {
 } from './social.js'
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion } from './career.js'
 import { relevanceDaily } from './relevance.js'
+import { processEurekaDaily, edge as eurekaEdge } from './eureka.js'
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
@@ -519,6 +520,8 @@ function maybeInnovate(save, player, events) {
   save.innovations.push(innov)
   player.knownInnovations.push(innov.id)
   player.respect += 5
+  // Created something (§1.2's edge table): invention pressures invention.
+  eurekaEdge(save, player, { weight: 1.2, stats: ['innovation'], why: `"${innov.name}" is theirs` })
   if (save.innovations.length === 1) {
     chronicle(save, '💡', `${pName(save, player)} discovered the scene's first original tech: "${innov.name}"`)
   }
@@ -1757,6 +1760,11 @@ export function endDay(save) {
       wonToday: dip.results?.[p.id] === 'won',
       staleDays,
     })
+    // The eureka spine's daily pass (REVISION §1): character demands, the
+    // weekly company/plateau/rupture sweep, the community meter, and the
+    // meter check that arms a breakthrough. Runs BEFORE the retirement check
+    // on purpose — a breakthrough today can be the thing that keeps them.
+    processEurekaDaily(save, p, { attendedToday: attendeeIdSet.has(p.id) })
     checkRetirement(save, p, events)
   }
 

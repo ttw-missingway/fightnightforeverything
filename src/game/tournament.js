@@ -6,7 +6,8 @@ import { performance as playerPerf, updateElo, gainSkill, matchupWeight, recordC
 import { narrateSet } from './fight.js'
 import { getMatchup, remember, chronicle, pushVod, awardMilestone } from './model.js'
 import { updateFeedFromTournament } from './socialmedia.js'
-import { shiftRel, socialDelta, teamLog, getRel } from './social.js'
+import { shiftRel, socialDelta, teamLog, getRel, areRivals } from './social.js'
+import { matchWound, matchEdge, eliminationWound } from './eureka.js'
 import { bumpPassion } from './career.js'
 import { applyChampionDividend } from './relevance.js'
 import { econLog, trySpend } from './economy.js'
@@ -127,6 +128,20 @@ export function resolveEntrantMatch(save, a, b, { long = true, context = 'tourna
     recordH2H(winner.ref, loser.ref)
   }
   save.patchGames = (save.patchGames || 0) + 1 // tournament sets are balance data too
+
+  // Eureka intake at tournament stakes (REVISION §1.2) — the same wound and
+  // edge attribution as a casual set, weighted by the stage. Losing to an
+  // ELITE lands here too: that is the loss-to-someone-above-you the whole
+  // spine feeds on.
+  if (loser.kind === 'arcade' && loser.ref.eureka) {
+    matchWound(save, loser.ref, winner.ref, { probSelf: aWins ? 1 - probA : probA, stage: context })
+  }
+  if (winner.kind === 'arcade' && winner.ref.eureka) {
+    matchEdge(save, winner.ref, loser.ref, {
+      probSelf: aWins ? probA : 1 - probA, stage: context,
+      rivals: bothArcade && areRivals(save, winner.ref, loser.ref),
+    })
+  }
 
   const charA = save.game.characters.find((c) => c.id === a.charId)
   const charB = save.game.characters.find((c) => c.id === b.charId)
@@ -538,6 +553,16 @@ export function runSinglesTournament(save, scheduleEntry) {
     }
     else if (place === 2) { p.glory += Math.ceil(baseGlory / 2) + Math.ceil(impact / 2); p.respect += Math.ceil(baseGlory / 3) }
     else if (place <= 4) { p.glory += Math.ceil(baseGlory / 4); p.respect += 2 }
+    // The tournament-scale wound (REVISION §1.10: elimination when they
+    // believed, 3–5). A weekly out means little; going out of a real bracket
+    // you believed you could win is the spine's richest fuel.
+    if (place > 2 && p.eureka && (p.belief ?? 0) >= 40) {
+      eliminationWound(save, p, {
+        believed: true,
+        late: size >= 16 && place <= Math.max(4, size / 4),
+        favored: (p.belief ?? 0) >= 60 && place > 4,
+      })
+    }
   }
   if (champion.charId && save.charMilestones) {
     const c = save.game.characters.find((x) => x.id === champion.charId)
@@ -1030,6 +1055,16 @@ export function runEvo(save) {
       econLog(save, Math.min(900, prize), 'EVO champion — sponsors & pilgrimage')
     }
     else if (place <= 8) { p.mood = clamp(p.mood + 2, 0, 10); remember(save, p, 'evo', `the top-${place <= 4 ? 4 : 8} run at EVO Year ${save.year}`) }
+    // Going out of EVO with belief in hand is the deepest wound the calendar
+    // can inflict — and therefore the spine's richest single event.
+    if (place > 1 && p.eureka && (p.belief ?? 0) >= 35) {
+      eliminationWound(save, p, {
+        believed: true,
+        late: place <= 8, // the long day was real — they were still standing for it
+        favored: (p.belief ?? 0) >= 60 && place > 8,
+        stage: 'evo',
+      })
+    }
   }
   if (champion.kind === 'elite') {
     champion.ref.titles = (champion.ref.titles || 0) + 1
