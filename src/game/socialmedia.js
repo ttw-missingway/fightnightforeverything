@@ -34,7 +34,14 @@ function feedActive(save) {
 }
 
 function post(save, { platform, text, title = null, scope = 'arcade', agoDays = 0 }) {
+  // WORLD POSTS ARE NOT ARCADE POSTS (P6). Engagement scaled only off your own
+  // channel, so a post that literally reads "ranked #3 in the WORLD" collected
+  // the same dozen hearts as a note about your Tuesday weekly — which made the
+  // whole mythology layer read small exactly where it was supposed to read
+  // enormous. A world-scope post is the internet talking, so it gets the
+  // internet's numbers, scaled by how big a name the post is about.
   const buzz = save.stream.hype + save.stream.followers / 50
+  const worldReach = scope === 'world' ? 40 + rand() * 90 : 0
   save.socialFeed.unshift({
     id: uid('post'),
     platform, // 'chirper' | 'boards'
@@ -45,7 +52,7 @@ function post(save, { platform, text, title = null, scope = 'arcade', agoDays = 
     board: platform === 'boards' ? `arcade/${gameSlug(save)}` : null,
     title,
     text,
-    likes: Math.max(1, randInt(1, 4) + Math.round(buzz * (0.3 + rand() * 1.2))),
+    likes: Math.max(1, randInt(1, 4) + Math.round((buzz + worldReach) * (0.3 + rand() * 1.2))),
     ...(() => {
       const when = agoDays > 0
         ? dateOfAbs(Math.max(1, absDayOf(save.day, save.year) - agoDays))

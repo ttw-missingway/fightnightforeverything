@@ -1333,3 +1333,127 @@ could build toward the ceiling §1.6 gives them.
 
 Baseline remains the P0 commit; still not re-blessed, so every phase diffs
 against the same origin.
+
+## 20. P6 — the sweep, built and measured (2026-07-30)
+
+REVISION §5-P6 plus the metric debt carried out of P3, P4 and P5. The headline
+is not a feature: **metric 1 finally holds its target shape.** Separation runs
+1.51 → 1.48 → 1.55 across fifteen years — it *widens*, which is what §2.3 has
+asked for since the beginning and what every previous phase failed to deliver.
+
+### The late economy — the contradiction resolved
+
+P5 left 23/24 runs ending in foreclosure at years 11–15, against P3's explicit
+demotion of foreclosure to "a guard rail against extravagance and
+inattention". The cause was structural, not tuning: **rent compounds 12% a
+year forever** (1.12¹² = 3.9× by year thirteen) while attendance is capped and
+relevance inevitably declines — and there was no `sellSetup` anywhere in the
+codebase, so a room that grew could never shrink. Every cabinet bought at the
+peak was a permanent line on the rent for the rest of the lineage.
+
+Two fixes. The escalator now runs for **eight years and then plateaus**
+(`RENT_ESCALATION_YEARS`) — the pressure lands where it was designed to,
+inside the early game, and stops being a countdown after. Note the first cut
+capped the *multiplier* at 2×, which lands at year six on normal but year four
+on master, so the harder the difficulty the sooner its pressure switched off;
+capping years instead keeps the ordering (2.5× normal, 4.3× master). And
+`sellSetup`/`closeAttraction` give the room the verb it never had. The
+harness's competent player now downsizes — measured against a **sustained
+28-day average**, after the first attempt read `history.at(-1).attendance`
+(null on every tournament day, so it sold a cabinet after each bracket night)
+and took median survival from year 13 to year 4.
+
+Result: 15/16 alive at year 15, median 5041 days. Failure remains real —
+careless play still dies in year 1, master in years 1–2, and one run died to
+the opinion funnel.
+
+**Difficulty note, per the standing finding** that "the ladder rides the
+creation-budget threshold via skillCeiling, NOT the economy; economy deaths
+are a symptom": normal and hard now both survive economically, which is
+consistent with that. But they also produced *identical* titles (4 EVO, 16
+major over 4 seeds × 12y), so difficulty is not currently expressing itself in
+achievement either. That is a real open question and is recorded, not fixed.
+
+### The band was decaying, and it was our own turnover doing it
+
+P5 declared the elite band a calibration constant and still lost it: champion
+skill drifted 98 → 84 → 77 across long runs. Two causes, both introduced by
+P5's own regeneration. The era reset still dipped elite skill 10%, which
+compounds when eras arrive every three years and band regression closes only a
+quarter of the gap annually — removed entirely, since what a sequel actually
+shuffles is who is on top, which is elo. And **every retiring elite was
+replaced by a `contender`**, so the roster's tier composition ratcheted
+downward forever while the band regression faithfully pulled each elite toward
+a tier that was itself decaying. Elites are now tiered **by rank** (top 3 god,
+next 9 legend, next 20 killer, rest tail), which preserves
+`generateEvoRoster`'s designed pyramid permanently and is self-correcting.
+Band restored: champion 98.3, top-8 90.5, cutoff 52.8 — matching the P4
+baseline (97.9 / 90.9 / 55.9). This is what moved metric 1.
+
+### The carried metric debt
+
+- **Journal volume ✅ back in band: 22–29/yr** (was 38–43 against 15–30). The
+  dominant kind was `elimination` at 430 entries across 17 careers — 23% of
+  every journal in the game — fired on every weekly bracket exit, despite the
+  comment directly above it reading "a weekly out means little". Now gated to
+  brackets of 16+ or non-weekly cadence. `travelAsk` gated to majors and the
+  Showdown; routine circuit exits compete for the weekly budget instead of
+  bypassing it with `always: true`.
+- **Wound is dominant again ✅: 1944 wound vs 1172 influence** (was 1183 vs
+  1974, inverted against §1.2 and carried unaddressed through three phases).
+  The company channel fired per relationship per attended day, so in a full
+  room it out-volumed wounds, which need an actual loss. Halved (0.28 → 0.15)
+  rather than removed — "the arcade is the growth engine" depends on the
+  channel existing, not on it winning.
+- **Metric 4 re-specified, and it still fails.** Retirement now records which
+  door it left through (`retiredVia`), so burnout can be counted separately
+  from a career simply ending. The re-spec barely moved the number — 0.85 vs
+  0.90 for all-retirements — which means the pushed cohort genuinely does burn
+  out, and this is a real failure rather than the instrument artifact P5
+  assumed. `anyRetiredShare` is reported alongside so the redefinition is
+  auditable. Open.
+
+### The bug list
+
+Nine of eleven fixed; two were already fixed (back-to-school attendance,
+NPCs taking bracket seats). Fixed: the "better than ours" rumor now
+intersects the player's favourite with what the counter actually stocks;
+elite portraits (`MatchHud` looked only in `save.players`, so every elite fell
+through to the id-hashed fallback and wore a different face than on the World
+tab); money-match VODs now mark themselves watched (completion set React state
+only and never wrote the cursor, so watched matches sat in the list as new
+forever) plus the `?? 0` / `|| 1` threshold mismatch that made a
+narration-less match unmarkable; "final exam" excuses are term-time only
+(`lifeEventsFor`); world-scope posts get world-sized engagement (a post
+reading "ranked #3 in the WORLD" collected the same hearts as a note about
+your Tuesday weekly); cabinet repairs priced off the cabinet (8–22% of
+`SETUP_COST`, floor $18 — was a flat $12–32 against $180–420 machines); teams
+prefer the cast in recruiting, co-founding and crew-battle squad selection (a
+higher-elo NPC teammate could bench the user's player from the one event they
+are guaranteed to appear in); and staff morale finally has a workload term
+(`staffStrain` — one employee covering a sixty-head night sat at the same
+target as one covering an empty Tuesday, and the causality was inverted:
+morale raised cleaning throughput but traffic never cost morale).
+
+Bug 8 ("losing to X should award double the arcade tokens") is deliberate
+satire in a fan post, not copy for a bonus that exists. Left alone; recorded
+so it is not re-reported.
+
+### Not done in P6, carried to P7 or later
+
+- **The navigation and notification leftovers** (win/loss history and elo
+  trajectory per player, golden outline on newly unlocked tabs, next button on
+  player cards, clickable NPC name pills, show/show-all in VODs).
+- **The idle shrink** — AFK catch-up, separating auto-stream from idle mode,
+  follow-a-specific-player. §6 calls this structural rather than
+  quality-of-life because an endless dynasty requires a good let-it-run mode,
+  so it should not be squeezed in.
+- **Unlockables** (palettes, sprite packs, rosters, stages) — the only meta
+  layer the revision keeps.
+- **Metric 9 (the recoverability cliff)** is untouched for a fourth phase and
+  is now comfortably the oldest open item in the plan.
+- **Metric 10** still does not invert (competition share 0.05–0.07).
+- **capRealisation.skill is still 0** — nobody reaches their spirit ceiling
+  even in a fifteen-year run.
+
+Baseline remains the P0 commit and is still not re-blessed.

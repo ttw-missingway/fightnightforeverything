@@ -65,8 +65,14 @@ function lifeRumors(save, p, seed) {
   if (friend) {
     out.push({ text: `${nm(p)} and ${nm(friend)} have been carpooling to every session — thick as thieves lately.`, subjectIds: [p.id, friend.id] })
   }
-  if (p.foods?.length) {
-    const food = p.foods[Math.floor(hash01(`${seed}:food`) * p.foods.length)]
+  // "…better than OURS" is only a sentence if we sell one. p.foods is the
+  // player's favourite, not the menu, so this has to be intersected with what
+  // the counter actually stocks — otherwise the room compares us unfavourably
+  // on a thing we have never sold. (Every other site that reaches for an
+  // amenity already gates this way: sim.js, scenes.js, social.js.)
+  const stocked = (p.foods || []).filter((f) => (save.arcade?.foods || []).includes(f))
+  if (stocked.length) {
+    const food = stocked[Math.floor(hash01(`${seed}:food`) * stocked.length)]
     out.push({ text: `${nm(p)} will not stop insisting the ${food} across the street is better than ours.`, subjectIds: [p.id] })
   }
   if (p.otherGames?.length) {

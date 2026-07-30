@@ -363,13 +363,27 @@ export const TOURNAMENT_NAME_PARTS = {
   b: ['Throwdown', 'Rumble', 'Clash', 'Showdown', 'Brawl', 'Gauntlet', 'Classic', 'Open', 'Invitational', 'Wars'],
 }
 
+/**
+ * Why somebody no-showed a bracket. Most reasons can happen any week of the
+ * year; a couple are TERM-TIME only, because the cast are students and "they
+ * had a final exam tomorrow" in the middle of the summer holidays is the kind
+ * of detail that quietly tells the player nothing here is really simulated.
+ * `schoolOnly` entries are filtered out during summer and winter break — see
+ * lifeEventsFor.
+ */
 export const LIFE_EVENTS = [
   'their car broke down on the highway', 'they got called into a double shift',
   'they came down with a nasty cold', 'a family dinner ran way too long',
   'their controller gave up the ghost this morning', 'they slept through three alarms',
-  'their landlord scheduled an "emergency" inspection', 'they had a final exam tomorrow',
+  'their landlord scheduled an "emergency" inspection',
   'their dog ate something it absolutely should not have', 'a friend needed help moving a couch',
   'they got stuck babysitting their cousins', 'their bus simply never came',
+]
+
+/** Reasons that only exist while school is actually in session. */
+export const SCHOOL_LIFE_EVENTS = [
+  'they had a final exam tomorrow', 'a project deadline landed on them',
+  'they were still at the library at closing time',
 ]
 
 // How each archetype fights when they're NOT landing a named special —

@@ -688,6 +688,26 @@ export function driftEvoRoster(save) {
     }
   }
 
+  // PROMOTION AND RELEGATION (P6). Every retiree is replaced by a CONTENDER,
+  // so without this the roster's tier composition ratchets downward: gods and
+  // legends leave, contenders arrive, and nobody ever moves up. Measured over
+  // fifteen years that alone walked the world champion from skill 98 to 77
+  // and slid metric 1's world ratio with it — the band regression above was
+  // faithfully pulling each elite toward a tier that was itself decaying.
+  // Real scenes promote: a contender who keeps growing becomes a killer, and
+  // a killer who keeps growing becomes a name. Tier follows skill.
+  // Tiered by RANK, not by absolute skill, so the pyramid keeps the shape
+  // generateEvoRoster designed (3 gods, 9 legends, 20 killers, the rest a
+  // tail). An absolute threshold let thirteen people be gods at once, which
+  // inflates the whole top of the ladder; a rank cut makes "god" mean what it
+  // says — the three best players alive — and is self-correcting forever.
+  {
+    const bySkill = [...save.evoRoster].sort((a, b) => b.skill - a.skill)
+    bySkill.forEach((e, i) => {
+      e.tier = i < 3 ? 'god' : i < 12 ? 'legend' : i < 32 ? 'killer' : 'contender'
+    })
+  }
+
   // TURNOVER — now driven by the clock rather than by weakness. Careers end
   // because they run out of years, which is why the name that drops off the
   // list is sometimes still a great one, and why the tail is full of young

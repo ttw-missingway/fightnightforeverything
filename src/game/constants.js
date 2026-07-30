@@ -1,3 +1,8 @@
+// constants.js owns the season calendar, so it owns the season-filtered view
+// of the excuse pool. names.js is a pure leaf (no imports of its own), so this
+// edge cannot close a cycle.
+import { LIFE_EVENTS, SCHOOL_LIFE_EVENTS } from './names.js'
+
 export const PERSONAL_STATS = [
   ['spark', 'How likely they are to go to the arcade and stay around'],
   ['analysis', 'Learns by watching, and turns matchup knowledge into wins'],
@@ -304,6 +309,18 @@ export const weekdayOf = (dayOfYear) => (dayOfYear - 1) % 7
 export const dayOfMonthOf = (dayOfYear) => ((dayOfYear - 1) % DAYS_PER_MONTH) + 1
 
 export const BRACKET_SIZES = [2, 4, 8, 16, 32, 64]
+
+/**
+ * The excuses available on a given day. School-only reasons are dropped when
+ * school is out — the cast are students, and a final exam during the summer
+ * holidays is the kind of detail that tells a player nothing is really being
+ * simulated. Lives here rather than in names.js because it needs seasonOf.
+ */
+export function lifeEventsFor(dayOfYear) {
+  const key = seasonOf(dayOfYear).key
+  const termTime = key !== 'summer' && key !== 'winterbreak' && key !== 'winterbreak2'
+  return termTime ? [...LIFE_EVENTS, ...SCHOOL_LIFE_EVENTS] : LIFE_EVENTS
+}
 
 // Join a {city, state, country} into a display string, skipping blanks.
 export function formatLocation(loc) {

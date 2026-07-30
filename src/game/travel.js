@@ -155,7 +155,11 @@ export function travelDaily(save) {
         state: 'pending',
       }
       t.asks.push(ask)
-      writeJournal(save, p, 'travelAsk', { event: eventName, place: countryName(country) })
+      // Asking to go somewhere is only a page when the somewhere is a big
+      // deal — a regional ask every season is a diary of logistics.
+      if (occ.def.kind === 'major' || occ.def.kind === 'squad') {
+        writeJournal(save, p, 'travelAsk', { event: eventName, place: countryName(country) })
+      }
       pushToast(save, {
         icon: '✈️',
         text: ask.squad

@@ -213,6 +213,13 @@ export function checkRetirement(save, player, events) {
   player.retired = true
   player.retiredDay = save.day
   player.retiredYear = save.year
+  // WHICH DOOR (P6). Metric 4 is "of the most-pushed players, who broke
+  // through and who burned out" — and burning out is a specific thing, not a
+  // synonym for having stopped. A career that ran its full length and aged
+  // out is the system working, so the instrument has to be able to tell the
+  // two apart or it just measures mortality, which over a fifteen-year run
+  // is 1 by construction.
+  player.retiredVia = viaAge ? 'age' : 'passion'
   const name = displayName(player, save)
 
   // Vacate their team seat.

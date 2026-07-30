@@ -326,8 +326,16 @@ function castAftermath(save, placements, opts) {
         stage,
       })
     }
+    // A LANDMARK, OR THE WEEK'S BUDGET (P6). This wrote `always: true` for
+    // every cast member at every one of the circuit's ten annual dates, which
+    // is a large part of why metric 7 ran to 26–43 entries a year against a
+    // 15–30 band — "it must not become a log file" (§2.3). A deep run, or any
+    // day at a major, is a page a career is judged by and still bypasses the
+    // budget. Going out early at a qualifier is a Tuesday, and now competes
+    // for space like one.
+    const landmark = place <= 4 || stage === 'evo'
     writeJournal(save, p, place <= 4 ? 'awayPlaced' : 'awayOut', {
-      event: name, place: placeLabel, always: true,
+      event: name, place: placeLabel, always: landmark,
     })
   }
 }

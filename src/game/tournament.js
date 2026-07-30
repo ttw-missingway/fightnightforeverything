@@ -1,7 +1,6 @@
 import { uid, chance, rand, randInt, choice, displayName, clamp } from './util.js'
 import { bindRng } from './rng.js'
-import { formatDay, statLevel } from './constants.js'
-import { LIFE_EVENTS } from './names.js'
+import { formatDay, statLevel, lifeEventsFor } from './constants.js'
 import { performance as playerPerf, updateElo, gainSkill, matchupWeight, recordCharResult, recordH2H, seriesNoteFor } from './match.js'
 import { narrateSet } from './fight.js'
 import { getMatchup, remember, chronicle, pushVod, awardMilestone } from './model.js'
@@ -552,10 +551,10 @@ function fillBracket(save, ranked, size, storylines, potPerHead = 1) {
     if (chance(dropoutChance(p, potPerHead))) {
       const sub = alternates.shift()
       if (sub) {
-        storylines.push(`${pName(save, p)} dropped out — ${choice(LIFE_EVENTS)}. ${pName(save, sub)} slides into the bracket.`)
+        storylines.push(`${pName(save, p)} dropped out — ${choice(lifeEventsFor(save.day))}. ${pName(save, sub)} slides into the bracket.`)
         field[i] = sub
       } else {
-        storylines.push(`${pName(save, p)} dropped out — ${choice(LIFE_EVENTS)} — and there was no one left to take the slot.`)
+        storylines.push(`${pName(save, p)} dropped out — ${choice(lifeEventsFor(save.day))} — and there was no one left to take the slot.`)
         return null
       }
     }
@@ -718,7 +717,13 @@ export function runSinglesTournament(save, scheduleEntry) {
         late: size >= 16 && place <= Math.max(4, size / 4),
         favored: (p.belief ?? 0) >= 60 && place > 4,
       })
-      writeJournal(save, p, 'elimination', { event: name })
+      // The WOUND lands on every believed elimination — that is the spine
+      // working. The PAGE does not: at 430 entries across 17 careers this was
+      // 23% of every journal in the game and the single biggest reason metric
+      // 7 ran at 40/yr against a 15–30 band. The comment directly above says
+      // it: "a weekly out means little". So the diary keeps the eliminations
+      // from brackets that meant something and lets the Tuesdays pass.
+      if (size >= 16 || cadence !== 'weekly') writeJournal(save, p, 'elimination', { event: name })
     }
   }
   if (champion.charId && save.charMilestones) {
@@ -772,8 +777,13 @@ export function runTeamTournament(save, scheduleEntry) {
     .filter((t) => t.memberIds.length >= 4)
     .map((t) => ({
       team: t,
+      // Cast first, THEN elo. Sorting a mixed roster on elo alone benched the
+      // user's player behind a higher-rated NPC teammate — the crew battle is
+      // the one event where your people are guaranteed to be on screen, so
+      // filler must never take a seat from them (the same law castFirst
+      // enforces for singles brackets).
       squad: t.memberIds.map((id) => save.players[id]).filter((p) => p && p.mainCharId && !p.retired && !p.banished)
-        .sort((a, b) => b.elo - a.elo).slice(0, 4),
+        .sort((a, b) => (a.npc ? 1 : 0) - (b.npc ? 1 : 0) || b.elo - a.elo).slice(0, 4),
       avgScore: 0,
     }))
     .filter((s) => s.squad.length === 4)

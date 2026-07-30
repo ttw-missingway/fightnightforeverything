@@ -129,8 +129,23 @@ export function monthlyRent(save) {
   // what makes a hands-off arcade lose: an operation that was comfortably in
   // the black on day one is underwater by year three unless the owner has
   // actually grown the takings. Standing still is a slow way of quitting.
+  // THE LEASE HAS A CEILING (P6). The hike is annual and compounding, which
+  // is the correct pressure on a young arcade — "standing still is a slow way
+  // of quitting" is the early game's whole thesis and it lands inside the
+  // first few years. Compounded FOREVER it stops being a pressure and becomes
+  // a countdown: on normal, 12% a year is 1.57× by year five (fine) and 3.9×
+  // by year thirteen (unanswerable, since attendance is capped and relevance
+  // inevitably declines). That was invisible while runs ended in year five;
+  // P5's fifteen-year lineages made it the thing that killed 23 of 24 runs.
+  //
+  // So the escalator runs out. A landlord who has already doubled the rent
+  // has extracted what the location is worth, and a tenant facing a third
+  // doubling simply leaves — which is a negotiation, not a mechanic. What
+  // still scales without limit is the REVIEW below: being busy and famous
+  // costs you, permanently and proportionally, and that is the term that is
+  // supposed to punish success.
   const years = Math.max(0, (save.year || 1) - 1)
-  const escalation = Math.pow(1 + (diff.rentEscalation || 0), years)
+  const escalation = Math.pow(1 + (diff.rentEscalation || 0), Math.min(years, RENT_ESCALATION_YEARS))
   // THE RENT REVIEW. A landmark pays landmark rent — the landlord reads the
   // same news everyone else does. Without this a thriving arcade compounds
   // cash forever with nothing pulling against it (measured: $51k banked over
@@ -176,6 +191,55 @@ export function weeklyUpkeep(save) {
   const mgmt = managementQuality(save)
   const machines = save.arcade.otherGames.reduce((s, g) => s + gameItem(g).upkeep, 0)
   return Math.round(foods + machines * (1.2 - mgmt * 0.4) + adWeeklyCost(save))
+}
+
+/**
+ * How many years the annual hike compounds for before the lease plateaus.
+ *
+ * A YEAR count rather than a multiplier cap, and the distinction matters. The
+ * first cut of this capped the multiplier at a flat 2×, which lands at year
+ * six on normal (12%) but year FOUR on master (20%) — so the harder the
+ * difficulty, the sooner its main long-run pressure switched off, and
+ * competent play on hard sailed through twenty years untouched. Capping the
+ * years instead keeps the difficulty ordering intact: after eight years the
+ * escalator stops everywhere, at 2.5× on normal and 4.3× on master.
+ */
+export const RENT_ESCALATION_YEARS = 8
+
+/**
+ * What you get back for a cabinet you no longer need. Used gear sells for a
+ * fraction of new, which is what makes over-building a real mistake rather
+ * than a refundable one.
+ */
+export const SETUP_RESALE = 0.4
+
+/**
+ * SHRINK THE ROOM (P6). A room that grew had no way to get smaller: there was
+ * no `sellSetup` anywhere in the codebase, so every cabinet bought at the peak
+ * was a permanent line on the rent and upkeep for the rest of the lineage.
+ * Combined with a relevance slope that inevitably thins the crowd, that made
+ * the late game a bill you could watch arriving and do nothing about.
+ *
+ * Downsizing is the Act 3 verb that was missing. It is a genuine decision with
+ * a genuine cost — you lose 60% of the cabinet's value and the capacity to run
+ * the brackets you used to — and it is how a shrinking scene stays solvent
+ * long enough to find its next generation.
+ */
+export function sellSetup(save, label = 'sold a setup cabinet') {
+  if ((save.settings?.setups || 0) <= 1) return false // never sell the last one
+  save.settings.setups -= 1
+  econLog(save, Math.round(SETUP_COST * SETUP_RESALE), label)
+  return true
+}
+
+/** The same, for a side attraction: floor space handed back to the landlord. */
+export function closeAttraction(save, name) {
+  const games = save.arcade?.otherGames || []
+  const i = name ? games.indexOf(name) : games.length - 1
+  if (i < 0) return null
+  const [gone] = games.splice(i, 1)
+  econLog(save, Math.round(gameItem(gone).price * SETUP_RESALE), `closed ${gone}`)
+  return gone
 }
 
 // A cabinet for the main game — the same price to install at creation or
@@ -327,13 +391,42 @@ function overmanagement(save) {
   return Math.max(0, managers - Math.max(1, Math.ceil(employees / 3)))
 }
 
-// Where morale is headed given current pay and management.
+/**
+ * How badly the crew is outnumbered by the floor, 0..1.
+ *
+ * One employee can comfortably carry roughly a twenty-head night. Past that
+ * they are running between a broken cabinet, the counter and the mop, and no
+ * wage makes that pleasant. Read off a rolling attendance average rather than
+ * today's number so a single busy Saturday is not a morale crisis and a
+ * tournament day (which records no attendance at all) is not a holiday.
+ */
+export const STAFF_CAPACITY = 20 // heads one employee can cover without strain
+
+export function staffStrain(save) {
+  const { employees, managers } = staffCounts(save)
+  const crew = employees + managers * 0.5
+  const recent = (save.economy?.history || []).slice(-14)
+    .map((h) => h.attendance).filter((a) => a != null)
+  if (!recent.length) return 0
+  const avg = recent.reduce((s2, a) => s2 + a, 0) / recent.length
+  if (crew <= 0) return avg > 0 ? 1 : 0
+  return clamp(avg / (crew * STAFF_CAPACITY) - 1, 0, 1)
+}
+
+// Where morale is headed given current pay, management AND workload.
 export function staffMoraleTarget(save) {
   const st = save.staffing
   const { employees, managers } = staffCounts(save)
   if (employees + managers === 0) return 70 // nobody to be unhappy
   const wageRatio = clamp(st.employeeWage / FAIR_WAGE.employee, 0.3, 1.6)
+  // BEING SWAMPED COSTS MORALE (P6). This had four inputs — wage, manager
+  // coverage, over-management and player charm — and no workload term at all,
+  // so one employee covering a sixty-person night sat at exactly the same
+  // target as one covering an empty Tuesday. The causality was even inverted:
+  // morale raised cleaning throughput, but heavy traffic never touched morale,
+  // so an understaffed room's only feedback was dirt it could not keep up with.
   return clamp(30 + (wageRatio - 1) * 80 + managementQuality(save) * 35
+    - staffStrain(save) * 45
     - overmanagement(save) * 8 + playerStaffAppeal(save) * 6, 5, 98)
 }
 
@@ -376,7 +469,12 @@ export function staffDaily(save, attendeeCount, gamesPlayed, events) {
   // Breakdowns: a poorly-run floor chews through machines.
   const machines = save.settings.setups + save.arcade.otherGames.length
   if (machines > 0 && chance(machines * 0.005 * (1.7 - mgmt))) {
-    const cost = randInt(12, 32)
+    // A REPAIR IS A FRACTION OF THE MACHINE (P6). This was a flat $12–32 roll
+    // against cabinets that cost $180–420 to buy, so "a cabinet broke down"
+    // resolved for the price of lunch and the whole maintenance loop was
+    // decoration. Priced off what actually broke: a board swap or a new stick
+    // assembly, ~8–22% of the machine, with a floor so it is never trivial.
+    const cost = Math.max(18, Math.round(SETUP_COST * (randInt(8, 22) / 100)))
     econLog(save, -cost, 'machine repair')
     events.push({ type: 'economy', text: `🔧 A cabinet broke down mid-evening — $${cost} to get it running again.` })
   }

@@ -577,9 +577,32 @@ function ZoneView({ meta, zone, save, nav, hourIdx, isCurrent, gameName, channel
  * show results freely.
  */
 function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
+  const { mutate } = useStore()
   const [open, setOpen] = useState(false)
   const [started, setStarted] = useState(spoil)
   const [fullyRevealed, setFullyRevealed] = useState(spoil)
+
+  /**
+   * WATCHING IT HERE HAS TO COUNT (P6). A money match plays inline in the day
+   * feed, but completion only ever set local React state — nothing wrote back
+   * to the VOD's `revealed` cursor. So the set you just sat through kept
+   * showing up under "new — not watched" and kept inflating the VODs badge
+   * forever. Tournaments never had this because they push the same object
+   * reference as save.lastTournament and the store advances that cursor during
+   * live reveal; money matches had no equivalent, so this is theirs.
+   */
+  const markWatched = () => {
+    setFullyRevealed(true)
+    if (!m.moneyMatch) return
+    mutate((s) => {
+      // The money-match event carries no id of its own, and vods are unshifted
+      // newest-first, so the freshest entry for this pairing is the one that
+      // was just watched.
+      const vod = (s.vods || []).find((v) => v.type === 'moneymatch'
+        && v.match?.aId === m.aId && v.match?.bId === m.bId)
+      if (vod) vod.revealed = Math.max(vod.revealed || 0, vod.match?.narration?.length || 1)
+    }, { ack: true })
+  }
 
   return (
     <div className={`event match clickable ${m.moneyMatch ? 'moneymatch' : ''}`} onClick={() => setOpen(!open)}>
@@ -609,7 +632,7 @@ function LiveMatch({ m, spoil = false, canStream = false, onStream = null }) {
             // happen BEFORE the first line, so it can't start on its own.
             autoStart={!canStream}
             onStart={() => setStarted(true)}
-            onComplete={() => setFullyRevealed(true)}
+            onComplete={markWatched}
             beforeStart={canStream && (
               <button className="small primary" style={{ marginBottom: 8 }} onClick={onStream}>
                 📡 Put this match on stream <span className="small">(before watching — no take-backs)</span>

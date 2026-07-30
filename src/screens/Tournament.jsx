@@ -312,7 +312,11 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext, onJump }) {
  */
 function MoneyMatchVod({ t, nav, mutate }) {
   const m = t.match
-  const total = m?.narration?.length ?? 0
+  // Matches model.js isVodWatched, which floors at 1: a money match with no
+  // narration lines would otherwise need `revealed >= 0` here and `>= 1`
+  // there, so it could never be marked watched and would sit in the VOD list
+  // as new forever.
+  const total = m?.narration?.length || 1
   // Playback is LOCAL. Writing the cursor through mutate() on every line
   // would structuredClone and re-persist the whole save once a second; the
   // save only needs to learn that this VOD got watched, which it does once,

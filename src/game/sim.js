@@ -1193,10 +1193,16 @@ function runInteraction(save, group, where, events, results = {}) {
   for (const a of group) {
     const team = teamOf(save, a)
     if (team) {
-      for (const b of group) {
-        if (b.id !== a.id && !b.teamId && getRel(a, b) > 25 && getRel(b, a) > 15) {
-          if (tryJoinTeam(save, team, b, a, events)) break
-        }
+      // THE CAST COMES FIRST (P6). This scanned `group` in attendance order
+      // and took the first relationship-qualifying body, and in a room where
+      // filler outnumbers the cast ten to one that meant roster slots went to
+      // strangers on nothing but arrival order. Teams are a CAST institution:
+      // your people get the seat whenever one of them qualifies.
+      const eligible = group.filter((b) => b.id !== a.id && !b.teamId
+        && getRel(a, b) > 25 && getRel(b, a) > 15)
+      eligible.sort((x, y) => (x.npc ? 1 : 0) - (y.npc ? 1 : 0))
+      for (const b of eligible) {
+        if (tryJoinTeam(save, team, b, a, events)) break
       }
     } else if (freeAgents >= 5 && chance((0.01 + a.social.community * 0.015) * foundingPressure)) {
       // Your co-founder is your FRIEND, not whoever happened to be standing in
@@ -1214,7 +1220,9 @@ function runInteraction(save, group, where, events, results = {}) {
       // gate made founding a team impossible for a whole year and vanishingly
       // rare after — 0 teams in eight two-year runs. At 28/18 the first pairs
       // appear mid-year-one, which is when a scene should start forming crews.
-      const buddy = pool.find((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 28 && getRel(b, a) > 18)
+      const buddy = pool
+        .filter((b) => b.id !== a.id && !b.teamId && getRel(a, b) > 28 && getRel(b, a) > 18)
+        .sort((x, y) => (x.npc ? 1 : 0) - (y.npc ? 1 : 0))[0]
       if (buddy) tryFoundTeam(save, a, buddy, save.day, save.year, events)
     }
   }

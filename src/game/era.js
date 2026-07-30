@@ -184,6 +184,7 @@ export function beginNewEra(save) {
       p.retired = true
       p.retiredDay = save.day
       p.retiredYear = save.year
+      p.retiredVia = 'era' // declined to learn a whole new game — not burnout
       if (p.teamId && save.teams[p.teamId]) {
         const t = save.teams[p.teamId]
         t.memberIds = t.memberIds.filter((id) => id !== p.id)
@@ -228,8 +229,15 @@ export function beginNewEra(save) {
   // is simply true: the best players in the world are the fastest people
   // alive at learning a fighting game, and a sequel is the thing they are
   // best at. Your cast's advantage over them is not that the world got worse.
+  // NOT EVEN A DIP (P6). P5 cut this from 0.55–0.75 to a flat 0.9 after the
+  // first version collapsed the world champion from skill 98 to 71. At 0.9 it
+  // still compounds: band regression closes only a quarter of the gap a year,
+  // eras now arrive every three, and across a fifteen-year run the champion
+  // drifted 98 → 84 → 77 while metric 1's world ratio slid 1.51 → 1.27. The
+  // dip was always cosmetic — what a sequel actually shuffles is who is on
+  // top, which is elo. The band is a calibration constant (§1.6) and nothing
+  // here touches it.
   for (const e of save.evoRoster || []) {
-    e.skill = Math.round(e.skill * 0.9)
     e.elo = Math.round(1200 + (e.elo - 1200) * 0.55)
   }
   for (const r of save.circuit?.field || []) {

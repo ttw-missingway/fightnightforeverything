@@ -78,8 +78,21 @@ export default function MatchHud({ m, revealed = null, state = null, pulse = nul
 
   const spriteA = chA ? lookArt(chA, m.aId) : charAName ? charArtFor(charAName, null) : null
   const spriteB = chB ? lookArt(chB, m.bId) : charBName ? charArtFor(charBName, null) : null
-  const playerA = playerArt(save.players[m.aId]) ?? playerArtFor(m.aId ?? m.aName)
-  const playerB = playerArt(save.players[m.bId]) ?? playerArtFor(m.bId ?? m.bName)
+  // ELITES LIVE IN evoRoster, NOT players (P6). Looking only in save.players
+  // meant playerArt() got undefined for every elite and fell through to the
+  // id-hashed fallback — which draws from the unfiltered face pool with a
+  // hashed palette, so the same elite wore a different face here than on the
+  // World tab (which passes the elite object straight in). Elites carry
+  // gender, heritage and facePalette exactly like anyone else; they just
+  // needed looking up in the right place. The regional board is the same
+  // story, so it is searched too.
+  const worldPerson = (id) => (id
+    ? (save.evoRoster || []).find((e) => e.id === id)
+      || (save.circuit?.field || []).find((r) => r.id === id)
+    : null)
+  const personOf = (id) => save.players[id] || worldPerson(id)
+  const playerA = playerArt(personOf(m.aId)) ?? playerArtFor(m.aId ?? m.aName)
+  const playerB = playerArt(personOf(m.bId)) ?? playerArtFor(m.bId ?? m.bName)
 
   const shake = shaking ? shakeClassFor(pulse) : ''
   return (

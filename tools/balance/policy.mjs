@@ -255,6 +255,26 @@ function manage(save, policy) {
     save.settings.setups += 1
     noteDecision(save, 'setup')
   }
+  // SHRINK IT AGAIN (P6). A competent owner does not keep paying rent and
+  // upkeep on cabinets nobody sits at. Downsizing is the Act 3 answer to a
+  // thinning crowd, and until economy.js grew a `sellSetup` there was no way
+  // to express it — a large part of why every mature run ended in foreclosure.
+  //
+  // Measured against a SUSTAINED average, never against today. Two traps, both
+  // hit on the first attempt: `history.at(-1).attendance` is null on every
+  // tournament day (the field is only written on normal days), so reading
+  // today's number sold a cabinet after every bracket night; and a single
+  // quiet Tuesday is not a trend. Selling into a temporary dip cuts capacity,
+  // which cuts revenue, which reads as a worse dip — the first cut of this
+  // took median survival from year 13 to year 4.
+  const attWindow = save.economy.history.slice(-28).map((h) => h.attendance).filter((a) => a != null)
+  const attAvg = attWindow.length >= 14
+    ? attWindow.reduce((s2, a) => s2 + a, 0) / attWindow.length
+    : null
+  if (policy.growSetups && attAvg != null && save.settings.setups > 2
+      && attAvg < (save.settings.setups - 2) * 4 && runway < 30) {
+    if (eco.sellSetup(save)) noteDecision(save, 'setup')
+  }
   // THE RIG, IF IT COULDN'T BE AFFORDED ON DAY ONE.
   //
   // makeRun only tries at opening, out of the leftover float. That was fine

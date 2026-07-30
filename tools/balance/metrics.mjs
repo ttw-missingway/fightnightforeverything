@@ -260,6 +260,7 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
       adversity: Math.round(e.adversity || 0),
       burnout: Math.round(e.burnout || 0),
       retired: !!p.retired,
+      burnedOut: p.retiredVia === 'passion', // metric 4's actual subject
       topped: Object.keys(topped).filter((k) => topped[k] != null),
       toppedFirst: first,
     }
@@ -307,9 +308,21 @@ function aggregateEureka(runs) {
     crossRowShare: totalBt ? r2(careers.reduce((s, c) => s + c.cross, 0) / totalBt) : 0,
     temperamentChanges: careers.reduce((s, c) => s + c.rowShifts, 0),
     // Metric 4 — the wager: of the most-pushed quartile, who broke through
-    // (≥3 career breakthroughs) and who burned out of the game entirely.
+    // (≥3 career breakthroughs) and who BURNED OUT of the game.
+    //
+    // Burning out, specifically — not "stopped playing". This counted every
+    // retirement, which over a five-year run was a fair proxy and over P5's
+    // fifteen-year runs became a measurement of mortality: everybody's career
+    // ends eventually, so the share went to 0.97 and the metric stopped
+    // saying anything. Since P5 a retirement records WHICH door it left
+    // through (career.js `retiredVia`), so the wager can be read properly:
+    // the passion door is burnout, while ageing out after a full career, or
+    // declining to relearn the game at a sequel, is a career completing.
     breakthroughShare: r2(cohort.filter((c) => c.count >= 3).length / cohort.length),
-    burnoutShare: r2(cohort.filter((c) => c.retired).length / cohort.length),
+    burnoutShare: r2(cohort.filter((c) => c.burnedOut).length / cohort.length),
+    // Kept alongside so the old number stays visible and the re-spec is
+    // auditable rather than a silent redefinition.
+    anyRetiredShare: r2(cohort.filter((c) => c.retired).length / cohort.length),
     capRealisation: {
       skill: r2(careers.filter((c) => c.topped.includes('skill')).length / careers.length),
       community: r2(careers.filter((c) => c.topped.includes('community')).length / careers.length),

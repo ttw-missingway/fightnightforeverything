@@ -659,7 +659,7 @@ export function processEurekaDaily(save, player, ctx = {}) {
     const demands = ARCHETYPE_DEMANDS[char?.archetype] || []
     for (const stat of demands) {
       const grain = (bagOf(player, stat)?.[stat] ?? 0) === 0 ? 1.4 : 1
-      addPressure(save, player, stat, 0.045 * grain, `${char?.name || 'their character'} demands it`, 'influence')
+      addPressure(save, player, stat, 0.032 * grain, `${char?.name || 'their character'} demands it`, 'influence')
     }
   }
 
@@ -724,7 +724,15 @@ function weeklyPass(save, player, e, today) {
     }
     leads.sort((a, b) => b[1] - a[1])
     for (const [stat] of leads.slice(0, 2)) {
-      addPressure(save, player, stat, 0.28 * intensity * pull * standards,
+      // COMPANY IS A CHANNEL, NOT THE CHANNEL (P6). §1.2 is explicit that
+      // WOUND is the dominant channel — what kept costing them is what they
+      // fix. This term fires per relationship per attended day, so in a full
+      // room it out-volumed wounds (which need an actual loss) by a wide
+      // margin: measured chosen-kind shares ran influence 1974 to wound 1183,
+      // and that inversion was carried unaddressed through P3, P4 and P5.
+      // Halved here rather than removed — "the arcade is the growth engine"
+      // depends on this channel existing, just not on it winning.
+      addPressure(save, player, stat, 0.15 * intensity * pull * standards,
         `${displayName(other, save)} is simply better at this`, 'influence')
     }
   }
