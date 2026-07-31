@@ -1519,7 +1519,7 @@ done. Where the metrics landed:
 | 7 | Journal volume | ✅ 22–29/yr, back inside the 15–30 band |
 | 8 | Lever latency | ✅ stream ≈ 6d, patch ≈ 0d, money belief-gated |
 | 9 | Recoverability curve | ❌ null result — instrument works; crises don't compound (§22) |
-| 10 | Money's job | ❌ does not invert (competition share 0.05–0.07) |
+| 10 | Money's job | ⚠️ **partial (§23)** — 0.03 → 0.40, but never crosses survival |
 
 Seven of ten hold. The three that do not are recorded with their causes rather
 than quietly dropped, and metric 9 — the one that most directly tests §0's
@@ -1614,3 +1614,88 @@ next (its spending sink is a prerequisite for one of metric 9's four
 counterplays), then metric 9, whose fix is making crises COMPOUND — its
 instrument works and has twice returned a null result because a static crisis
 cannot have a lag structure.
+
+## 23. Metric 10 — money's job (2026-07-31)
+
+### It was mostly an instrument bug, and the smoke alarm was working
+
+The spend classifier buckets every economy log line into survival /
+competition / growth, with anything unmatched landing in `other` **so that a
+renamed label can never silently vanish from the books**. That safeguard did
+its job perfectly and nobody looked at it.
+
+P4 rewrote travel onto the real calendar and changed its log label from
+`trip to X` to `funded NAME — EVENT`. The `/trip to/` pattern stopped matching
+that day, and **every dollar of travel funding — the entire second half of what
+§0 calls money's new job — has been reported as unclassified ever since.**
+`emergency cabinet repair` was never matched either. Metric 10 has been
+under-reporting competition spend for three phases.
+
+It hid well because every travel line is a unique string (`funded TheReads —
+Autumn Major · Japan`), so a top-N-by-label breakdown shows hundreds of tiny
+rows and never a total — while `other` quietly held a third of all spend.
+
+Fixed: SURVIVAL gains `/cabinet repair/`, COMPETITION becomes
+`[/pot & trophies/, /^funded /, /trip to/, /exhibition/]`, and `aggregate` now
+reports the `other` share alongside the three real buckets so the alarm is
+audible next time.
+
+**The correction is most of the metric.** Competition share by year, n=6 × 20y:
+
+| year | 1 | 3 | 5 | 8 | 12 | 16 | 20 |
+|---|---|---|---|---|---|---|---|
+| survival | 0.73 | 0.71 | 0.57 | 0.61 | 0.61 | 0.65 | 0.59 |
+| competition | 0.03 | 0.28 | 0.42 | 0.38 | 0.39 | 0.35 | 0.40 |
+| other | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Previously reported: 0.03 → 0.07, flat. Actual: **0.03 → ~0.40**, a
+thirteen-fold climb with survival falling 0.73 → 0.59. Money's job *does*
+change across a run, and the game has been doing it since P4.
+
+### Verdict: partial. It changes job; it does not invert
+
+§2.3's literal target is that the shares **invert**. They converge and
+plateau — competition never exceeds survival — so this is a partial pass, not
+a pass. Competition plateaus because everything competitive has a ceiling: pot
+stakes cap at ×20 and a trip costs what a trip costs.
+
+### The sink I recommended was built, measured, and cut
+
+Per §22's recommendation I built the training program — tiered monthly
+coaching/lab investment (PROGRAM_TIERS), billed with the rent, feeding §1.7's
+room half so that money → conditions → conversion → champions. It was
+thematically right and it did not survive contact with measurement:
+
+- **It bought metric 10 nothing.** Competition sat at ~0.40 with it and ~0.40
+  without — pots and travel already dominate, and the policy can only afford
+  the top tier late.
+- **It cost metric 4 its spread.** A flat bonus lifted every player equally,
+  compressing conversion spread 0.19 → 0.12 — money buying its way out of the
+  wager §22 had just restored. Re-shaping it to *amplify* the room half rather
+  than add to it (money amplifies a room, it cannot substitute for one)
+  recovered only part of that: still 0.12.
+
+Trading a fixed metric for an unfixed one is a bad trade, so it was reverted
+in full. Post-revert, metric 4's spread is back to **0.18** and metric 10 is
+unchanged, which is the confirmation that the program was buying nothing.
+Recorded rather than quietly deleted, because "we tried the obvious sink and
+it did not earn its place" is the useful finding.
+
+### What strict inversion would actually require
+
+For competition to exceed survival, an arcade would have to spend more on its
+competitive program than on rent, payroll and upkeep combined. That is not a
+tuning problem — it is a question about what the arcade fundamentally IS, and
+it belongs to the designer rather than to a balance pass. The options are
+roughly: make competition unbounded (appearance guarantees, funding whole
+seasons, a paid stable), or re-specify the metric against DISCRETIONARY spend
+(after the nut), which is the number that actually answers "what is money
+for".
+
+Nothing else moved: separation 1.52 / 1.53 / 1.54, metric 5 at 1703, metric 2
+share 1.0 at median year 4, journal 29.1/yr, survival median 6721 days.
+Determinism green.
+
+**Open: metric 9 only.** Its fix is making crises compound — the instrument
+works and has twice returned a null result because a static crisis cannot have
+a lag structure.

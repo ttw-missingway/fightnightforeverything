@@ -856,7 +856,7 @@ final metric table.
 | P6 the sweep | ✅ metric 1 finally widens; 9 of 11 bugs; see §20 |
 | P7 sound | ✅ synthesized, 23 cues |
 
-**Eight of ten metrics hold** (seven at the close, plus metric 4 fixed in §22).
+**Eight of ten metrics hold**, plus metric 10 partial (seven at the close, metric 4 fixed in §22, metric 10 corrected in §23).
 Open, with causes recorded in §§21–22:
 
 - **Metric 9 (the recoverability curve) returns a NULL RESULT.** The instrument
@@ -872,7 +872,13 @@ Open, with causes recorded in §§21–22:
   The room terms had been outweighed 2:1 by innate stats, inverting the
   thesis. Re-weighted; conversion is now 0.75 with spread 0.19, and a well-run
   room converts 0.59 against a neglected room's 0.38.
-- **Metric 10** still does not invert.
+- **Metric 10 — PARTIAL (§23).** The reported failure was mostly an instrument
+  bug: P4 renamed travel's log label and the classifier stopped matching it, so
+  three phases of travel funding were reported as unclassified. Corrected, the
+  competition share reads 0.03 → 0.40 rather than 0.03 → 0.07. Money demonstrably
+  changes job; it does not strictly INVERT. Closing that needs a design decision
+  about whether an arcade should spend more on competing than on existing — the
+  obvious sink was built, measured, found to buy nothing, and cut.
 
 **Backlog items NOT delivered**, all from §6 and all still wanted: the
 navigation and notification leftovers, the **idle shrink** (which §6 itself

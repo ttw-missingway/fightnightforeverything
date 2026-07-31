@@ -206,6 +206,7 @@ export function weeklyUpkeep(save) {
  */
 export const RENT_ESCALATION_YEARS = 8
 
+
 /**
  * What you get back for a cabinet you no longer need. Used gear sells for a
  * fraction of new, which is what makes over-building a real mistake rather

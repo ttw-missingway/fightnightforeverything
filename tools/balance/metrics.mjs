@@ -34,11 +34,28 @@ const r2 = (x) => Math.round(x * 100) / 100
 
 // ---------- money classification (metric 10) ----------
 // Ads are billed inside 'upkeep & restocking' (weeklyUpkeep folds them in),
-// so they read as survival here. Anything unmatched lands in `other` so a new
-// label can never silently vanish from the books.
-const SURVIVAL = [/monthly rent/, /payroll/, /upkeep & restocking/, /machine repair/, /health-code fine/]
-const COMPETITION = [/pot & trophies/, /exhibition/, /trip to/]
-const GROWTH = [/new setup cabinet/, /hired/, /streaming setup/, /installed/, /advertis/]
+// so they read as survival here. Anything unmatched lands in `other`.
+//
+// THE `other` BUCKET IS A SMOKE ALARM NOBODY WAS LOOKING AT. It exists so a
+// renamed label cannot silently vanish from the books — and then exactly that
+// happened and went unnoticed for three phases. P4 rewrote travel onto the
+// real calendar and changed its label from "trip to X" to "funded NAME —
+// EVENT", so /trip to/ stopped matching and every dollar of travel funding —
+// the entire second half of what §0 calls money's new job — was being
+// reported as unclassified. `emergency cabinet repair` was never matched
+// either. Metric 10's competition share has been under-reported since P4.
+//
+// Both fixed, and `aggregate` now reports the `other` share alongside the
+// three real buckets so the alarm is audible next time.
+const SURVIVAL = [
+  /monthly rent/, /payroll/, /upkeep & restocking/, /health-code fine/,
+  /machine repair/, /cabinet repair/,
+]
+// Everything that buys ADVERSITY (§0): pots that pull better fields through
+// the door, and funding the road. Matched on the shapes the engine actually
+// logs — see travel.js fundAsk and tournament.js.
+const COMPETITION = [/pot & trophies/, /^funded /, /trip to/, /exhibition/, /training program/]
+const GROWTH = [/new setup cabinet/, /hired/, /streaming setup/, /installed/, /advertis/, /sold a setup/, /closed /]
 function spendBucket(label) {
   if (SURVIVAL.some((re) => re.test(label))) return 'survival'
   if (COMPETITION.some((re) => re.test(label))) return 'competition'
