@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { play } from '../audio/sound.js'
 import MatchHud from './MatchHud.jsx'
 import StreamChat from './StreamChat.jsx'
 import { SpeechLine } from './ui.jsx'
@@ -97,6 +98,33 @@ export default function MatchPlayback({
     }
     return () => timers.forEach(clearTimeout)
   }, [revealed, speed, reduce, hud, meta])
+
+  // SOUND (§5-P7). Voiced off the beat that just landed, so the impact scales
+  // with the damage the narrator actually described rather than firing a
+  // generic thud on every line. Presentation only — nothing here can reach
+  // the save or the seeded stream.
+  useEffect(() => {
+    if (revealed === 0) return
+    const meta_ = meta[revealed - 1]
+    if (!meta_) return
+    if (meta_.kind === 'beat') {
+      const now = hud?.[Math.min(revealed, hud?.length || 0) - 1]
+      const prev = revealed > 1 ? hud?.[revealed - 2] : null
+      // How much health this line took off, 0..1 — the shape of the hit.
+      let power = 0.35
+      if (now && prev) {
+        const drop = Math.max((prev.hpA ?? 0) - (now.hpA ?? 0), (prev.hpB ?? 0) - (now.hpB ?? 0))
+        if (drop > 0) power = Math.min(1, drop / 45)
+      }
+      play('hit', power)
+    } else if (meta_.kind === 'game' || meta_.kind === 'bell') {
+      play('roundEnd')
+    }
+  }, [revealed, meta, hud])
+
+  useEffect(() => {
+    if (finished) play('ko')
+  }, [finished])
 
   // --- advancing ----------------------------------------------------------
   useEffect(() => {

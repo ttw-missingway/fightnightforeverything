@@ -839,6 +839,46 @@ handoff, and dynasty collapse as a recoverable failure state.
 The bug list, the notification and navigation layer, the idle shrink. Detailed
 in §6.
 
+### Status — the revision is complete (2026-07-30)
+
+All seven phases are built, measured and committed. Per-phase measurement
+records live in `docs/BALANCE.md` §§14–21; §21 closes the plan with the
+final metric table.
+
+| phase | status |
+|---|---|
+| P0 baseline | ✅ committed, never re-blessed (every phase diffs against it) |
+| P1 the eureka spine | ✅ |
+| P2 the journal | ✅ |
+| P3 the levers | ✅ |
+| P4 the calendar | ✅ metric 2 re-specified to top-32; see §18 |
+| P5 the world regenerates | ✅ survival 4.3y → 12.8y; metrics 2 and 5 hold at y15 |
+| P6 the sweep | ✅ metric 1 finally widens; 9 of 11 bugs; see §20 |
+| P7 sound | ✅ synthesized, 23 cues |
+
+**Seven of ten metrics hold.** Open, with causes recorded in §21:
+
+- **Metric 9 (the recoverability curve) was never built.** Deferred in P4, P5
+  and P6. It is the metric that most directly tests §0's central claim that
+  failure is "fixable if caught early, hopeless past a point", and it is the
+  largest single piece of unfinished work in this plan.
+- **Metric 4** re-specified in P6 (burnout now counted separately from a
+  career simply ending) and still fails at 0.85 — a real failure, not an
+  instrument artifact.
+- **Metric 10** still does not invert.
+
+**Backlog items NOT delivered**, all from §6 and all still wanted: the
+navigation and notification leftovers, the **idle shrink** (which §6 itself
+calls structural rather than quality-of-life, since an endless dynasty
+requires a good let-it-run mode), and the unlockables layer.
+
+**One open question found late:** normal and hard now produce identical
+achievement, so difficulty is not currently expressing itself in the ladder.
+See the difficulty-calibration note before changing any difficulty number —
+the ladder is supposed to ride the creation-budget threshold, not the economy.
+
+---
+
 ### P7 — Sound
 Not last by importance — the most-requested item on the list, and every
 landmark this revision builds is weaker without it. Can start any time after

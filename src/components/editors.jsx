@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { getSoundSettings, setSoundSettings, unlockAudio, play } from '../audio/sound.js'
 import { Field, NumField, StringListEditor, PillPicker, Portrait } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
 import { POT_STAKES, tournamentPot } from '../game/tournament.js'
@@ -95,6 +96,31 @@ export function EconomyCard({ save }) {
 
 // Mid-save settings that DON'T touch the economy or the game itself.
 // Consequential mode locks the world-defining ones.
+/**
+ * Master volume and mute. Local component state mirrors the module's, because
+ * the setting lives outside the save and so cannot come down through `update`.
+ */
+function SoundControls() {
+  const [snd, setSnd] = useState(() => getSoundSettings())
+  const apply = (next) => {
+    setSnd(setSoundSettings(next))
+    unlockAudio()
+    if (next.on !== false) play('click')
+  }
+  return (
+    <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+      <button className="small" onClick={() => apply({ on: !snd.on })}
+        title={snd.on ? 'mute' : 'unmute'}>
+        {snd.on ? '🔊 On' : '🔇 Muted'}
+      </button>
+      <input type="range" min={0} max={100} value={Math.round(snd.volume * 100)}
+        disabled={!snd.on} style={{ width: 120 }}
+        onChange={(e) => apply({ volume: Number(e.target.value) / 100 })} />
+      <span className="dim small">{Math.round(snd.volume * 100)}%</span>
+    </div>
+  )
+}
+
 export function SettingsEditor({ save, update }) {
   const locked = save.settings.mode !== 'sandbox'
   return (
@@ -103,6 +129,13 @@ export function SettingsEditor({ save, update }) {
         <h3>Settings</h3>
         <Field label="Save name">
           <input value={save.saveName} onChange={(e) => update((s) => { s.saveName = e.target.value })} />
+        </Field>
+        {/* SOUND (§5-P7). Deliberately NOT stored on the save: how loud
+            somebody's laptop is has nothing to do with their arcade, and it
+            must not ride along in an exported world and change the volume on
+            whoever imports it. Lives in localStorage — see audio/sound.js. */}
+        <Field label="Sound">
+          <SoundControls />
         </Field>
         <Field label="Refer to players by">
           <select value={save.settings.nameDisplay || 'alias'}

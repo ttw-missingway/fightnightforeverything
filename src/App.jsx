@@ -24,11 +24,18 @@ import { TAB_GATES, tabOpen, tabHint } from './game/tabs.js'
 import { setFacePalette } from './components/art.js'
 import { bannerToasts, liveToasts, dismissToast } from './game/notify.js'
 import { pendingAsks, fundAsk, denyAsk, daysUntil, TRAVEL_TIERS } from './game/travel.js'
+import { useToastSound, useRunEndSound, useAudioUnlock } from './audio/useSound.jsx'
 import { displayName } from './game/util.js'
 
 export default function App() {
   const { save, screen, nav, closeSave, mutate } = useStore()
   useIdleLoop() // drives idle mode when it's running (no-op otherwise)
+  // SOUND (REVISION §5-P7). Observes the notification layer and voices what
+  // lands; the engine has no idea it exists. See audio/useSound.jsx for why
+  // the dependency points this way.
+  useAudioUnlock()
+  useToastSound(save)
+  useRunEndSound(save)
   // Tracked in state, not read straight off `window`, so typing #dev into an
   // already-open tab works. Changing the hash doesn't reload the page and
   // nothing else here would re-render, so without this the suite only ever

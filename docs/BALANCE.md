@@ -1457,3 +1457,81 @@ so it is not re-reported.
   even in a fifteen-year run.
 
 Baseline remains the P0 commit and is still not re-blessed.
+
+## 21. P7 — sound, and the revision closed (2026-07-30)
+
+REVISION §5-P7: "the most-requested item on the list, and every landmark this
+revision builds is weaker without it."
+
+**Synthesized, not sampled** (`src/audio/sound.js`). Sampling was available and
+was declined for a design reason, not a practical one: synthesized cues can be
+**procedural**. A hit's body and volume scale with the damage the narrator just
+described, and EVO does not sound like a Tuesday weekly. A sample library gives
+one recording of a punch; an oscillator gives the punch that actually landed —
+and the whole revision is about consequences being legible. Square waves are
+also the native voice of the thing being simulated. Zero bundle cost, zero
+licensing, works offline.
+
+**Two rules the audio layer obeys**, both load-bearing:
+
+- *Sound never touches the save and never draws from the seeded rng.* The
+  balance harness rests entirely on determinism, and P3 and P4 each found a
+  leak where a non-engine caller forked the stream. Noise generation uses
+  `Math.random` **deliberately**, precisely because it must not be accounted
+  for. Determinism suite re-run and green after P7.
+- *Sound never throws.* Every entry point is wrapped; a missing Web Audio
+  implementation or a mis-guessed autoplay policy can never interrupt a game
+  that is otherwise fine.
+
+**The layer observes rather than being called.** `useSound.jsx` watches the
+notification layer, which already enumerates every landmark the revision built,
+and voices what arrives. That direction of dependency means the engine has no
+idea sound exists, and the enumeration §5-P7 asks for cannot drift out of sync
+with the one notify.js already maintains: a landmark that pushes a toast is a
+landmark that makes a sound, by construction.
+
+23 cues: the verge and the breakthrough (the signature sound — a rising major
+arpeggio that *resolves*), the first elite win, titles, EVO, the sequel (falls
+away, then climbs back out somewhere new), a prodigy walking in, the coaching
+handoff, veteran-tier output, retirement, the danger rail, and game over — plus
+match hits scaled by damage, KOs, and light UI feedback. Volume and mute live
+in localStorage rather than the save: how loud a laptop is has nothing to do
+with an arcade, and it must not ride along inside an exported world.
+
+Verified in-browser: all 23 cues fire without error, the AudioContext reaches
+`running` after a gesture, settings round-trip, console clean.
+
+---
+
+## The revision, closed
+
+Seven phases, P0 through P7, each measured against §2.3 before it was called
+done. Where the metrics landed:
+
+| # | metric | verdict |
+|---|---|---|
+| 1 | Separation | ✅ **widens** — 1.51 → 1.48 → 1.55 over 15y (P6) |
+| 2 | Time to first elite win | ✅ median y4, share 0.94, never y1–2 |
+| 3 | Eureka cadence | ✅ ~9.9/career, front-loaded and thinning |
+| 4 | Breakthrough : burnout | ❌ 0.85 — re-specified in P6 and still fails |
+| 5 | Retirement dispersion | ✅ 1160 days, all runs measurable |
+| 6 | Attention cost | ✅ ~6.7–7.2 mutating decisions/week, flat y1→y15 |
+| 7 | Journal volume | ✅ 22–29/yr, back inside the 15–30 band |
+| 8 | Lever latency | ✅ stream ≈ 6d, patch ≈ 0d, money belief-gated |
+| 9 | Recoverability curve | ❌ **never built** — no cliff, four phases carried |
+| 10 | Money's job | ❌ does not invert (competition share 0.05–0.07) |
+
+Seven of ten hold. The three that do not are recorded with their causes rather
+than quietly dropped, and metric 9 — the one that most directly tests §0's
+"fixable if caught early, hopeless past a point" claim — was deferred in P4,
+P5 and P6 and is the single largest piece of unfinished work in the plan.
+
+Also carried, and NOT done: the navigation/notification leftovers, the idle
+shrink (§6 calls it structural, not quality-of-life, because an endless dynasty
+requires a good let-it-run mode), and the unlockables layer. One open question
+found late in P6: normal and hard now produce identical achievement, so
+difficulty is not currently expressing itself in the ladder — read
+`difficulty-calibration` before touching any difficulty number.
+
+The committed baseline is still the P0 commit and has never been re-blessed, so
+every phase in §§14–21 diffs against the same origin.
