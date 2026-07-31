@@ -135,15 +135,36 @@ function relHealthOf(player) {
  */
 export function productiveShare(save, player, convKey = 'determination') {
   const s = player.personal || {}
-  let share = 0.16
-    + statLevel(s[convKey]) * 0.042
-    + statLevel(s.temperance) * 0.018
-    + statLevel(s.composure) * 0.014
-    + ((player.mood ?? 5) - 5) * 0.028
-    + relHealthOf(player) * 0.10
-    + (player.belief ?? 0) * 0.0009
+  // RE-WEIGHTED 2026-07-31, after metric 4 was re-specified to read this
+  // split directly (see metrics.mjs). Measured, the realized conversion sat
+  // at 0.77 for brand-new careers and 0.87 for the most-pushed cohort, with
+  // a FLOOR of 0.50 and a p10-p90 spread of 0.10. In other words suffering
+  // essentially always paid, for everybody, at about the same rate — so the
+  // wager §2.3 asks about was not a wager, and §1.7's own claim that "a
+  // miserable, isolated player converts adversity almost entirely into
+  // burnout" described a player who did not exist in the data.
+  //
+  // Two causes, both fixed here. The base was high enough that a beginner
+  // with nothing started over two-thirds of the way up. And the INNATE terms
+  // (determination, temperance, composure — max 0.64 between them) outweighed
+  // the ROOM terms (mood, relationships, the love aura — max 0.29) by more
+  // than two to one, which inverts the thesis: §1.7 is the equation for
+  // "suffering is only productive in a well-run room", and the room was the
+  // smaller half of it. Room quality now carries at least as much as talent
+  // does, which is what makes the three levers land in this split at all.
+  //
+  // The compounding §1.7 promises is untouched: early breakthroughs into
+  // resilience stats still make later adversity more productive, and the
+  // measured 0.77 → 0.83 career curve is the shape that should survive.
+  let share = 0.08
+    + statLevel(s[convKey]) * 0.030
+    + statLevel(s.temperance) * 0.012
+    + statLevel(s.composure) * 0.009
+    + ((player.mood ?? 5) - 5) * 0.030
+    + relHealthOf(player) * 0.18
+    + (player.belief ?? 0) * 0.0006
   share += loveAuraOf(save, player) * RADIANCE.LOVE_COHESION
-  return clamp(share, 0.06, 0.92)
+  return clamp(share, 0.05, 0.88)
 }
 
 // ---------- Pressure accrual ----------

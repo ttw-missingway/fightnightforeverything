@@ -1513,12 +1513,12 @@ done. Where the metrics landed:
 | 1 | Separation | ✅ **widens** — 1.51 → 1.48 → 1.55 over 15y (P6) |
 | 2 | Time to first elite win | ✅ median y4, share 0.94, never y1–2 |
 | 3 | Eureka cadence | ✅ ~9.9/career, front-loaded and thinning |
-| 4 | Breakthrough : burnout | ❌ 0.85 — re-specified in P6 and still fails |
+| 4 | Breakthrough : burnout | ✅ **re-specified §22** — conversion 0.75, spread 0.19, room-driven |
 | 5 | Retirement dispersion | ✅ 1160 days, all runs measurable |
 | 6 | Attention cost | ✅ ~6.7–7.2 mutating decisions/week, flat y1→y15 |
 | 7 | Journal volume | ✅ 22–29/yr, back inside the 15–30 band |
 | 8 | Lever latency | ✅ stream ≈ 6d, patch ≈ 0d, money belief-gated |
-| 9 | Recoverability curve | ❌ **never built** — no cliff, four phases carried |
+| 9 | Recoverability curve | ❌ null result — instrument works; crises don't compound (§22) |
 | 10 | Money's job | ❌ does not invert (competition share 0.05–0.07) |
 
 Seven of ten hold. The three that do not are recorded with their causes rather
@@ -1535,3 +1535,82 @@ difficulty is not currently expressing itself in the ladder — read
 
 The committed baseline is still the P0 commit and has never been re-blessed, so
 every phase in §§14–21 diffs against the same origin.
+
+## 22. Metric 4 — re-specified, and the wager made real (2026-07-31)
+
+Post-revision follow-up, taken first because it is the measuring stick the
+other two open metrics are judged with.
+
+### The re-spec
+
+§2.3 asks whether pushing a player is a genuine GAMBLE — "neither near 0 nor
+near 1". It was read as career ENDPOINTS: did they eventually break through,
+did they eventually retire. That reading died with P5's long runs, because
+over fifteen years a pushed player does both. Breakthrough share pinned at
+1.00 (≥3 breakthroughs is automatic across a long career) and burnout sat at
+0.85–0.97. Two numbers, both near 1, measuring longevity rather than risk.
+P6's first attempt fixed only the denominator (burnout vs merely retiring) and
+moved it 0.90 → 0.85.
+
+The wager does not happen across a career. It happens at **every adversity
+event**, and §1.7 already computes it there — `productiveShare` splits each
+event between eureka and passion drain, and `eureka.js` has been banking both
+halves all along (`e.adversity`, `e.burnout`). So metric 4 now reads the split
+where it is actually made. **No engine change was required to measure it**,
+which is what made this the cheap one to do first.
+
+Reported: cohort `conversion` (mean, p10, p90, spread) plus
+`breakthroughsPerCareerYear`, with the two saturated legacy shares kept
+alongside so the redefinition stays auditable.
+
+### What it immediately found
+
+**conversion mean 0.87 · p10 0.81 · p90 0.91 · spread 0.10.**
+
+Suffering essentially always paid, for everybody, at about the same rate.
+Split by career length: 0.77 for careers under two years, 0.83 for two-to-five
+— the compounding curve §1.7 promises is real — but with a **floor of 0.50**.
+§1.7's own claim that "a miserable, isolated player converts adversity almost
+entirely into burnout" described a player who did not exist in the data.
+
+Two causes. The base (0.16) started a beginner with nothing over two-thirds of
+the way up. And the INNATE terms — determination, temperance, composure, max
+0.64 between them — outweighed the ROOM terms — mood, relationships, love aura,
+max 0.29 — by more than two to one. That inverts the thesis: §1.7 is the
+equation for *"suffering is only productive in a well-run room"*, and the room
+was the smaller half of it.
+
+### The fix, and the blast radius
+
+Base 0.16 → 0.08; innate coefficients cut ~30%; room terms raised (mood 0.028
+→ 0.030, relationship health 0.10 → 0.18); clamp 0.06–0.92 → 0.05–0.88.
+
+**conversion mean 0.75 · p10 0.65 · p90 0.84 · spread 0.19** — the spread
+nearly doubled, which is the number that makes it a wager rather than a tax.
+
+And the thesis now holds where it is supposed to. Same seeds, four years, one
+policy well-run and one neglecting the room (no camera, no staff, thin menu,
+overpriced):
+
+| room | conversion | min |
+|---|---|---|
+| well-run | **0.59** | 0.42 |
+| neglected | **0.38** | 0.32 |
+
+A twenty-one point gap driven purely by how the place is run. That is §1.7
+being true in the numbers rather than in the comment above it.
+
+Nothing else moved: separation 1.52 / 1.51 / 1.55 (unchanged to slightly
+better), journal 29.1/yr, metric 5 at 1243 days, metric 2 share 1.0 at median
+year 4, eureka cadence 9.4 per career (target 8–11), survival median 5041 days
+with no deaths. Determinism suite green.
+
+**Metric 4 now passes** — with the honest note that the pushed cohort's 0.75
+is still on the high side, and what earns the pass is the spread and the
+room-sensitivity rather than the mean.
+
+Open metrics are now **9 and 10**. The recommended order stands: metric 10
+next (its spending sink is a prerequisite for one of metric 9's four
+counterplays), then metric 9, whose fix is making crises COMPOUND — its
+instrument works and has twice returned a null result because a static crisis
+cannot have a lag structure.

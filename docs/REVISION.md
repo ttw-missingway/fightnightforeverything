@@ -856,15 +856,22 @@ final metric table.
 | P6 the sweep | ✅ metric 1 finally widens; 9 of 11 bugs; see §20 |
 | P7 sound | ✅ synthesized, 23 cues |
 
-**Seven of ten metrics hold.** Open, with causes recorded in §21:
+**Eight of ten metrics hold** (seven at the close, plus metric 4 fixed in §22).
+Open, with causes recorded in §§21–22:
 
-- **Metric 9 (the recoverability curve) was never built.** Deferred in P4, P5
-  and P6. It is the metric that most directly tests §0's central claim that
+- **Metric 9 (the recoverability curve) returns a NULL RESULT.** The instrument
+  exists and works; it has run twice and found no lag structure, because
+  injected crises are static — severity on day 112 equals day 0, so timing
+  cannot matter. The fix is making untreated crises COMPOUND, not building a
+  tool. Deferred in P4, P5 and P6. It is the metric that most directly tests §0's central claim that
   failure is "fixable if caught early, hopeless past a point", and it is the
   largest single piece of unfinished work in this plan.
-- **Metric 4** re-specified in P6 (burnout now counted separately from a
-  career simply ending) and still fails at 0.85 — a real failure, not an
-  instrument artifact.
+- **Metric 4 — RESOLVED (§22).** Re-specified to read §1.7's conversion split
+  where it is actually made rather than at career endpoints, which exposed a
+  real failure: suffering paid at ~0.87 for everyone, spread 0.10, floor 0.50.
+  The room terms had been outweighed 2:1 by innate stats, inverting the
+  thesis. Re-weighted; conversion is now 0.75 with spread 0.19, and a well-run
+  room converts 0.59 against a neglected room's 0.38.
 - **Metric 10** still does not invert.
 
 **Backlog items NOT delivered**, all from §6 and all still wanted: the

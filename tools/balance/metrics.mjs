@@ -261,6 +261,7 @@ export function instrumentedRun({ seed, difficulty = 'normal', years = 10, polic
       burnout: Math.round(e.burnout || 0),
       retired: !!p.retired,
       burnedOut: p.retiredVia === 'passion', // metric 4's actual subject
+      careerDays: p.daysAttended || 0, // metric 4 normalises breakthroughs by this
       topped: Object.keys(topped).filter((k) => topped[k] != null),
       toppedFirst: first,
     }
@@ -307,21 +308,53 @@ function aggregateEureka(runs) {
     forcedShare: totalBt ? r2(careers.reduce((s, c) => s + c.forced, 0) / totalBt) : 0,
     crossRowShare: totalBt ? r2(careers.reduce((s, c) => s + c.cross, 0) / totalBt) : 0,
     temperamentChanges: careers.reduce((s, c) => s + c.rowShifts, 0),
-    // Metric 4 — the wager: of the most-pushed quartile, who broke through
-    // (≥3 career breakthroughs) and who BURNED OUT of the game.
+    // ---- METRIC 4 — the wager (re-specified 2026-07-31) ----
     //
-    // Burning out, specifically — not "stopped playing". This counted every
-    // retirement, which over a five-year run was a fair proxy and over P5's
-    // fifteen-year runs became a measurement of mortality: everybody's career
-    // ends eventually, so the share went to 0.97 and the metric stopped
-    // saying anything. Since P5 a retirement records WHICH door it left
-    // through (career.js `retiredVia`), so the wager can be read properly:
-    // the passion door is burnout, while ageing out after a full career, or
-    // declining to relearn the game at a sequel, is a career completing.
+    // §2.3 asks whether pushing a player is genuinely a GAMBLE: "neither near
+    // 0 nor near 1". It was read as career endpoints — did they eventually
+    // break through, did they eventually retire — and that reading died with
+    // P5's long runs. Over fifteen years a pushed player does BOTH: the
+    // breakthrough share pinned at 1.00 (≥3 breakthroughs is automatic across
+    // a long career) and burnout sat at 0.85–0.97. Two numbers, both near 1,
+    // measuring longevity rather than risk. P6's first re-spec fixed only the
+    // denominator (burnout vs merely retiring) and moved it 0.90 → 0.85.
+    //
+    // The wager does not happen across a career. It happens at EVERY adversity
+    // event, and §1.7 already computes it there: `productiveShare` splits each
+    // event between eureka and passion drain, and eureka.js has been banking
+    // both halves all along (`e.adversity` total, `e.burnout` the drained
+    // part). So the metric now reads the split where it is actually made, and
+    // needs no engine change to do it.
+    //
+    // What "neither near 0 nor near 1" means here: a cohort mean around the
+    // middle, AND — the part that makes it a wager rather than a constant —
+    // real SPREAD, so that the same push pays off for one player and breaks
+    // another. A tight distribution at 0.5 would be a tax, not a gamble.
+    conversion: (() => {
+      const rates = cohort
+        .filter((c) => c.adversity > 0)
+        .map((c) => (c.adversity - c.burnout) / c.adversity)
+      if (!rates.length) return null
+      return {
+        mean: r2(mean(rates)),
+        p10: r2(quantile(rates, 0.1)),
+        p90: r2(quantile(rates, 0.9)),
+        spread: r2(quantile(rates, 0.9) - quantile(rates, 0.1)),
+        n: rates.length,
+      }
+    })(),
+    // Breakthroughs per active career-YEAR rather than a lifetime ≥3 bar, so
+    // longevity cannot clear it by itself.
+    breakthroughsPerCareerYear: (() => {
+      const rates = cohort
+        .filter((c) => c.careerDays >= 120)
+        .map((c) => c.count / (c.careerDays / DAYS_PER_YEAR))
+      return rates.length ? r2(mean(rates)) : null
+    })(),
+    // The old outcome reads, kept so the re-spec stays auditable rather than
+    // being a silent redefinition. Both are known-saturated on long runs.
     breakthroughShare: r2(cohort.filter((c) => c.count >= 3).length / cohort.length),
     burnoutShare: r2(cohort.filter((c) => c.burnedOut).length / cohort.length),
-    // Kept alongside so the old number stays visible and the re-spec is
-    // auditable rather than a silent redefinition.
     anyRetiredShare: r2(cohort.filter((c) => c.retired).length / cohort.length),
     capRealisation: {
       skill: r2(careers.filter((c) => c.topped.includes('skill')).length / careers.length),
