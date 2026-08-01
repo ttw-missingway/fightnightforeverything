@@ -27,7 +27,7 @@ import { rankedInTop, worldTalkExchange, worldRankings } from './world.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
-  sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf,
+  sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf, spreadFeuds,
 } from './social.js'
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion, ageYearly, ageWarnings, careerStageOf } from './career.js'
 import { relevanceDaily } from './relevance.js'
@@ -2148,6 +2148,8 @@ export function advanceDay(save) {
   }
   // A fresh patch re-shuffles who the pros play — the meta-chasers first.
   if (daysSincePatch(save) === 0) gravitateElites(save)
+  // Bad blood recruits: an unattended feud becomes a faction (social.js).
+  spreadFeuds(save)
   // A visiting crew arrives, or goes home.
   invasionDaily(save)
   // SUCCESSION (P5): the rare kid who could be somebody walks in, the one

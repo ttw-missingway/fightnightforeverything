@@ -56,7 +56,12 @@ function shiftMain(save, playerId, dir) {
 }
 
 const LAGS = [0, 7, 14, 28, 56, 112]
-const SEEDS = [31, 32, 33, 34, 35, 36]
+// §17's first named suspect was instrument power, and it was right: at six
+// seeds a single run is 0.17, so nothing below ~0.2 is resolvable and the
+// curves were being read through noise. Twelve halves that floor. Sweeps are
+// slow (6 lags × 12 seeds × a 180–336 day window each), which is the price of
+// being able to tell a cliff from a coin flip.
+const SEEDS = [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
 const INJECT_DAY = 200 // ~eight months in: the room exists, the books work
 
 const bestSkillOf = (p) => Math.max(0, ...Object.values(p.charSkill || {}), 0)
@@ -224,7 +229,21 @@ export const CRISES = {
     detect: (save) => (save.relevance ?? 55) < 30,
   },
 
+  // PLATEAU IS AN EQUILIBRIUM, NOT AN EVENT — and therefore not a
+  // recoverability question. §2.6 says so in as many words ("Toxicity,
+  // burnout and irrelevance are events. Plateau is the game's current
+  // equilibrium — it is the disease of §0, not an accident"), and the data
+  // agreed: measured recovery ROSE with lag (0.33 → 0.83), which is not a
+  // cliff inverted, it is later windows simply being richer rooms. Asking
+  // "did it recover, given you waited k days" of a steady state is a
+  // category error that produced a misleading row for three phases.
+  //
+  // It is measured by INCIDENCE instead (measurePlateauIncidence below):
+  // what share of runs are sitting in a plateau at year N. `curveExempt`
+  // keeps it out of the sweep while leaving inject/detect available, since
+  // the fixtures and the natural-incidence pass still use them.
   plateau: {
+    curveExempt: true,
     windowDays: 180,
     inject(save) {
       // The disease of §0, imposed: skill compressed into one band, elo
@@ -334,9 +353,39 @@ export function measureNaturalIncidence({ difficulty = 'normal', years = 6 } = {
     .map(([k, v]) => [k, Math.round((v / SEEDS.length) * 100) / 100]))
 }
 
+/**
+ * PLATEAU, measured properly: what share of runs are sitting in the §0
+ * equilibrium at a given year — skill compressed and the community's average
+ * elo going nowhere. Incidence, not recovery, per §2.6.
+ */
+export function measurePlateauIncidence({ difficulty = 'normal', years = [4, 8, 12] } = {}) {
+  const out = {}
+  const marks = new Set(years)
+  const tally = Object.fromEntries(years.map((y) => [y, { plateaued: 0, alive: 0 }]))
+  for (const seed of SEEDS) {
+    const save = makeRun({ seed: seed + 200, difficulty })
+    for (let y = 1; y <= Math.max(...years) && !isDead(save); y++) {
+      for (let d = 0; d < 336 && !isDead(save); d++) playDay(save)
+      if (!marks.has(y) || isDead(save)) continue
+      tally[y].alive += 1
+      if (CRISES.plateau.detect(save)) tally[y].plateaued += 1
+    }
+  }
+  for (const y of years) {
+    out[`y${y}`] = tally[y].alive
+      ? Math.round((tally[y].plateaued / tally[y].alive) * 100) / 100
+      : null
+  }
+  return out
+}
+
 export async function measureAllRecoveries(opts = {}) {
   const out = {}
-  for (const name of Object.keys(CRISES)) out[name] = measureRecovery(name, opts)
+  for (const [name, crisis] of Object.entries(CRISES)) {
+    if (crisis.curveExempt) continue // plateau — see the note on it
+    out[name] = measureRecovery(name, opts)
+  }
+  out.plateauIncidence = measurePlateauIncidence(opts)
   out.naturalIncidence = measureNaturalIncidence(opts)
   return out
 }

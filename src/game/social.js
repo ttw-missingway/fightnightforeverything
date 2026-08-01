@@ -467,6 +467,88 @@ export function standingLabel(v) {
   return { label: 'resented', color: 'var(--red)' }
 }
 
+/**
+ * FEUDS RECRUIT (metric 9). The measurement that produced this: inject a
+ * three-way feud at −80 and leave it alone, and 112 days later scene toxicity
+ * has moved from 0.10 to 0.13. It just sits there. That is why metric 9's
+ * recovery curve is flat — not because the counterplay is weak, but because
+ * an untreated crisis never gets worse, so "you caught it early" describes
+ * nothing and the curve is flat by arithmetic.
+ *
+ * Real scene toxicity spreads. People take sides: if someone you like is at
+ * war with someone you barely know, you drift toward your friend and against
+ * the stranger, and the feud stops being two people and becomes two camps.
+ * Toxicity is measured as the SHARE of the room caught in bad blood
+ * (sceneHealth), so a growing faction is a growing number — which finally
+ * gives severity somewhere to go while the owner does nothing about it.
+ *
+ * Deliberately slow. This should take weeks to become a real problem, so that
+ * catching it early is possible and catching it late is expensive; a fast
+ * spread would just be a different flat curve.
+ */
+export function spreadFeuds(save, events = null) {
+  const regs = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !p.banished)
+  if (regs.length < 4) return
+  // Everyone currently in real bad blood, and who with.
+  const feuding = []
+  for (let i = 0; i < regs.length; i++) {
+    for (let j = i + 1; j < regs.length; j++) {
+      const a = regs[i]; const b = regs[j]
+      if (Math.min(getRel(a, b), getRel(b, a)) <= -60) feuding.push([a, b])
+    }
+  }
+  if (!feuding.length) return
+  // WOUNDS ALSO CLOSE — and that is what makes the cliff a cliff.
+  //
+  // The first cut of this only spread, and measured, toxicity went from
+  // recovering 0% at every lag (too weak to matter) to recovering 0% at every
+  // lag (too strong to fix). A crisis that only ever grows is not a cliff, it
+  // is a wall: if nothing can be undone, reacting on day 0 is worth exactly
+  // as much as reacting on day 112, and the curve is flat again.
+  //
+  // So feuds cool on their own — people get over things — but ONLY in a room
+  // that is not already poisonous. The cooling rate is suppressed by the
+  // scene's own toxicity, which is what produces the shape §0 promises: early,
+  // few feuds and cooling wins, so catching it works; late, the room is toxic
+  // enough that cooling is throttled and the faction re-spreads faster than it
+  // heals. Fixable if caught early, hopeless past a point — as a mechanism
+  // rather than as a hope.
+  const tox = save.scene?.toxicity ?? 0
+  const cooling = clamp(1 - tox * 2.2, 0, 1)
+  if (cooling > 0) {
+    for (const [a, b] of feuding) {
+      if (!chance(0.16 * cooling)) continue
+      shiftRel(a, b, 3)
+      shiftRel(b, a, 3)
+    }
+  }
+
+  for (const [a, b] of feuding) {
+    // One recruitment roll per feud per day. An unattended feud pulls in
+    // roughly one bystander a month; against the cooling above, that is slow
+    // enough to be catchable and relentless enough to matter if you don't.
+    if (!chance(0.035)) continue
+    // Whose side is up for grabs: somebody who likes one of them and is not
+    // already at war with the other.
+    const side = chance(0.5) ? [a, b] : [b, a]
+    const [ally, enemy] = side
+    const candidates = regs.filter((p) => p.id !== a.id && p.id !== b.id
+      && getRel(p, ally) > 25 && getRel(p, enemy) > -60)
+    if (!candidates.length) continue
+    const recruit = choice(candidates)
+    // They pick a side, and picking a side is what makes a faction.
+    shiftRel(recruit, enemy, -(45 + Math.floor(rand() * 30)))
+    shiftRel(enemy, recruit, -(25 + Math.floor(rand() * 25)))
+    shiftRel(recruit, ally, 8)
+    if (events && Math.min(getRel(recruit, enemy), getRel(enemy, recruit)) <= -60) {
+      events.push({
+        type: 'social',
+        text: `🔥 ${recruit.alias || recruit.firstName} has picked a side — they're not speaking to ${enemy.alias || enemy.firstName} either now.`,
+      })
+    }
+  }
+}
+
 // ---------- Scene health: rivalry vs toxicity ----------
 // The mid-game's central tension. A fierce rivalry — two players close in
 // skill who've traded blows many times, with a competitive edge but not open

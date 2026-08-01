@@ -143,8 +143,22 @@ export function passionDaily(save, player, ctx) {
     // than a third of the time — measured over two years, average passion sat
     // at 99 and NOBODY in the game ever retired. The whole burnout arc was off.
     const novelty = noveltyOf(player)
-    bumpPassion(player, (0.18 + (player.mood - 5) * 0.05) * novelty)
-    if (ctx.wonToday) bumpPassion(player, 0.5 * novelty)
+    // CHECKED OUT (metric 9). Measured: inject a star at passion 10 — deep
+    // inside the retirement zone — leave it completely alone, and 112 days
+    // later they are back at 40. The crisis cured itself, which is why
+    // metric 9's burnout curve reads ~0.83 recovery at every lag: the
+    // counterplay was never the thing doing the work.
+    //
+    // The fix is the file's own thesis, applied to the state it describes:
+    // "burnout is not bad things happening — it is good things stopping
+    // working." That is modelled for TENURE (noveltyOf) but not for burnout
+    // itself, so somebody already checked out still got the full lift from a
+    // good night. Now the lift fades as passion falls, which makes burnout
+    // STICKY without making it terminal: they can still be pulled out, but
+    // by wins, the spotlight and being backed — not by waiting.
+    const engaged = clamp(0.35 + (player.passion ?? 80) / 40, 0.35, 1)
+    bumpPassion(player, (0.18 + (player.mood - 5) * 0.05) * novelty * engaged)
+    if (ctx.wonToday) bumpPassion(player, 0.5 * novelty * engaged)
   }
 }
 
@@ -244,6 +258,19 @@ export function checkRetirement(save, player, events) {
       see: { screen: 'players' },
       sticky: true,
     })
+  }
+
+  // SCENES DIE IN CLUMPS (metric 9). Losing someone you came here for costs
+  // you something, so one departure makes the next likelier and catching the
+  // FIRST one is worth doing. Deliberately small and friends-only: metric 5
+  // (retirement dispersion, currently ~1700 days) exists to catch exactly the
+  // bulk-exodus bug an aggressive version of this would reintroduce.
+  for (const other of Object.values(save.players)) {
+    if (other.id === player.id || other.retired || other.banished || !other.isRegular) continue
+    const bond = other.relationships?.[player.id] ?? 0
+    if (bond < 35) continue
+    bumpPassion(other, -(2 + (bond / 100) * 4))
+    other.mood = clamp(other.mood - 0.5, 0, 10)
   }
 
   const glorious = (player.glory || 0) >= 40

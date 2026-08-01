@@ -1518,7 +1518,7 @@ done. Where the metrics landed:
 | 6 | Attention cost | ✅ ~6.7–7.2 mutating decisions/week, flat y1→y15 |
 | 7 | Journal volume | ✅ 22–29/yr, back inside the 15–30 band |
 | 8 | Lever latency | ✅ stream ≈ 6d, patch ≈ 0d, money belief-gated |
-| 9 | Recoverability curve | ❌ null result — instrument works; crises don't compound (§22) |
+| 9 | Recoverability curve | ⚠️ **partial (§24)** — burnout is a real cliff; toxicity has no counterplay |
 | 10 | Money's job | ⚠️ **partial (§23)** — 0.03 → 0.40, but never crosses survival |
 
 Seven of ten hold. The three that do not are recorded with their causes rather
@@ -1699,3 +1699,101 @@ Determinism green.
 **Open: metric 9 only.** Its fix is making crises compound — the instrument
 works and has twice returned a null result because a static crisis cannot have
 a lag structure.
+
+## 24. Metric 9 — the cliff exists now, for one crisis (2026-07-31)
+
+The oldest open item in the plan, carried through P4, P5 and P6. Six steps,
+in the order they were recommended.
+
+### 1. Verify the premise first
+
+Deliberately ahead of any building, because §23's lesson was that a confident
+diagnosis can be wrong. Inject a crisis, do **nothing**, log severity weekly
+for 112 days:
+
+| crisis | wk 0 | wk 2 | wk 4 | wk 8 | wk 12 | wk 16 |
+|---|---|---|---|---|---|---|
+| toxicity (scene) | 0.10 | 0.12 | 0.12 | 0.13 | 0.15 | 0.13 |
+| burnout (star passion) | 10 | 20 | 34 | 41 | 41 | 40 |
+
+Half the diagnosis was right and half was wrong, which is exactly why the
+probe was worth doing. **Toxicity is static** — 0.10 to 0.13 in four months,
+confirming the compounding theory. **Burnout is not static, it is
+SELF-CURING**: a star injected at passion 10, deep inside the retirement zone,
+climbs back to 40 untouched. The counterplay was never doing the work; the
+crisis was fixing itself. A flat curve was guaranteed either way, but for two
+different reasons.
+
+### 2–3. The two engine changes
+
+**Feuds recruit** (`spreadFeuds`, social.js). Bystanders with ties to one side
+take it, and toxicity is measured as the share of the room in bad blood — so a
+faction is a rising number. **And wounds close**: feuds cool on their own, but
+at a rate suppressed by the scene's own toxicity. That pairing is the cliff's
+actual mechanism — early, cooling beats spreading and catching it works; late,
+the room is poisonous enough to throttle cooling and the faction outruns it.
+The first cut only spread, and produced 0% recovery at every lag: a crisis
+that can only grow is a wall, not a cliff, and reads exactly as flat.
+
+**Burnout sticks** (career.js). The file's own thesis — "burnout is not bad
+things happening, it is good things stopping working" — was modelled for
+tenure and not for burnout itself, so somebody already checked out still got
+the full lift from a good night. Gains now fade as passion falls. Plus
+departures cost their friends passion, kept deliberately small because metric
+5 is the bulk-exodus alarm.
+
+Post-change, untreated severity now moves: toxicity **0.24 → 0.54** across the
+window (crossing its own 0.45 detection threshold), and burnout sits *below*
+the retirement line for weeks instead of curing itself.
+
+### 4. Plateau left the curve
+
+§2.6 always said plateau is an equilibrium rather than an event, and its
+measured recovery *rose* with lag (0.33 → 0.83) because later windows are
+simply richer rooms. Asking "did it recover given you waited" of a steady
+state is a category error. It is now `measurePlateauIncidence` — the share of
+runs sitting in the §0 equilibrium at years 4, 8 and 12 — and `curveExempt`
+keeps it out of the sweep.
+
+### 5–6. The control, and raising n
+
+Irrelevance was left untouched as the positive control. And §17's first named
+suspect — instrument power — was correct: at six seeds one run is 0.17, so
+nothing below ~0.2 was resolvable and every curve was being read through
+noise. SEEDS doubled to twelve.
+
+**The sweep, n=12:**
+
+| crisis | k0 | k7 | k14 | k28 | k56 | k112 |
+|---|---|---|---|---|---|---|
+| **burnout** | **0.75** | **0.67** | **0.58** | 0.58 | 0.58 | 0.58 |
+| toxicity | 0 | 0.08 | 0 | 0.08 | 0.08 | 0.17 |
+| irrelevance | 1.00 | 0.58 | 0.67 | 0.75 | 0.75 | 0.83 |
+
+### The verdict: partial, and the failure is now a different failure
+
+**Burnout is a cliff.** Monotone decline to a floor: react immediately and
+three runs in four recover; wait a week and it is two in three; past a
+fortnight it settles at 0.58 and waiting longer costs nothing more because the
+damage is done. That is the first genuine lag structure this metric has ever
+produced, and it means §0's "fixable if caught early" is now literally true of
+at least one crisis.
+
+**Toxicity has no counterplay at all.** ~0 recovery at every lag — but the
+reason has changed, and that is the progress. It used to be unmeasurable
+because nothing got worse; now the disease progresses correctly and the §2.6
+kit (starve the spotlight, steer breakthroughs into sensitivity, nerf the
+instigator's character) simply cannot reverse a spreading faction. That is a
+real design gap with a clear shape, not an instrument artifact.
+
+**Irrelevance is odd**: perfect at k0, then 0.58–0.83 with no monotone order.
+Immediate action always works; after that the shape is not a cliff. Untouched
+this pass by design, so it stands as the honest control.
+
+Metric 9 moves from ❌ to ⚠️. What remains is a counterplay problem for
+toxicity — plausibly that the room needs a way to actually break a faction
+(mediation, separating the parties, or paying the cost of losing somebody) —
+rather than a measurement problem.
+
+Determinism green. Separation, metric 2, metric 4, metric 5 and journal volume
+re-checked in the same pass and unmoved.
