@@ -827,13 +827,18 @@ function RecapView({ save, report, nav }) {
           .map((p) => (
             <div className={`row spread ${p.npc ? 'npc-dim' : ''}`} key={p.id}
               style={{ borderBottom: '1px solid var(--border)', padding: '4px 0' }}>
-              {p.npc ? (
-                <span>{displayName(p, save)}</span>
-              ) : (
-                <span style={{ cursor: 'pointer' }} onClick={() => nav('players', { playerId: p.id })}>
-                  {displayName(p, save)}
-                </span>
-              )}
+              {/* FILLER IS CLICKABLE TOO (§6). Their name was deliberately
+                  inert — they are not your cast, so there was "nothing to
+                  see". But the room is full of them, they are who your people
+                  actually play every night, and "who IS that" is a fair
+                  question about the person who just took a set off your star.
+                  They stay dimmed, because they are still filler; they are
+                  just no longer unaskable. */}
+              <span className="clickable" style={{ cursor: 'pointer' }}
+                title={p.npc ? 'a regular — open their card' : undefined}
+                onClick={() => nav('players', { playerId: p.id })}>
+                {displayName(p, save)}
+              </span>
               <span className="small dim" title={p.npc ? undefined : moodLabel(p.mood)}>
                 {!p.npc && <><span className="mood-face">{moodFace(p.mood)}</span>{' '}</>}{Math.round(p.elo)}
               </span>

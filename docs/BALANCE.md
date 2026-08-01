@@ -2087,6 +2087,19 @@ cannot win a bracket. Locked entries stay visible and unpickable with what
 earns them in the label, the same rule the tab bar follows — an invisible
 unlock teaches nobody there is anything to chase.
 
+**Clickable NPC pills.** Filler names in the day report were deliberately
+inert — they are not your cast, so there was "nothing to see". But the room is
+full of them, they are who your people play every night, and "who IS that" is
+a fair question about the person who just took a set off your star. Their card
+already rendered (`save.players[id]` never cared about the npc flag); only the
+click was withheld. They stay dimmed in the list — still filler, just no
+longer unaskable.
+
+That immediately surfaced a bug in the roster cycler shipped an hour earlier:
+from an NPC card `findIndex` returns −1 and the counter read "0/6". Cycling is
+a cast tool and is simply not offered on a filler card.
+
 Determinism green; build clean; verified in-browser (no console errors, tab
 seeding correct on a year-6 save, all six palettes correctly locked on a
-lineage that has not earned them).
+lineage that has not earned them, an NPC card opening cleanly from the day
+report with no cycler).

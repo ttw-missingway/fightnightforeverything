@@ -290,8 +290,12 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
             const roster = Object.values(save.players)
               .filter((x) => !x.npc && !x.banished)
               .sort((a, b) => (b.elo || 0) - (a.elo || 0))
-            if (roster.length < 2) return null
             const i = roster.findIndex((x) => x.id === p.id)
+            // Filler is reachable from the day report now, and filler is not
+            // ON the roster — so from an NPC card there is no "next" to cycle
+            // to and the counter would read 0/6. Cycling is a cast tool; it
+            // simply isn't offered here.
+            if (roster.length < 2 || i < 0) return null
             const prev = roster[(i - 1 + roster.length) % roster.length]
             const next = roster[(i + 1) % roster.length]
             return (
