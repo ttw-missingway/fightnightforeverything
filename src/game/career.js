@@ -90,9 +90,75 @@ export function passionLabel(v) {
   return 'ready to walk away'
 }
 
+/**
+ * How long somebody can sit at the bottom before the decision is made.
+ *
+ * The design target is "day one should almost always work, a month should be
+ * hopeless", and passion alone could never deliver the second half: it is a
+ * number that goes back up, so there was no month past which anything was
+ * settled. This is the point of no return — a month of genuinely not wanting
+ * to be there and they have decided, whatever you do afterwards. Recoverable
+ * right up until it isn't.
+ */
+export const CHECKED_OUT_DAYS = 28
+export const CHECKED_OUT_BELOW = 22
+
+/**
+ * How long THIS person specifically holds on, rolled once. A fixed 28-day
+ * fuse is a shared clock, and shared clocks are how metric 5's bulk-exodus
+ * bug comes back — measured, the flat version dropped retirement dispersion
+ * from 1703 days to 1191 by lining everyone's decision up. Same lesson as
+ * peakAge/hangUpAge in the block above, learned the same way.
+ */
+export function checkedOutFuse(p) {
+  if (p.checkedOutFuse == null) p.checkedOutFuse = CHECKED_OUT_DAYS + randInt(-9, 22)
+  return p.checkedOutFuse
+}
+
 export function bumpPassion(player, delta) {
   if (player.retired) return
+  // Once they have decided, encouragement barely registers. They are being
+  // polite about it now.
+  if (delta > 0 && player.checkedOut) delta *= 0.12
   player.passion = clamp((player.passion ?? 80) + delta, 0, PASSION_MAX)
+}
+
+/**
+ * The daily count toward that decision. Separate from passionDaily because it
+ * must tick for everyone every day, attended or not — deciding you are done
+ * is something that happens while you are NOT at the arcade.
+ */
+export function checkedOutDaily(save) {
+  for (const p of Object.values(save.players)) {
+    if (p.retired || p.banished || !p.isRegular) continue
+    // The clock counts days they are sinking, not days they are low. Somebody
+    // actively being pulled back — streamed, backed, winning again — is not
+    // quietly deciding to quit, even while the number is still small. Same
+    // principle as feud hardening: the countdown runs on neglect, not on the
+    // calendar, so attending to it is what buys the time.
+    const sinking = (p.passion ?? 80) <= (p.lastPassion ?? p.passion ?? 80)
+    p.lastPassion = p.passion ?? 80
+    if ((p.passion ?? 80) < CHECKED_OUT_BELOW && sinking) {
+      p.lowDays = (p.lowDays || 0) + 1
+      if (!p.checkedOut && p.lowDays >= checkedOutFuse(p)) {
+        p.checkedOut = true
+        if (!p.npc) {
+          writeJournal(save, p, 'checkedOut', {}) // a warning, not a landmark — metric 7
+          pushToast(save, {
+            icon: '🕯',
+            text: `${displayName(p, save)} has stopped pretending they still want this. Whatever was going to change their mind needed to happen already.`,
+            see: { screen: 'players', params: { playerId: p.id } },
+            sticky: true,
+            key: `checkedout_${p.id}`,
+          })
+        }
+      }
+    } else {
+      // A real recovery resets the clock — but only a real one.
+      p.lowDays = 0
+      if ((p.passion ?? 80) > 45) { p.checkedOut = false; p.checkedOutFuse = null }
+    }
+  }
 }
 
 /**

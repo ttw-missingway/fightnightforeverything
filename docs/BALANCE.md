@@ -1904,3 +1904,63 @@ claimed. The honest next step is not more tuning — it is deciding whether a
 the counterplays need to be genuinely more powerful when applied immediately.
 That is a design question, and answering it by adjusting numbers until the
 curve looks right would be fitting to noise.
+
+### §24 addendum 3 — building to a stated target (2026-07-31)
+
+Design target given: **"day one should almost always work, a month should be
+hopeless"** — roughly 0.9 falling to 0.1.
+
+The missing ingredient was irreversibility: every mechanism up to here was
+undoable at any time, so late could never be hopeless, only slightly worse.
+Two were added — feud grudges HARDEN (they stop tracing to whoever seeded
+them, and stop cooling), and a player below the passion line long enough goes
+CHECKED OUT (encouragement is damped to 12%).
+
+**Attempt 1 hardened on wall-clock time. It lowered the whole curve instead of
+tilting it** — toxicity k0 fell to 0.38, burnout k0 to 0.38, *below* their own
+later lags. Correct on reflection: grudges set because they keep being
+reinforced, not because a calendar advanced, so they were setting *underneath*
+an owner who acted immediately. Early intervention never got a clean shot.
+
+**Attempt 2 gates both clocks on NEGLECT.** Feud hardening pauses when the
+room's temperature comes down; the checked-out countdown only advances on days
+a player is still sinking. Act, and the clock stops. A well-run room hardens
+nothing.
+
+| crisis | k0 | k7 | k14 | k28 | k56 | k112 |
+|---|---|---|---|---|---|---|
+| toxicity | 0.58 | 0.50 | 0.54 | 0.42 | 0.38 | 0.38 |
+| burnout | 0.63 | 0.58 | 0.58 | 0.54 | 0.54 | 0.54 |
+| irrelevance | 0.88 | 0.54 | 0.71 | 0.75 | 0.63 | 0.67 |
+
+**Shape achieved, magnitude not.** Toxicity and burnout now decline
+monotonically with lag for the first time — burnout in particular went from
+*backwards* (k0 its own worst point) to correctly ordered. But 0.58 → 0.38 and
+0.63 → 0.54 are nowhere near 0.9 → 0.1.
+
+### The cost, and the recommendation
+
+| metric | pre-hardening | with hardening |
+|---|---|---|
+| retirement dispersion (m5) | 1703 | 1139 |
+| first elite win share (m2) | 1.00 | 0.67 |
+| journal volume (m7, band 15–30) | 29 | 32.5 |
+| toxicity curve | 0.58 → 0.46 | 0.58 → 0.38 |
+| burnout curve | 0.50 → 0.63 (backwards) | 0.63 → 0.54 (monotone) |
+
+Hardening bought a marginally steeper toxicity curve and a genuinely fixed
+burnout ordering, and charged a third of metric 5's dispersion and a third of
+metric 2's hit rate for it. Metric 2 is "the impossible moment" — the single
+thing the whole calendar exists to produce — so a third of runs never getting
+there is an expensive way to buy a tilt.
+
+That is the same shape of trade as §23's training program: plausible
+mechanism, real cost, thin benefit. **Recommendation is to revert the
+hardening and keep the pre-hardening state**, which had crises that were real
+and fixable (0% → ~50%, the large win) with metrics 2, 5 and 7 all healthy —
+and to treat "day one almost always works" as needing a different mechanism
+than decay, most likely counterplay that is *decisively* stronger when
+immediate rather than crises that rot faster when ignored.
+
+Recorded rather than silently reverted, and left in the tree pending that
+call, because the target was explicit and the choice belongs to the designer.

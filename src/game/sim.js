@@ -29,7 +29,7 @@ import {
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
   sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf, spreadFeuds, feudSource,
 } from './social.js'
-import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion, ageYearly, ageWarnings, careerStageOf } from './career.js'
+import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion, ageYearly, ageWarnings, careerStageOf, checkedOutDaily } from './career.js'
 import { relevanceDaily } from './relevance.js'
 import { processEurekaDaily, edge as eurekaEdge } from './eureka.js'
 import { writeJournal } from './journal.js'
@@ -2148,6 +2148,8 @@ export function advanceDay(save) {
   }
   // A fresh patch re-shuffles who the pros play — the meta-chasers first.
   if (daysSincePatch(save) === 0) gravitateElites(save)
+  // The slow decision to stop caring — ticks whether or not they came in.
+  checkedOutDaily(save)
   // Bad blood recruits: an unattended feud becomes a faction (social.js).
   spreadFeuds(save)
   // NAME THE SOURCE. The one nuclear option only works if you can tell WHO to
