@@ -362,6 +362,11 @@ export const AUTO_STREAM_SELECTORS = [
   { key: 'closest', label: 'Closest matches', blurb: 'the match nearest a 50/50' },
   { key: 'best', label: 'Best players', blurb: 'top combined skill + fame' },
   { key: 'first', label: 'First setup', blurb: 'whatever is on setup 1' },
+  // FOLLOW ONE PERSON (§6). The camera is the cultivation lever — §1.8 makes
+  // exposure a prerequisite for growth — so "point it at THIS player" is a
+  // strategy, not a convenience. Falls back to the closest match on nights
+  // they do not play.
+  { key: 'follow', label: 'Follow a player', blurb: 'whoever you are building' },
 ]
 export const AUTO_STREAM_CADENCES = [
   { key: 'hourly', label: 'Every hour' },

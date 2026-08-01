@@ -135,7 +135,10 @@ export function noteMatchOutcome(save, player, oppCharId, won) {
   // Recent form, newest first, capped at 8. Lifetime W/L says who somebody IS;
   // this says how the last few nights have gone, which is what people actually
   // talk about and what a losing streak means.
-  player.form = [won ? 'w' : 'l', ...(player.form || [])].slice(0, 8)
+  // Twenty, not eight (§6's nav list asks for a last-20 record). Eight is a
+  // fortnight — long enough for the sim's "recent form" reads, too short for
+  // the player to see a slump turn into a slide.
+  player.form = [won ? 'w' : 'l', ...(player.form || [])].slice(0, 20)
   if (!oppCharId) return
   const absDay = absDayOf(save.day, save.year)
   if (!won) {

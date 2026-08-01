@@ -350,6 +350,21 @@ function AutoStreamControls({ autoStream, setAutoStream }) {
           </select>
         </div>
       )}
+      {/* WHO the camera follows. §1.8 makes exposure a prerequisite for
+          growth, so this is the cultivation lever pointed by hand — the
+          difference between "stream something" and "build this person". */}
+      {autoStream.enabled && autoStream.selector === 'follow' && (
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <select className="small" value={autoStream.followId || ''}
+            onChange={(e) => setAutoStream({ followId: e.target.value || null })}>
+            <option value="">— pick a player —</option>
+            {Object.values(save.players)
+              .filter((p) => !p.npc && !p.retired && !p.banished && p.isRegular)
+              .sort((a, b) => (b.elo || 0) - (a.elo || 0))
+              .map((p) => <option key={p.id} value={p.id}>{displayName(p, save)}</option>)}
+          </select>
+        </div>
+      )}
     </div>
   )
 }

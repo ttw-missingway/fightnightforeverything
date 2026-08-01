@@ -12,6 +12,8 @@ import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from 
 import { computeMatchups } from '../game/balance.js'
 import { uid } from '../game/util.js'
 import { noteDecision } from '../game/attention.js'
+import { TAB_GATES, tabOpen } from '../game/tabs.js'
+import { isUnlocked } from '../game/achievements.js'
 
 const INDEX_KEY = 'fightnight:index'
 const saveKey = (id) => `fightnight:save:${id}`
@@ -19,6 +21,11 @@ const saveKey = (id) => `fightnight:save:${id}`
 // How many advance-steps a single idle pass may run. Idle only advances with
 // the tab open, so this just keeps each foreground tick smooth.
 const IDLE_FOREGROUND_CAP = 200
+// How much away-time one return can bank. At the default 'fast' speed a step
+// is an in-game hour a minute, so this is a bit over two in-game months —
+// enough that a weekend away is fully honoured and a month away is a long
+// catch-up rather than an unbounded one.
+const IDLE_AWAY_CAP = 1500
 
 export function loadIndex() {
   try {
@@ -156,6 +163,24 @@ function repairWorld(save) {
     ensureRegionalField(save)
     hostsForYear(save, save.year)
     hostsForYear(save, save.year + 1)
+  }
+  // NEWLY-UNLOCKED TAB OUTLINES need a baseline, or every tab an existing save
+  // already had reads as "new" the first time it loads and the whole bar
+  // lights up gold — which says nothing, which is the failure mode the
+  // indicator exists to avoid. Seed it with what is open RIGHT NOW so only
+  // things unlocked from here forward glow. Done at load rather than in a
+  // render, per the standing rule that no UI render may be the first caller
+  // of anything that writes to the save.
+  if (!save.seenTabs) {
+    // Both gate KINDS: per-run tabs (TAB_GATES) and lineage unlocks from
+    // achievements. Missing the second lit the Studio up on every existing
+    // save, which is exactly the noise this is meant to prevent.
+    const gated = { world: 'world', teams: 'teams', vods: 'vods', halloffame: 'halloffame', codex: 'codex', studio: 'studio' }
+    save.seenTabs = ['arcade', 'players', 'manage', 'feed', 'tournament']
+    for (const [tab, gate] of Object.entries(gated)) {
+      const open = TAB_GATES[gate] ? tabOpen(save, gate) : isUnlocked(save, gate)
+      if (open) save.seenTabs.push(tab)
+    }
   }
   return save
 }
@@ -572,11 +597,28 @@ export function StoreProvider({ children }) {
   const openSave = useCallback((id) => {
     const loaded = loadSaveById(id)
     if (!loaded) return false
-    // This is not a game that plays itself while you're gone. Idle mode is a
-    // fast-forward you WATCH — it only advances with the tab open — so closing
-    // the save stops time cold. Reopening just restarts the clock from now; the
-    // hours you were away never happened.
-    if (loaded.idle) { loaded.idle.running = false; loaded.idle.lastTickAt = null; loaded.idle.awayReport = null }
+    // AFK CATCH-UP (§6's idle shrink). This used to stop time cold on close and
+    // restart the clock on open — "the hours you were away never happened" —
+    // which is a defensible stance for a game you sit and watch, and the wrong
+    // one for this game. §6 calls the let-it-run mode STRUCTURAL rather than
+    // quality-of-life, because P5 made a lineage twenty years long: nobody is
+    // going to sit at the tab for that, and an endless dynasty that only
+    // advances while observed is a dynasty nobody finishes.
+    //
+    // So time passes while the tab is shut, IF you left it running. Bounded by
+    // IDLE_AWAY_CAP so a fortnight away is a long catch-up rather than an
+    // unbounded one, and the result lands in `awayReport` for the welcome-back
+    // modal instead of silently mutating the world behind you.
+    if (loaded.idle) {
+      loaded.idle.awayReport = null
+      if (loaded.idle.enabled && loaded.idle.running && loaded.idle.lastTickAt) {
+        const report = idleRun(loaded, IDLE_AWAY_CAP, false)
+        if (report) loaded.idle.awayReport = report
+      } else {
+        loaded.idle.running = false
+        loaded.idle.lastTickAt = null
+      }
+    }
     persistSave(loaded) // write migrations back immediately
     setSave(loaded)
     setScreen({ name: 'arcade' })
@@ -635,7 +677,7 @@ export function StoreProvider({ children }) {
       }
       startDay(next)
     }
-    while (next.hour < HOURS_PER_DAY) simHour(next)
+    while (next.hour < HOURS_PER_DAY) { simHour(next); maybeAutoStream(next) }
     endDay(next)
     persistSave(next)
     setSave(next)

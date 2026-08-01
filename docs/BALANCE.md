@@ -2033,3 +2033,60 @@ needs to move outside the rng path.
 
 Metrics 1 (1.54), 2 (median y4), 4 (spread 0.14) and survival all sit in
 acceptable ranges. Determinism green.
+
+## 25. The last of §6 — idle, nav, unlockables (2026-07-31)
+
+The three undelivered backlog items, built together.
+
+### The idle shrink (structural, per §6)
+
+**AFK catch-up.** Idle used to stop time cold on close: "the hours you were
+away never happened." Defensible for a game you sit and watch, wrong for this
+one — P5 made a lineage twenty years long, and an endless dynasty that only
+advances while observed is one nobody finishes. Time now passes with the tab
+shut if you left it running, bounded by `IDLE_AWAY_CAP` (1500 steps, ~two
+in-game months at the default speed), landing in a welcome-back modal that
+says exactly what happened rather than silently mutating the world.
+
+**Auto-stream split from idle.** `maybeAutoStream` fired only inside the idle
+loop, so the camera setting did nothing for anyone playing by hand. It now
+runs on manual day-advance too.
+
+**Follow a player.** A fourth auto-stream selector. §1.8 makes exposure a
+prerequisite for growth, so pointing the camera at one person is a
+cultivation strategy, not a convenience — it falls through to the closest
+match on nights they do not play rather than wasting the slot.
+
+### Navigation
+
+- **Roster cycling** on the player card (‹ 3/8 ›) — reading six cards in a row
+  is the actual loop of the Players tab.
+- **Elo trajectory**: one number per player per year (`eloByYear`), sampled at
+  the rollover. Cheap to store and the only way to see a career's SHAPE — the
+  climb, the plateau, the decline age puts on the end.
+- **Last-20 form** (was 8). Eight is a fortnight — long enough for the sim's
+  recent-form reads, too short to watch a slump become a slide.
+- **Newly-unlocked tabs** carry a gold ✦ until visited. Needed a baseline:
+  seeded at LOAD (not in a render — the standing rule) with everything already
+  open, or an existing save lights the whole bar up and the indicator says
+  nothing. First cut missed lineage unlocks and lit the Studio on every save;
+  it now checks both gate kinds.
+- **VOD mark-all-watched.** A long run banks replays faster than anyone
+  watches them, and a permanent "12 new" badge stops meaning anything.
+
+### Unlockables — the only meta layer
+
+Prestige-as-power was deprecated in P0, so a lineage carries no advantage
+between runs, only its record books. These are the other thing it carries:
+six portrait palettes, each tied to a real accomplishment — a first title,
+the national board, a major, EVO top 8, an EVO win, outliving the game itself.
+
+Zero points, by construction. **They grant nothing.** That is the whole
+design constraint and the reason they can be as rare as they like: a palette
+cannot win a bracket. Locked entries stay visible and unpickable with what
+earns them in the label, the same rule the tab bar follows — an invisible
+unlock teaches nobody there is anything to chase.
+
+Determinism green; build clean; verified in-browser (no console errors, tab
+seeding correct on a year-6 save, all six palettes correctly locked on a
+lineage that has not earned them).

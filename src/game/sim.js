@@ -2215,6 +2215,13 @@ export function advanceDay(save) {
     save.year += 1
     driftEvoRoster(save)
     driftRegionalField(save) // the national board regresses and churns too
+    // A YEAR-BY-YEAR ELO TRACE per cast member (§6's nav list). One number a
+    // year is nothing to store and it is the only way to see a career's SHAPE
+    // — the climb, the plateau, the decline age puts on the end of it.
+    for (const p of Object.values(save.players)) {
+      if (p.npc) continue
+      p.eloByYear = [...(p.eloByYear || []), Math.round(p.elo || 1200)].slice(-25)
+    }
     // EVERYBODY HAS A BIRTHDAY (P5). The one tick a year where the clock that
     // nobody can top back up moves — and the succession problem gets one year
     // closer whether or not the owner has been thinking about it.

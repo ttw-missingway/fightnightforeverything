@@ -58,6 +58,51 @@ const TO_NEW_YEAR = 182 // June 15 → January 1
 const yours = (save) => (save.hallOfFame || []).filter((r) => r.type !== 'evo' && r.type !== 'circuit' && !r.circuitKind)
 
 export const ACHIEVEMENTS = [
+  // ---------- Cosmetics: the only meta layer (REVISION §6) ----------
+  //
+  // Prestige-as-power was deprecated in P0, so a lineage carries no advantage
+  // between runs — only its record books. These are the other thing it
+  // carries: things to look at, earned by proving something, granting nothing.
+  // Zero points on purpose; they are their own reward and cannot be spent.
+  {
+    key: 'pal-first-title', icon: '🎨', name: 'House colours',
+    unlock: 'pal-synthwave', unlockLabel: 'Portrait palette: Synthwave', points: 0,
+    how: 'Win any tournament at your own arcade.',
+    check: (s) => (s.hallOfFame || []).some((r) => !r.circuitKind && r.type !== 'evo'),
+  },
+  {
+    key: 'pal-regional', icon: '🧊', name: 'Cold open',
+    unlock: 'pal-ice', unlockLabel: 'Portrait palette: Ice', points: 0,
+    how: 'Put somebody on the national board’s top sixteen.',
+    check: (s) => (s.hallOfFame || []).some((r) => r.circuitKind === 'regional' && (r.arcadeResults || []).length),
+  },
+  {
+    key: 'pal-major', icon: '🌸', name: 'Travelled well',
+    unlock: 'pal-blossom', unlockLabel: 'Portrait palette: Blossom', points: 0,
+    how: 'Have one of yours compete at a world major.',
+    check: (s) => (s.hallOfFame || []).some((r) => r.circuitKind === 'major' && (r.arcadeResults || []).length),
+  },
+  {
+    key: 'pal-evo-top8', icon: '🌇', name: 'Sunset on the big stage',
+    unlock: 'pal-sunset', unlockLabel: 'Portrait palette: Sunset', points: 0,
+    how: 'Make EVO top 8.',
+    check: (s) => (s.hallOfFame || []).some((r) => r.type === 'evo'
+      && (r.arcadeResults || []).some((a) => a.place <= 8)),
+  },
+  {
+    key: 'pal-champion', icon: '🍇', name: 'Vintage',
+    unlock: 'pal-grape', unlockLabel: 'Portrait palette: Grape', points: 0,
+    how: 'Win EVO.',
+    check: (s) => (s.hallOfFame || []).some((r) => r.type === 'evo'
+      && (r.arcadeResults || []).some((a) => a.place === 1)),
+  },
+  {
+    key: 'pal-era', icon: '🕹', name: 'Outlived the game',
+    unlock: 'pal-virtualboy', unlockLabel: 'Portrait palette: Virtual Boy', points: 0,
+    how: 'Still be running when the sequel ships.',
+    check: (s) => (s.era?.n || 1) >= 2,
+  },
+
   // ---------- Idle speeds: you earn the right to skip ahead ----------
   {
     key: 'summer-holds', icon: '☀️', name: 'The summer holds',

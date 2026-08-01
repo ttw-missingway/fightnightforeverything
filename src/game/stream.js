@@ -617,6 +617,16 @@ export function pickAutoStreamSetup(save, hour, selector) {
   const candidates = (hour?.events || []).filter((e) => e.type === 'match' && !e.stream)
   if (!candidates.length) return null
   let pick
+  if (selector === 'follow') {
+    // Point the camera at one person. §1.8 makes exposure a prerequisite for
+    // growth, so this is the cultivation lever aimed by hand — and it falls
+    // through to the closest match on nights they are not playing rather than
+    // wasting the slot.
+    const id = save.idle?.autoStream?.followId
+    const theirs = id ? candidates.find((e) => e.aId === id || e.bId === id) : null
+    if (theirs) return theirs.setupIndex
+    selector = 'closest'
+  }
   if (selector === 'first') {
     pick = candidates.reduce((a, b) => (a.setupIndex <= b.setupIndex ? a : b))
   } else if (selector === 'best') {

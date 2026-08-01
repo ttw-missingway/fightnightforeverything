@@ -131,12 +131,23 @@ export default function App() {
         <span className="brand">FIGHT NIGHT</span>
         {ordered.map(([k, label, gate]) => {
           const locked = gateShut(gate)
-          return (
+            // FRESHLY OPENED, AND SAYING SO (§6). A tab that unlocks mid-run
+            // is a thing the player earned and will otherwise never notice —
+            // the bar simply has one more button than it did. Gold outline
+            // until visited, cleared on the visit itself.
+            const fresh = !locked && gate && !(save.seenTabs || []).includes(k)
+            return (
             <button key={k} disabled={!!locked}
-              title={locked ? `Locked — earned by: ${TAB_GATES[gate] ? tabHint(gate) : howToUnlock(gate)}` : undefined}
-              style={activeTab === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' } : {}}
-              onClick={() => { if (!locked) nav(k) }}>
-              {locked ? `🔒 ${label.replace(/^\S+\s/, '')}` : label}
+              title={locked ? `Locked — earned by: ${TAB_GATES[gate] ? tabHint(gate) : howToUnlock(gate)}`
+                : fresh ? 'Newly unlocked' : undefined}
+              style={activeTab === k ? { borderColor: 'var(--pink)', color: 'var(--pink)' }
+                : fresh ? { borderColor: 'var(--gold)', color: 'var(--gold)' } : {}}
+              onClick={() => {
+                if (locked) return
+                if (fresh) mutate((s2) => { s2.seenTabs = [...(s2.seenTabs || []), k] }, { ack: true })
+                nav(k)
+              }}>
+              {fresh ? `✦ ${label}` : locked ? `🔒 ${label.replace(/^\S+\s/, '')}` : label}
             </button>
           )
         })}
@@ -175,9 +186,48 @@ export default function App() {
       {screen.name === 'studio' && isUnlocked(save, 'studio') && <GameStudio />}
       {screen.name === 'manage' && <Manage />}
 
+      <AwayReport />
       <ToastOverlay onArcade={screen.name === 'arcade'} />
       <ForeclosureModal />
       <GameOverModal />
+    </div>
+  )
+}
+
+/**
+ * WELCOME BACK. Idle now runs with the tab closed (§6's idle shrink), so the
+ * world can be meaningfully further along than you left it — and time passing
+ * behind your back is only acceptable if the game tells you exactly what it
+ * did. Everything here comes from the catch-up itself; nothing is re-simulated
+ * to build it.
+ */
+function AwayReport() {
+  const { save, mutate, nav } = useStore()
+  const r = save?.idle?.awayReport
+  if (!r || !r.daysPassed) return null
+  const close = () => mutate((s) => { s.idle.awayReport = null }, { ack: true })
+  return (
+    <div className="modal-backdrop" onClick={close}>
+      <div className="card" style={{ maxWidth: 520, borderColor: 'var(--gold)' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>🌙 While you were away</h3>
+        <p className="dim small" style={{ marginTop: 0 }}>
+          {r.daysPassed} day{r.daysPassed === 1 ? '' : 's'} passed at {save.arcade.name}.
+        </p>
+        {(r.headlines || []).length > 0 && (
+          <div className="card sub">
+            {r.headlines.map((h, i) => <div key={i} className="small" style={{ margin: '3px 0' }}>{h}</div>)}
+          </div>
+        )}
+        {(r.tournaments || []).length > 0 && (
+          <p className="small">
+            📼 {r.tournaments.length} event{r.tournaments.length === 1 ? '' : 's'} ran —{' '}
+            <button className="small" onClick={() => { close(); nav('vods') }}>watch the replays →</button>
+          </p>
+        )}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="primary" onClick={close}>Back to it</button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -21,6 +21,29 @@ export const FACE_PALETTES = [
   { key: 'grape', label: 'Grape' },
 ]
 
+/**
+ * THE ONLY META LAYER (REVISION §6). Prestige-as-power was deprecated in P0 —
+ * a returning lineage never starts stronger — which left the game with nothing
+ * to carry between runs except the record books. These are what it carries
+ * instead: things to LOOK at, earned by proving something, granting no
+ * advantage whatsoever. That is the whole design constraint. A palette cannot
+ * win you a bracket, so it can be as rare as it likes.
+ *
+ * `unlock` names an achievements.js unlock key; a palette without one is
+ * available from the first day.
+ */
+export const PALETTE_UNLOCKS = {
+  synthwave: 'pal-synthwave',
+  ice: 'pal-ice',
+  blossom: 'pal-blossom',
+  sunset: 'pal-sunset',
+  grape: 'pal-grape',
+  virtualboy: 'pal-virtualboy',
+}
+
+/** Palettes with no unlock gate — everything a first run can pick. */
+export const isPaletteFree = (key) => !PALETTE_UNLOCKS[key]
+
 export const PALETTE_KEYS = FACE_PALETTES.map((p) => p.key)
 export const DEFAULT_PALETTE = 'gameboy'
 

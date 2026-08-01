@@ -778,7 +778,8 @@ export function newIdleState() {
     lastTickAt: null, // wall-clock ms of the last processed step (for catch-up)
     autoStream: {
       enabled: true,
-      selector: 'closest', // 'closest' | 'best' | 'first'
+      selector: 'closest', // 'closest' | 'best' | 'first' | 'follow'
+      followId: null, // whose camera to point at when selector is 'follow'
       cadence: 'daily', // 'hourly' | 'daily' | 'weekly' | 'weekends'
       lastStreamAbsDay: null, // last absolute day an auto-stream fired (cadence gate)
     },

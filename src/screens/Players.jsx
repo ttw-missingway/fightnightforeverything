@@ -282,7 +282,27 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
   return (
     <div>
       <div className="row spread">
-        <button onClick={back}>← Leaderboard</button>
+        <div className="row" style={{ gap: 6 }}>
+          <button onClick={back}>← Leaderboard</button>
+          {/* Cycle the roster without going back through the table — reading
+              six cards in a row is the actual loop of the Players tab. */}
+          {(() => {
+            const roster = Object.values(save.players)
+              .filter((x) => !x.npc && !x.banished)
+              .sort((a, b) => (b.elo || 0) - (a.elo || 0))
+            if (roster.length < 2) return null
+            const i = roster.findIndex((x) => x.id === p.id)
+            const prev = roster[(i - 1 + roster.length) % roster.length]
+            const next = roster[(i + 1) % roster.length]
+            return (
+              <>
+                <button className="small" title={`← ${prev.alias || prev.firstName}`} onClick={() => goTo(prev.id)}>‹</button>
+                <span className="dim small">{i + 1}/{roster.length}</span>
+                <button className="small" title={`${next.alias || next.firstName} →`} onClick={() => goTo(next.id)}>›</button>
+              </>
+            )
+          })()}
+        </div>
         {canEdit
           ? <button onClick={() => setEditing(!editing)}>{editing ? 'Done editing' : '✎ Edit player'}</button>
           : <span className="pill" title="players are locked in once a consequential run begins">🔒 locked in</span>}

@@ -6,7 +6,7 @@ const typeIcon = (type) =>
   type === 'evo' ? '🌏' : type === 'circuit' ? '🌐' : type === 'teams' ? '🛡' : type === 'moneymatch' ? '💸' : '🏆'
 
 export default function Vods() {
-  const { save, nav } = useStore()
+  const { save, nav, mutate } = useStore()
   const vods = save.vods || []
   const archives = (save.archives || []).filter((a) => (a.vods || []).length)
   const [showRun, setShowRun] = useState(null) // archive run number, or null = current
@@ -18,6 +18,20 @@ export default function Vods() {
     <div>
       <div className="card">
         <h2 style={{ margin: 0 }}>📼 VODs {unwatched > 0 && <span className="pill on">{unwatched} new</span>}</h2>
+        {/* MARK THE BACKLOG WATCHED (§6). A long run banks replays faster than
+            anyone watches them, and a permanent "12 new" badge stops meaning
+            anything. One button to clear what you are never going to sit
+            through, so the badge can go back to meaning "something happened". */}
+        {unwatched > 0 && !archive && (
+          <button className="small" title="mark every replay as watched"
+            onClick={() => mutate((s) => {
+              for (const v of s.vods || []) {
+                v.revealed = 999999
+              }
+            }, { ack: true })}>
+            ✓ Mark all watched
+          </button>
+        )}
         <span className="dim">
           Tournaments, EVO, and money matches broadcast on {save.stream.channelName}.
           Watch them back spoiler-free — nothing here reveals a winner until you press play.

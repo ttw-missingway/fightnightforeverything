@@ -54,7 +54,7 @@ import {
 } from '../game/economy.js'
 import { SpritePicker, StagePicker } from './SpritePicker.jsx'
 import { CHAR_SPRITE_CATALOG, CHAR_SPRITE_GROUPS, charArt, charArtFor, stageArt, FACE_PALETTES, playerArtFor } from './art.js'
-import { MIXED_PALETTE } from '../game/palettes.js'
+import { MIXED_PALETTE, PALETTE_UNLOCKS } from '../game/palettes.js'
 
 // Every editor gets (save, update) where update(fn) mutates a draft of the save.
 
@@ -152,7 +152,18 @@ export function SettingsEditor({ save, update }) {
             <select value={save.settings.facePalette || MIXED_PALETTE}
               onChange={(e) => update((s) => { s.settings.facePalette = e.target.value })}>
               <option value={MIXED_PALETTE}>Mixed — everyone their own</option>
-              {FACE_PALETTES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              {/* Locked palettes stay VISIBLE and unpickable, with what earns
+                  them in the label — the same rule the tab bar follows. An
+                  invisible unlock teaches nobody there is anything to chase. */}
+              {FACE_PALETTES.map((p) => {
+                const gate = PALETTE_UNLOCKS[p.key]
+                const locked = gate && !isUnlocked(save, gate)
+                return (
+                  <option key={p.key} value={p.key} disabled={!!locked}>
+                    {locked ? `🔒 ${p.label} — ${howToUnlock(gate)}` : p.label}
+                  </option>
+                )
+              })}
             </select>
             <Portrait url={playerArtFor('palette-preview')} size={30} alt="preview" />
             <Portrait url={playerArtFor('palette-preview-2', 'woman')} size={30} alt="preview" />
