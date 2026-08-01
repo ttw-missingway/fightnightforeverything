@@ -480,21 +480,6 @@ const LINES = {
       `The money was there. The answer was still no. I heard what was actually said.`,
     ],
   },
-  checkedOut: {
-    killer: [
-      `I keep showing up because leaving would mean admitting it. That's the only reason left. I'm not chasing anything any more — I'm just here.`,
-    ],
-    scholar: [
-      `An honest note, since these are for me: I have stopped improving because I have stopped trying, and I stopped trying some weeks ago without announcing it to myself. The distinction between a break and an ending is apparently retrospective.`,
-    ],
-    natural: [
-      `Went in, played a bit, came home. Same as last week. I used to be so excited I couldn't sleep the night before. I don't really know when that stopped.`,
-    ],
-    stoic: [
-      `The fire is out. I have been standing near the ashes pretending otherwise out of habit. It was a good long burn.`,
-    ],
-  },
-
   // -------- the other clock (P5 — age, and the endings it writes) --------
   slowingDown: {
     killer: [

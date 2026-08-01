@@ -1964,3 +1964,38 @@ immediate rather than crises that rot faster when ignored.
 
 Recorded rather than silently reverted, and left in the tree pending that
 call, because the target was explicit and the choice belongs to the designer.
+
+### §24 addendum 4 — hardening reverted, and a correction (2026-07-31)
+
+The hardening (grudge setting, checked-out) is **reverted** on the designer's
+call. `src/` is restored to the c2d9244 state; `tools/` is untouched, so
+SEEDS=24, the plateau incidence re-spec, metric 4's re-spec and metric 10's
+classifier repair all stand. 135 lines out, determinism green.
+
+**A correction to what was predicted of the revert.** It was said that
+reverting would restore m5 to 1703, m2 to 1.00 and m7 to 29. Measured
+post-revert (n=6, 15y): **m5 1207 · m2 0.83 · m7 38.3 · m4 spread 0.12 · m1
+1.50/1.47/1.56 · cadence 10.6 · survival 5041.**
+
+Two reasons the prediction was wrong, and the second one matters:
+
+1. **The comparison was across different configurations.** The quoted
+   1703/1.00/29.1 came from a 20-year run; this is a 15-year run at n=6.
+   Retirement dispersion in particular scales with horizon, so those were
+   never like-for-like.
+2. **Some of the cost belonged to the feud contagion, not to the hardening.**
+   Journal volume at year 10 reads 38.3 against a 15–30 band. Contagion
+   generates social churn — more feuds means more rivalry and grudge entries —
+   and that work is being KEPT. Attributing the whole regression to hardening
+   was wrong; reverting hardening does not take it back.
+
+So the honest post-revert position is better than the hardened state on every
+count, but **not identical to the pre-metric-9 state**: metric 7 is now out of
+band at ~38/yr, and that is a real cost of making feuds spread. It is an open
+item, and cheap — the same treatment §20 applied to `elimination` (gate the
+routine social entries to the weekly budget rather than letting every new
+grudge announce itself) should bring it back.
+
+Metrics 1, 2, 3, 4 and 5 and survival all sit in acceptable ranges; metric 9
+returns to its c2d9244 reading (crises fixable at ~50%, timing worth little);
+metric 10 unchanged.

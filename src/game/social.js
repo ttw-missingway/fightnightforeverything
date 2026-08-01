@@ -3,7 +3,7 @@ import { newTeam, remember, chronicle, getMatchup } from './model.js'
 import { writeJournal } from './journal.js'
 import { pushToast } from './notify.js'
 import { TEAM_WORDS } from './names.js'
-import { DAYS_PER_YEAR, statLevel, absDayOf } from './constants.js'
+import { DAYS_PER_YEAR, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
 import { tokenFeel } from './economy.js'
 
@@ -486,8 +486,6 @@ export function standingLabel(v) {
  * catching it early is possible and catching it late is expensive; a fast
  * spread would just be a different flat curve.
  */
-export const FEUD_HARDEN_DAYS = 26 // a grudge carried this long stops being on loan
-
 export function spreadFeuds(save, events = null) {
   const regs = Object.values(save.players).filter((p) => p.isRegular && !p.retired && !p.banished)
   if (regs.length < 4) return
@@ -515,57 +513,10 @@ export function spreadFeuds(save, events = null) {
   // enough that cooling is throttled and the faction re-spreads faster than it
   // heals. Fixable if caught early, hopeless past a point — as a mechanism
   // rather than as a hope.
-  // GRUDGES HARDEN, AND THAT IS THE POINT OF NO RETURN.
-  //
-  // The design target is "day one should almost always work, a month should be
-  // hopeless", and nothing in the game could deliver the second half: every
-  // mechanism here was reversible at any time, so late could never be
-  // hopeless — only slightly worse. A cliff needs something that stops being
-  // undoable.
-  //
-  // A fresh grudge belongs to whoever talked you into it: you are angry on
-  // someone else's behalf, so removing them takes it with them and time cools
-  // it. Carry it for a month and it stops being on loan. It is yours, you have
-  // your own reasons now, and it no longer traces back to anybody — so cutting
-  // out the instigator does nothing for it and it never cools again.
-  // THE CLOCK ONLY RUNS WHILE THE FEUD IS BEING FED.
-  //
-  // First attempt hardened on wall-clock time alone, and it lowered the whole
-  // recovery curve instead of tilting it: even acting on day zero, grudges
-  // hardened under you mid-treatment, so early intervention never got a clean
-  // shot either. Which is right, on reflection — a grudge sets because it
-  // keeps getting reinforced, not because a calendar advanced. In a room
-  // somebody is actively cooling down, people get over it.
-  //
-  // So the clock advances only while the room is still hot. Bring the
-  // temperature down and the hardening stops; leave it and everything sets.
-  // That is what makes day one decisive and a month hopeless — and it also
-  // means a well-run room never hardens anything, so this costs ordinary play
-  // nothing.
-  const today = absDayOf(save.day, save.year)
-  const stillHot = (save.scene?.toxicity ?? 0) >= 0.18
-  for (const p of regs) {
-    const since = p.feudSince
-    if (!since) continue
-    for (const [otherId, day] of Object.entries(since)) {
-      if (!stillHot) { since[otherId] = day + 1; continue } // paused, not reset
-      if (today - day < FEUD_HARDEN_DAYS) continue
-      const other = save.players[otherId]
-      // Only hardens if it is still live — a grudge that already healed just
-      // stops being tracked.
-      if (other && Math.min(getRel(p, other), getRel(other, p)) <= -50) {
-        ;(p.feudHard ??= {})[otherId] = true
-      }
-      delete since[otherId]
-      if (p.feudOrigin) delete p.feudOrigin[otherId] // nobody's to withdraw now
-    }
-  }
-
   const tox = save.scene?.toxicity ?? 0
   const cooling = clamp(1 - tox * 2.2, 0, 1)
   if (cooling > 0) {
     for (const [a, b] of feuding) {
-      if (a.feudHard?.[b.id] || b.feudHard?.[a.id]) continue // set in stone
       if (!chance(0.16 * cooling)) continue
       shiftRel(a, b, 3)
       shiftRel(b, a, 3)
@@ -599,7 +550,6 @@ export function spreadFeuds(save, events = null) {
     // target, not the source. Identifying the radiator is a real read, not a
     // sort by unpopularity.
     ;(recruit.feudOrigin ??= {})[enemy.id] = ally.id
-    ;(recruit.feudSince ??= {})[enemy.id] = absDayOf(save.day, save.year)
     ally.feudSeeded = (ally.feudSeeded || 0) + 1
     if (events && Math.min(getRel(recruit, enemy), getRel(enemy, recruit)) <= -60) {
       events.push({
