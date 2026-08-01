@@ -814,9 +814,18 @@ function weeklyPass(save, player, e, today) {
     const other = save.players[otherId]
     if (other) {
       const grudge = openThread(save, player, 'grudge', otherId)
+      // ONE FALLING-OUT IS A PAGE; A FACTION IS A MOOD (metric 7). Once feuds
+      // recruit (social.js spreadFeuds), a bad month produces many ruptures,
+      // and every one of them writing its own entry pushed journal volume to
+      // ~38/yr against a 15–30 band. The FIRST rupture with somebody is the
+      // page — that is the moment the friendship broke. After that the room
+      // being at war is a background condition, and it competes for the
+      // weekly budget like everything else.
+      const first = !player.ruptureNoted
       writeJournal(save, player, caused ? 'ruptureCaused' : 'ruptureAbsorbed', {
-        opp: other.alias || other.firstName, thread: grudge?.id,
+        opp: other.alias || other.firstName, thread: grudge?.id, always: first,
       })
+      player.ruptureNoted = true
     }
   }
 

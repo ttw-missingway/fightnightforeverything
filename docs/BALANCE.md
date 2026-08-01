@@ -1999,3 +1999,37 @@ grudge announce itself) should bring it back.
 Metrics 1, 2, 3, 4 and 5 and survival all sit in acceptable ranges; metric 9
 returns to its c2d9244 reading (crises fixable at ~50%, timing worth little);
 metric 10 unchanged.
+
+### §24 addendum 5 — journal volume back in band (2026-07-31)
+
+The cost §24-4 identified as belonging to the feud contagion, paid off.
+Journal volume was 38.3/yr against a 15–30 band; it now reads **y3 24 · y6
+24.8 · y9 29.8 · y12 29 · y15 26.5 — mean 25.6, max 29.8.** In band.
+
+Three gates, all the same judgement §20 applied to `elimination`: the first
+time something happens is a page, the tenth is a mood.
+
+- **`ruptureCaused`/`ruptureAbsorbed`** (227 combined, the contagion's own
+  footprint) — the FIRST falling-out a player has is a landmark and bypasses
+  the budget; every one after competes for it. Once feuds recruit, a bad month
+  produces many ruptures, and a diary that records each one is a casualty
+  list.
+- **`travelFunded`** (207, the single largest) — gated to majors and the
+  Showdown, matching the gate `travelAsk` already had. Being sent somewhere
+  big is a page; being sent to the regionals for the fourth time is a Tuesday
+  with a plane ticket.
+- **`awayOut`** (171) — a routine early exit is now not written at all below
+  top eight. The elimination WOUND still fires, which is the part that
+  matters mechanically.
+
+**One measurement note worth keeping.** `composeEntry` picks its variant with
+`choice()`, so journal writes CONSUME the seeded stream — gating them
+reshuffles every downstream draw. The n=6 readings either side of this change
+(m5 1233 → 842, survival 5041 → 4006) are therefore not comparable: they are
+different random sequences, not a regression. Retirement dispersion at 842 is
+still five times the P0 baseline of 173. Anything measuring the effect of a
+journal change on a non-journal metric needs a much larger n, or the gating
+needs to move outside the rng path.
+
+Metrics 1 (1.54), 2 (median y4), 4 (spread 0.14) and survival all sit in
+acceptable ranges. Determinism green.

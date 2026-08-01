@@ -188,7 +188,11 @@ export function fundAsk(save, askId) {
   if (!trySpend(save, ask.cost, `funded ${ask.squad ? 'the crew' : displayName(p, save)} — ${ask.eventName}`)) return false
   ask.state = 'funded'
   dismissToastByKey(save, `ask_${ask.id}`)
-  writeJournal(save, p, 'travelFunded', { event: ask.eventName, place: countryName(ask.country) })
+  // Being SENT somewhere big is a page; being sent to the regionals for the
+  // fourth time is a Tuesday with a plane ticket. Same gate the ask uses.
+  if (ask.kind === 'major' || ask.kind === 'squad') {
+    writeJournal(save, p, 'travelFunded', { event: ask.eventName, place: countryName(ask.country) })
+  }
   bumpPassion(p, 5) // being backed is being believed in
   return true
 }

@@ -334,9 +334,18 @@ function castAftermath(save, placements, opts) {
     // budget. Going out early at a qualifier is a Tuesday, and now competes
     // for space like one.
     const landmark = place <= 4 || stage === 'evo'
-    writeJournal(save, p, place <= 4 ? 'awayPlaced' : 'awayOut', {
-      event: name, place: placeLabel, always: landmark,
-    })
+    // P6 made the routine exits compete for the weekly budget instead of
+    // bypassing it — but competing still means usually winning, because a
+    // circuit week is otherwise quiet. An early exit at a regional is not a
+    // page at all: the elimination WOUND already fired, which is the part
+    // that matters, and §2.3's band is what stops a diary becoming a log.
+    if (landmark) {
+      writeJournal(save, p, place <= 4 ? 'awayPlaced' : 'awayOut', {
+        event: name, place: placeLabel, always: true,
+      })
+    } else if (place <= 8) {
+      writeJournal(save, p, 'awayOut', { event: name, place: placeLabel })
+    }
   }
 }
 
