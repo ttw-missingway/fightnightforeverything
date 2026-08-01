@@ -325,12 +325,16 @@ function IdleBar({ save }) {
           ? <span className="cyan">▶ auto-advancing · next {revealing ? 'match' : 'hour'} in {formatCountdown(nextInMs)}</span>
           : <span className="dim">paused</span>}
       </div>
-      <AutoStreamControls autoStream={idle.autoStream} setAutoStream={setAutoStream} />
+      <AutoStreamControls save={save} autoStream={idle.autoStream} setAutoStream={setAutoStream} />
     </div>
   )
 }
 
-function AutoStreamControls({ autoStream, setAutoStream }) {
+// `save` is needed for the follow-a-player picker. It was added to the JSX
+// before it was added to the signature, which crashed the whole app the
+// moment anyone selected 'follow' — and kept crashing on load afterwards,
+// because the choice persists in the save. See the note on the picker below.
+function AutoStreamControls({ save, autoStream, setAutoStream }) {
   return (
     <div className="col" style={{ alignItems: 'flex-end', gap: 3, marginTop: 4 }}>
       <label className="small row" style={{ gap: 4 }}>
@@ -358,7 +362,7 @@ function AutoStreamControls({ autoStream, setAutoStream }) {
           <select className="small" value={autoStream.followId || ''}
             onChange={(e) => setAutoStream({ followId: e.target.value || null })}>
             <option value="">— pick a player —</option>
-            {Object.values(save.players)
+            {Object.values(save?.players || {})
               .filter((p) => !p.npc && !p.retired && !p.banished && p.isRegular)
               .sort((a, b) => (b.elo || 0) - (a.elo || 0))
               .map((p) => <option key={p.id} value={p.id}>{displayName(p, save)}</option>)}
