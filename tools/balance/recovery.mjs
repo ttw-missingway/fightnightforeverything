@@ -61,10 +61,11 @@ import { banish } from '../../src/game/discipline.js'
 const LAGS = [0, 7, 14, 28, 56, 112]
 // §17's first named suspect was instrument power, and it was right: at six
 // seeds a single run is 0.17, so nothing below ~0.2 is resolvable and the
-// curves were being read through noise. Twelve halves that floor. Sweeps are
+// curves were being read through noise. Twenty-four puts the floor at 0.04,
+// which is what it takes to trust a difference of a tenth. Sweeps are
 // slow (6 lags × 12 seeds × a 180–336 day window each), which is the price of
 // being able to tell a cliff from a coin flip.
-const SEEDS = [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
+const SEEDS = Array.from({ length: 24 }, (_, i) => 31 + i)
 const INJECT_DAY = 200 // ~eight months in: the room exists, the books work
 
 const bestSkillOf = (p) => Math.max(0, ...Object.values(p.charSkill || {}), 0)

@@ -1518,7 +1518,7 @@ done. Where the metrics landed:
 | 6 | Attention cost | ✅ ~6.7–7.2 mutating decisions/week, flat y1→y15 |
 | 7 | Journal volume | ✅ 22–29/yr, back inside the 15–30 band |
 | 8 | Lever latency | ✅ stream ≈ 6d, patch ≈ 0d, money belief-gated |
-| 9 | Recoverability curve | ⚠️ **partial (§24)** — burnout a clean cliff, toxicity recovers early; irrelevance unordered |
+| 9 | Recoverability curve | ⚠️ **partial (§24)** — crises now recover at all (0% → ~0.5); the CLIFF is NOT demonstrated at n=24 |
 | 10 | Money's job | ⚠️ **partial (§23)** — 0.03 → 0.40, but never crosses survival |
 
 Seven of ten hold. The three that do not are recorded with their causes rather
@@ -1849,3 +1849,58 @@ anywhere" to "two of three crises are genuinely time-sensitive", which is the
 first time §0's *fixable if caught early, hopeless past a point* has been true
 of anything in this game. What remains is irrelevance's shape, and n=12 is
 still thin — a third of a run is 0.08, so nothing under ~0.15 is resolvable.
+
+### §24 addendum 2 — n=24, and a retraction (2026-07-31)
+
+The n=12 sweep was rerun at **n=24** (784s). It does not replicate.
+
+| crisis | k0 | k7 | k14 | k28 | k56 | k112 |
+|---|---|---|---|---|---|---|
+| toxicity | 0.58 | 0.50 | 0.58 | 0.46 | 0.42 | 0.46 |
+| burnout | 0.50 | 0.67 | 0.63 | 0.63 | 0.63 | 0.63 |
+| irrelevance | 0.88 | 0.50 | 0.63 | 0.63 | 0.67 | 0.63 |
+
+**The burnout cliff was noise. Retracted.** At n=12 it read 0.75 / 0.67 /
+0.58 / 0.58 / 0.58 / 0.58 — a clean monotone decline to a floor, and it was
+reported here and in the commit message as "the first genuine lag structure
+this metric has produced". At n=24, k0 is 0.50 — the *worst* point on its own
+curve — and everything from k7 out sits flat at 0.63. The apparent cliff was
+six runs of luck. It is withdrawn.
+
+That is the discipline working exactly as §17 said it should, and it is worth
+recording that it caught its own author: the instruction "raise n before
+tuning any number" was written into the recommendation, followed, and then
+immediately invalidated the recommendation's headline result. Nothing was
+tuned against the n=12 curve, which is the only reason this is a correction
+rather than a rebuild.
+
+**What does replicate**, across both sample sizes, is small and consistent in
+direction:
+
+- **irrelevance**: k0 is high (1.00 at n=12, 0.88 at n=24) against its own
+  later lags (~0.6 both times). The most robust signal in the table.
+- **toxicity**: early beats late by roughly 0.10–0.15 in both runs (n=12:
+  ~0.45 → 0.33; n=24: ~0.55 → 0.45). Consistent direction, marginal magnitude.
+- **burnout**: nothing. The direction reversed between samples.
+
+At n=24 a single run is 0.042, so a 0.12 gap is about three runs. These are
+suggestive, not established.
+
+### Metric 9, honestly
+
+Two separate claims, and only one of them survives:
+
+1. **Crises are now real and fixable.** Toxicity recovery went from 0% at
+   every lag to ~0.5, the injected crises genuinely progress while untreated
+   (toxicity 0.24 → 0.54 over the window), and burnout no longer cures itself.
+   That work stands on its own merits and is independent of the curve shape.
+2. **The cliff is not demonstrated.** §2.3 asks for "a clean S-curve with a
+   real cliff, not a straight line". What n=24 shows is a slightly tilted
+   straight line for two crises and a flat one for the third.
+
+So metric 9 stays **⚠️ partial**, and the partial is smaller than §24 first
+claimed. The honest next step is not more tuning — it is deciding whether a
+~0.12 early advantage is the intended size of "caught it early", or whether
+the counterplays need to be genuinely more powerful when applied immediately.
+That is a design question, and answering it by adjusting numbers until the
+curve looks right would be fitting to noise.
