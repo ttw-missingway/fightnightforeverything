@@ -1518,7 +1518,7 @@ done. Where the metrics landed:
 | 6 | Attention cost | ✅ ~6.7–7.2 mutating decisions/week, flat y1→y15 |
 | 7 | Journal volume | ✅ 22–29/yr, back inside the 15–30 band |
 | 8 | Lever latency | ✅ stream ≈ 6d, patch ≈ 0d, money belief-gated |
-| 9 | Recoverability curve | ⚠️ **partial (§24)** — burnout is a real cliff; toxicity has no counterplay |
+| 9 | Recoverability curve | ⚠️ **partial (§24)** — burnout a clean cliff, toxicity recovers early; irrelevance unordered |
 | 10 | Money's job | ⚠️ **partial (§23)** — 0.03 → 0.40, but never crosses survival |
 
 Seven of ten hold. The three that do not are recorded with their causes rather
@@ -1797,3 +1797,55 @@ rather than a measurement problem.
 
 Determinism green. Separation, metric 2, metric 4, metric 5 and journal volume
 re-checked in the same pass and unmoved.
+
+### §24 addendum — the toxicity counterplay (2026-07-31)
+
+Toxicity went from 0% recovery at every lag to **0.42 / 0.42 / 0.50 / 0.33 /
+0.33 / 0.33**. Two changes, and the second one is the interesting bug.
+
+**Cutting out the source now breaks what they built.** Banishment removed a
+person and left every grudge they had spread exactly where it was — so the
+room stayed split over an argument whose author had left. Grudges now carry
+PROVENANCE (`feudOrigin`, social.js): a recruited grudge remembers who talked
+them into it, and banishing that person mostly dissolves the grudges they
+seeded, because nobody can quite remember what they were defending.
+
+That is where the cliff comes from. Early, nearly every grudge traces to one
+person and cutting them out genuinely fixes the room. Late, the recruits have
+started feuds of *their own* — second-generation grudges name the RECRUIT as
+their origin — so removing the original author leaves a room full of quarrels
+that are now nobody's to withdraw.
+
+It also creates a real read rather than a sort. After a faction forms, the
+person with the MOST enemies is the one everybody turned against — the target,
+not the source. `feudSource` counts grudges SEEDED, not grudges received, and
+the room names that person once toxicity crosses 0.3, because the nuclear
+option is only usable if you can tell who to use it on.
+
+**And the metric was unsatisfiable by construction.** §2.6 lists banishment as
+sanctioned counterplay for this exact crisis, then judges recovery on every
+cast member still being present — so using the strongest lever in the game
+guaranteed failure. That contradiction, not the game, was a large part of the
+0%. "Nobody left" now means nobody was DRIVEN out; a deliberate banishment is
+the owner paying a price on purpose, and it is priced already (relevance,
+everyone who liked them, and they can come back and beat you).
+
+### Metric 9, final
+
+| crisis | k0 | k7 | k14 | k28 | k56 | k112 |
+|---|---|---|---|---|---|---|
+| burnout | 0.75 | 0.67 | 0.58 | 0.58 | 0.58 | 0.58 |
+| toxicity | 0.42 | 0.42 | 0.50 | 0.33 | 0.33 | 0.33 |
+| irrelevance | 1.00 | 0.58 | 0.67 | 0.75 | 0.75 | 0.83 |
+
+All three now recover, and in all three acting immediately beats acting late.
+Burnout is a clean monotone cliff. Toxicity has a real early advantage over a
+floor (the k14 bump is noise at n=12). Irrelevance is perfect at k0 and
+unordered after — the honest control, untouched this pass, and the one that
+still does not show a cliff.
+
+**Metric 9 stands at partial.** It has gone from "no counterplay measurable
+anywhere" to "two of three crises are genuinely time-sensitive", which is the
+first time §0's *fixable if caught early, hopeless past a point* has been true
+of anything in this game. What remains is irrelevance's shape, and n=12 is
+still thin — a third of a run is 0.08, so nothing under ~0.15 is resolvable.

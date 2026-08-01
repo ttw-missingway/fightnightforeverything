@@ -8,7 +8,7 @@
 
 import { clamp, displayName } from './util.js'
 import { chronicle } from './model.js'
-import { getRel } from './social.js'
+import { getRel, shiftRel } from './social.js'
 import { bumpPassion } from './career.js'
 import { writeJournal } from './journal.js'
 
@@ -39,6 +39,41 @@ export function banish(save, player, events) {
       bumpPassion(other, -5)
       writeJournal(save, other, 'friendBanished', { opp: player.alias || player.firstName })
     }
+  }
+
+  // CUTTING OUT THE SOURCE BREAKS WHAT THEY BUILT (metric 9).
+  //
+  // Banishment used to remove a person and leave every grudge they had spread
+  // exactly where it was — so the room stayed split over an argument whose
+  // author had left, and toxicity recovered at ~0% no matter when you acted.
+  // Grudges carry provenance now (social.js spreadFeuds): a recruited grudge
+  // remembers WHO talked them into it. Remove that person and most of it goes
+  // with them, because nobody can quite remember what they were defending.
+  //
+  // This is the whole shape of the cliff. EARLY, nearly every grudge in the
+  // room traces to one person, so cutting them out genuinely fixes it. LATE,
+  // the recruits have started feuds of their own, those second-generation
+  // grudges name the RECRUIT as their origin, and removing the original
+  // author leaves a room still full of quarrels that are now nobody's to
+  // withdraw. Fixable if caught early, hopeless past a point — earned.
+  let healed = 0
+  for (const other of Object.values(save.players)) {
+    if (other.id === player.id || other.retired || other.banished) continue
+    const origins = other.feudOrigin
+    if (!origins) continue
+    for (const [targetId, sourceId] of Object.entries(origins)) {
+      if (sourceId !== player.id) continue
+      const target = save.players[targetId]
+      delete origins[targetId]
+      if (!target || target.retired || target.banished) continue
+      // Most of the way back, not all of it — you don't un-say things.
+      shiftRel(other, target, 55)
+      shiftRel(target, other, 35)
+      healed += 1
+    }
+  }
+  if (healed > 0) {
+    chronicle(save, '🕊', `With ${name} gone, a few people who had stopped speaking started again. Whatever that was about, it left with them.`)
   }
 
   if (events) events.push({ type: 'staff', text: `🚫 ${name} has been banned from ${save.arcade.name}. The room is quieter — for better or worse.` })

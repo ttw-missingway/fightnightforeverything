@@ -27,7 +27,7 @@ import { rankedInTop, worldTalkExchange, worldRankings } from './world.js'
 import {
   getRel, shiftRel, socialDelta, applySocialMood, moodLabel,
   tryFoundTeam, tryJoinTeam, checkFallingOut, teamOf, dailyTeamDynamics,
-  sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf, spreadFeuds,
+  sceneHealth, rivalOf, communityGameOpinion, arcadeOpinionOf, spreadFeuds, feudSource,
 } from './social.js'
 import { passionDaily, checkRetirement, passionAttendanceFactor, bumpPassion, ageYearly, ageWarnings, careerStageOf } from './career.js'
 import { relevanceDaily } from './relevance.js'
@@ -2150,6 +2150,28 @@ export function advanceDay(save) {
   if (daysSincePatch(save) === 0) gravitateElites(save)
   // Bad blood recruits: an unattended feud becomes a faction (social.js).
   spreadFeuds(save)
+  // NAME THE SOURCE. The one nuclear option only works if you can tell WHO to
+  // use it on, and after a feud spreads the person with the most enemies is
+  // the target rather than the author. Once the room is genuinely poisoned,
+  // the counter tells you who keeps starting it — once, so it reads as the
+  // room finally saying out loud what everyone already knew.
+  {
+    const tox = save.scene?.toxicity ?? 0
+    if (tox >= 0.3 && !save.feudSourceNamed) {
+      const src = feudSource(save)
+      if (src) {
+        save.feudSourceNamed = src.player.id
+        pushToast(save, {
+          icon: '🔥',
+          text: `It keeps coming back to ${pName(save, src.player)}. They've talked ${src.seeded} different people into somebody else's fight.`,
+          see: { screen: 'players', params: { playerId: src.player.id } },
+          sticky: true,
+          key: 'feud_source',
+        })
+      }
+    }
+    if (tox < 0.15) save.feudSourceNamed = null // the room settled; re-arm
+  }
   // A visiting crew arrives, or goes home.
   invasionDaily(save)
   // SUCCESSION (P5): the rare kid who could be somebody walks in, the one

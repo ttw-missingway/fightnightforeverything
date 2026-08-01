@@ -540,6 +540,17 @@ export function spreadFeuds(save, events = null) {
     shiftRel(recruit, enemy, -(45 + Math.floor(rand() * 30)))
     shiftRel(enemy, recruit, -(25 + Math.floor(rand() * 25)))
     shiftRel(recruit, ally, 8)
+    // PROVENANCE — who this grudge actually belongs to. The recruit is not
+    // angry at the enemy on their own account; they are angry because of
+    // ALLY. Recorded so that removing the person who spread it can undo it
+    // (discipline.js), and so the room can be told who the source is.
+    //
+    // Note the trap this creates, deliberately: after a feud spreads, the
+    // person with the MOST enemies is the one everybody turned against — the
+    // target, not the source. Identifying the radiator is a real read, not a
+    // sort by unpopularity.
+    ;(recruit.feudOrigin ??= {})[enemy.id] = ally.id
+    ally.feudSeeded = (ally.feudSeeded || 0) + 1
     if (events && Math.min(getRel(recruit, enemy), getRel(enemy, recruit)) <= -60) {
       events.push({
         type: 'social',
@@ -547,6 +558,26 @@ export function spreadFeuds(save, events = null) {
       })
     }
   }
+}
+
+/**
+ * THE RADIATING SOURCE — who this room's bad blood actually comes from.
+ *
+ * Counts grudges a person has SEEDED (talked somebody else into), not grudges
+ * pointed at them. Those are very different people once a feud has spread:
+ * the target of a faction collects enemies without causing any, and throwing
+ * them out is both unjust and useless. This is the read the owner has to get
+ * right before reaching for the one nuclear option they have.
+ */
+export function feudSource(save) {
+  let worst = null
+  let seeded = 0
+  for (const p of Object.values(save.players)) {
+    if (p.retired || p.banished || !p.isRegular) continue
+    const n = p.feudSeeded || 0
+    if (n > seeded) { seeded = n; worst = p }
+  }
+  return seeded >= 2 ? { player: worst, seeded } : null
 }
 
 // ---------- Scene health: rivalry vs toxicity ----------

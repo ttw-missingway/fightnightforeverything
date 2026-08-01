@@ -55,6 +55,9 @@ function shiftMain(save, playerId, dir) {
   return true
 }
 
+import { feudSource } from '../../src/game/social.js'
+import { banish } from '../../src/game/discipline.js'
+
 const LAGS = [0, 7, 14, 28, 56, 112]
 // §17's first named suspect was instrument power, and it was right: at six
 // seeds a single run is 0.17, so nothing below ~0.2 is resolvable and the
@@ -139,16 +142,47 @@ export const CRISES = {
       }
     },
     counterplayDay(save, signal) {
-      // Three weeks of starving the spotlight not working → the sabotage.
       const abs = (save.year - 1) * 336 + save.day
-      if (!signal.nerfedAbs && abs - (signal.startAbs ??= abs) > 21) {
+      signal.startAbs ??= abs
+      // Three weeks of starving the spotlight not working → the sabotage.
+      if (!signal.nerfedAbs && abs - signal.startAbs > 21) {
         const chief = worstOffender(save)
         if (chief && shiftMain(save, chief.id, -1)) signal.nerfedAbs = abs
+      }
+      // THE NUCLEAR OPTION, WHICH THIS NEVER ACTUALLY TRIED. §2.6's toxicity
+      // row ends "banish only if necessary", and the harness took that as
+      // "never" — so the measured 0% recovery was partly a report on a
+      // counterplay kit that omitted the strongest lever in the game.
+      //
+      // A competent owner reaches for it late and aims it at the person who
+      // keeps SEEDING fights (social.js feudSource), not at the one who has
+      // collected the most enemies — after a faction forms those are usually
+      // different people, and throwing out the target achieves nothing.
+      if (!signal.banishedAbs && abs - signal.startAbs > 42) {
+        const src = feudSource(save)
+        if (src) {
+          banish(save, src.player, null)
+          signal.banishedAbs = abs
+          signal.banishedId = src.player.id
+        }
       }
     },
     recovered(save, signal) {
       const still = new Set(activeCast(save).map((p) => p.id))
-      const nobodyLeft = signal.members.every((id) => still.has(id))
+      // "NOBODY LEFT" MEANS NOBODY WAS DRIVEN OUT — not "nobody was removed".
+      //
+      // §2.6 lists banishment as sanctioned counterplay for this exact crisis
+      // and then judges recovery on every cast member still being present,
+      // which makes the strongest available lever self-defeating: use it and
+      // you fail by construction. That contradiction, not the game, is a
+      // large part of why toxicity measured ~0% recovery at every lag.
+      //
+      // A deliberate banishment is the owner paying a price on purpose, and
+      // it is priced already (relevance, everyone who liked them, and they
+      // can come back to beat you). The thing this clause is actually
+      // guarding against is the ROOM BLEEDING — people quitting because the
+      // place became unbearable — so that is what it now checks.
+      const nobodyLeft = signal.members.every((id) => still.has(id) || id === signal.banishedId)
       // A healthy room pre-signal can read 0.0; a small floor keeps "back to
       // its pre-signal level" satisfiable rather than demanding exact zero.
       return (save.scene?.toxicity ?? 0) <= Math.max(signal.preToxicity, 0.05) && nobodyLeft
