@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore, persistSave } from '../state/store.jsx'
 import GrandOpening from './GrandOpening.jsx'
 import { ArcadeChampion } from './EvoWeek.jsx'
+import { MajorSplash } from '../components/Circuit.jsx'
 import { TAB_GATES, tabOpen, tabHint } from '../game/tabs.js'
 import { canStream, STREAM_RIG_COST } from '../game/stream.js'
 import { rosterOpen } from '../game/model.js'
@@ -79,16 +80,28 @@ function installCopy(world, nameSuffix) {
  * entrance animation only plays on mount, and "watch it again" is the job.
  */
 function Cinematics() {
+  const { save } = useStore()
   const [which, setWhich] = useState('opening')
   const [name, setName] = useState('BracketDemon')
   const [run, setRun] = useState(0)
   const replay = () => setRun((n) => n + 1)
   const pick = (w) => { setWhich(w); replay() }
+  // A MAJOR IS THE HARDEST BEAT TO REACH BY PLAYING. Three a year, the first
+  // one lands most of a year after the doors open, and the splash only plays
+  // the first time a record is opened. So: the real record if the loaded save
+  // has one, and a synthetic field otherwise — same component, same shape.
+  const realMajor = useMemo(() => {
+    const pool = [save?.lastTournament, ...(save?.vods || [])].filter(Boolean)
+    return pool.find((r) => r.circuitKind === 'major' && r.field) || null
+  }, [save])
+  const major = realMajor || SAMPLE_MAJOR
+
   return (
     <div>
       <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
         <button className={which === 'opening' ? 'primary' : ''} onClick={() => pick('opening')}>Grand opening</button>
         <button className={which === 'champion' ? 'primary' : ''} onClick={() => pick('champion')}>EVO champion</button>
+        <button className={which === 'major' ? 'primary' : ''} onClick={() => pick('major')}>World major</button>
         {which === 'champion' && (
           <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: 220 }} aria-label="champion name" />
         )}
@@ -97,13 +110,40 @@ function Cinematics() {
       <p className="dim small">
         {which === 'opening'
           ? 'Plays once per world, and again on a run-back. Uses the loaded save’s arcade name and location when there is one.'
-          : `Plays only in a year one of YOUR players takes the title (arcadeResults place 1). Clicking through advances to "That's EVO".`}
+          : which === 'champion'
+            ? `Plays only in a year one of YOUR players takes the title (arcadeResults place 1). Clicking through advances to "That's EVO".`
+            : realMajor
+              ? `The real ${major.name} off this save. Plays once per record — splashDone is set on the first open.`
+              : 'No major on the loaded save, so this is a synthetic sixteen. The `via` tags are what the beat is for: how each chair was earned.'}
       </p>
-      {which === 'opening'
-        ? <GrandOpening key={run} onDone={replay} />
-        : <ArcadeChampion key={run} name={name} onDone={replay} />}
+      {which === 'opening' && <GrandOpening key={run} onDone={replay} />}
+      {which === 'champion' && <ArcadeChampion key={run} name={name} onDone={replay} />}
+      {which === 'major' && <MajorSplash key={run} record={major} onDone={replay} />}
     </div>
   )
+}
+
+// A plausible sixteen, for when the loaded save has never seen a major. Only
+// the fields MajorSplash reads.
+const SAMPLE_MAJOR = {
+  name: 'Spring Major · Japan',
+  host: 'JP',
+  season: 'Spring',
+  dateLabel: 'April 15, Year 3',
+  entrantCount: 16,
+  emptyChairs: ['WhiffPunish'],
+  field: [
+    ['The Standard', 'JP', 2569, 'region', 'Sable'], ['Tempest', 'US', 2512, 'region', 'Tempest'],
+    ['Fracture', 'AU', 2440, 'region', 'Volt'], ['Nightjar', 'CA', 2400, 'ranking', 'Anansi'],
+    ['Judgement', 'JP', 2377, 'qualified', 'Bruteus'], ['Riptide', 'US', 2340, 'qualified', 'Zenith'],
+    ['The Auditor', 'KR', 2301, 'region', 'Sable'], ['Blackout', 'SG', 2288, 'region', 'Volt'],
+    ['Thornfield', 'US', 2240, 'vote', 'Piper'], ['Monolith 9', 'US', 2201, 'vote', 'Tempest'],
+    ['Perihelion', 'FR', 2180, 'region', 'Duchess'], ['The Abacus', 'PT', 2150, 'region', 'Anansi'],
+    ['Ghost', 'BB', 2120, 'region', 'Volt'], ['Vandal', 'IT', 2090, 'region', 'Bruteus'],
+    ['TheReads', 'US', 1980, 'qualified', 'Sable'], ['Palisade', 'PL', 1950, 'ranking', 'Zenith'],
+  ].map(([n, region, elo, via, char], i) => ({
+    seed: i + 1, name: n, region, elo, via, char, yours: n === 'TheReads',
+  })),
 }
 
 // ---------- Gates ----------
