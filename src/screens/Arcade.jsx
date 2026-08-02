@@ -14,6 +14,7 @@ import { buildStreamForPlayers, canStream, hypeLabel } from '../game/stream.js'
 import { revealState } from '../game/tournament.js'
 import { gatherRumors, allRumors, rumorHeatLabel } from '../game/rumors.js'
 import { rosterOpen } from '../game/model.js'
+import { isUnlocked, howToUnlock } from '../game/achievements.js'
 
 /**
  * "Spend the points before you open the doors."
@@ -131,7 +132,7 @@ export default function Arcade() {
           </div>
           <div className="col" style={{ alignItems: 'flex-end' }}>
             {save.idle.enabled ? (
-              <IdleBar save={save} />
+              <IdleBar save={save} buttonLabel={buttonLabel} />
             ) : (
               <div className="row">
                 {/* Idle is free at all speeds from the start — the time-locks
@@ -290,8 +291,8 @@ function formatCountdown(ms) {
   return `${s}s`
 }
 
-function IdleBar({ save }) {
-  const { setIdleRunning, setIdleSpeed, setAutoStream, enableIdle } = useStore()
+function IdleBar({ save, buttonLabel }) {
+  const { setIdleRunning, setIdleSpeed, setAutoStream, enableIdle, advance, skipDay } = useStore()
   const idle = save.idle
   const speed = idleSpeedOf(idle.speed)
   const [now, setNow] = useState(Date.now())
@@ -311,12 +312,35 @@ function IdleBar({ save }) {
           {idle.running ? '⏸ Pause' : '▶ Play'}
         </button>
         <select value={idle.speed} onChange={(e) => setIdleSpeed(e.target.value)}>
-          {IDLE_SPEEDS.map((s) => (
-            <option key={s.key} value={s.key}>{s.label}</option>
-          ))}
+          {IDLE_SPEEDS.map((s) => {
+            // THE SPEED YOU HAVE EARNED. Blitz is the one tier that changes
+            // what the game IS — eight seconds a day is a spreadsheet filling
+            // itself in, and it is far too tempting to reach for on day one.
+            // The rest stay free (the revision deprecated those time-locks on
+            // purpose); this one is back on the ladder, where it started.
+            const locked = !isUnlocked(save, `idle-${s.key}`)
+            return (
+              <option key={s.key} value={s.key} disabled={locked}>
+                {locked ? `🔒 ${s.label} — ${howToUnlock(`idle-${s.key}`)}` : s.label}
+              </option>
+            )
+          })}
         </select>
         <button className="small" title="return to manual play" onClick={() => enableIdle(false)}>
           ✕ Exit
+        </button>
+      </div>
+      {/* THE CLOCK IS STILL YOURS (§6). Idle mode used to take the manual
+          controls away with it, so wanting to see the next hour NOW meant
+          exiting idle, stepping, and switching it back on — three clicks to do
+          the thing the game is about. Auto-advance is a floor for how fast time
+          moves, never a ceiling. */}
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
+          ⏩ Skip to recap
+        </button>
+        <button className="small" title="step forward now, without waiting for the timer" onClick={advance}>
+          {buttonLabel}
         </button>
       </div>
       <div className="small dim" style={{ textAlign: 'right' }}>{speed.blurb}</div>
@@ -325,7 +349,17 @@ function IdleBar({ save }) {
           ? <span className="cyan">▶ auto-advancing · next {revealing ? 'match' : 'hour'} in {formatCountdown(nextInMs)}</span>
           : <span className="dim">paused</span>}
       </div>
-      <AutoStreamControls save={save} autoStream={idle.autoStream} setAutoStream={setAutoStream} />
+      {/* No rig, no channel — and therefore nothing to point a camera with.
+          These controls sat here from day one, offering to auto-stream a
+          broadcast the run cannot make, which reads as a broken feature rather
+          than as an unbought one. Same gate the live stream button uses. */}
+      {canStream(save)
+        ? <AutoStreamControls save={save} autoStream={idle.autoStream} setAutoStream={setAutoStream} />
+        : (
+          <div className="small dim" style={{ textAlign: 'right', marginTop: 4 }}>
+            📡 auto-stream needs a stream rig — buy one on the Manage tab.
+          </div>
+        )}
     </div>
   )
 }

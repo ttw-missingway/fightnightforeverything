@@ -30,6 +30,15 @@ const FRAGMENTS = {
     showman: [`interview|"Did you HEAR that crowd? That's why we play. The bracket was just the excuse."`],
     veteran: [`interview|"My {n}th year at this. The kids get faster every season and somehow the old man keeps the belt. Study your fundamentals."`],
   },
+  // A major is a big weekend, not the summit. The champion talks about it like
+  // one — a stop on a season rather than the thing they will be remembered for.
+  championMajor: {
+    loyalist: [`interview|"{event}. Same character I brought to the last one, and the one before that. That's the whole answer."`],
+    'meta-chaser': [`interview|"{char} was the correct pick for this field. Ask me again in April and it'll be a different name."`],
+    'lab-monster': [`interview|"I found something in {char} on the flight over. Used it twice. Nobody blocked it either time."`],
+    showman: [`tweet|{event} 🏆 — that's {n} now. Somebody tell the bracket to stop putting me in it if they want a different ending.`],
+    veteran: [`interview|"Majors are the season. EVO is the year. I'll take this one and keep my mouth shut until June."`],
+  },
   beaten: {
     loyalist: [`tweet|Losses like tonight's don't change anything. Same character, same work, next year.`],
     'meta-chaser': [`tweet|Wrong pick for the bracket. My fault. The spreadsheet gets updated tomorrow.`],

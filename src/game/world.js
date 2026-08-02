@@ -79,7 +79,13 @@ export function worldRankings(save) {
     persona: e.persona || null,
     elo: Math.round(e.elo || 0),
     skill: Math.round(e.skill || 0),
-    titles: e.titles || 0,
+    // TWO TROPHIES, TWO COUNTERS. `titles` was one number fed by both EVO and
+    // the majors and printed under a column headed EVO — so one world title
+    // plus one major read as a two-time world champion. The legacy field is
+    // folded into the EVO count for saves written before the split, because
+    // that is what it exclusively meant until the circuit shipped.
+    titles: (e.evoTitles ?? e.titles) || 0,
+    majorTitles: e.majorTitles || 0,
     charId: e.mainCharId || null,
     yours: false,
   }))
@@ -96,6 +102,7 @@ export function worldRankings(save) {
       elo: Math.round(p.elo || 0),
       skill: Math.round(bestSkillOf(p)),
       titles: p.evoTitles || 0,
+      majorTitles: p.majorTitles || 0,
       charId: p.mainCharId || null,
       yours: true,
       retired: !!p.retired,
@@ -203,12 +210,17 @@ export function dossier(save, id) {
   // competitor: what they did at the majors.
   const bare = (n) => String(n || '').replace(/^[^\p{L}]+/u, '').trim()
   const self = bare(row.name)
+  // EVO AND THE CIRCUIT'S MAJORS. This read `type === 'evo'` alone, under a
+  // heading that says "At the majors" — so a competitor with three major
+  // titles and no EVO finish had a blank file. Qualifiers and regionals stay
+  // out: those are the road TO the majors, not the record of them.
   const majors = []
   for (const rec of save.hallOfFame || []) {
-    if (rec.type !== 'evo') continue
-    if (bare(rec.champion) === self) { majors.push({ year: rec.year, place: 1, event: rec.name }); continue }
+    const isMajor = rec.type === 'evo' || rec.circuitKind === 'major'
+    if (!isMajor) continue
+    if (bare(rec.champion) === self) { majors.push({ year: rec.year, place: 1, event: rec.name, evo: rec.type === 'evo' }); continue }
     const pl = (rec.placements || []).find((x) => bare(x.name) === self)
-    if (pl) majors.push({ year: rec.year, place: pl.place, event: rec.name })
+    if (pl) majors.push({ year: rec.year, place: pl.place, event: rec.name, evo: rec.type === 'evo' })
   }
   majors.sort((a, b) => b.year - a.year)
 

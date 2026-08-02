@@ -847,6 +847,13 @@ export function runTeamTournament(save, scheduleEntry) {
         const d = resolveEntrantMatch(save, ea, eb, { long: false })
         if (d.winnerId === ea.id) aScore += 1
         else bScore += 1
+        // Seat and running score, so the crew battle can be WATCHED rather
+        // than summarised — the screen plays each duel back in order and needs
+        // to say where in the tie it sits. (See CrewBattle in Tournament.jsx.)
+        d.seat = seat + 1
+        d.squadA = A.name
+        d.squadB = B.name
+        d.scoreAfter = `${aScore}–${bScore}`
         duels.push(d)
       }
       if (aScore === bScore) {
@@ -855,6 +862,10 @@ export function runTeamTournament(save, scheduleEntry) {
         if (d.winnerId === A.squad[0].id) aScore += 1
         else bScore += 1
         d.tiebreaker = true
+        d.seat = duels.length + 1
+        d.squadA = A.name
+        d.squadB = B.name
+        d.scoreAfter = `${aScore}–${bScore}`
         duels.push(d)
       }
       const winner = aScore > bScore ? A : B
@@ -866,7 +877,14 @@ export function runTeamTournament(save, scheduleEntry) {
         winnerId: winner.id, winnerName: winner.name,
         score: `${aScore}–${bScore}`,
         duels,
-        narration: [`${A.name} vs ${B.name} — crew battle, four duels.`, `${winner.name} takes the set ${Math.max(aScore, bScore)}–${Math.min(aScore, bScore)}.`],
+        // Duel by duel, so the crew battle reads as four sets that happened in
+        // an order rather than as a scoreline. Each of these matches a duel the
+        // player can then open and watch in full.
+        narration: [
+          `${A.name} vs ${B.name} — crew battle, four duels.`,
+          ...duels.map((d) => `${d.tiebreaker ? 'Tiebreaker — aces: ' : `Seat ${d.seat}: `}${d.aName} vs ${d.bName} → ${d.winnerName}. ${d.scoreAfter}.`),
+          `${winner.name} takes the set ${Math.max(aScore, bScore)}–${Math.min(aScore, bScore)}.`,
+        ],
       })
       next.push(winner)
     }
@@ -1246,10 +1264,14 @@ export function runEvo(save) {
     writeJournal(save, p, 'evoRun', { place, always: true })
   }
   if (champion.kind === 'elite') {
-    champion.ref.titles = (champion.ref.titles || 0) + 1
+    // AN EVO TITLE IS NOT A MAJOR TITLE. Both used to land on one `titles`
+    // counter, and the world list prints that counter under a column headed
+    // EVO — so a name who won EVO once and a major once read as a two-time
+    // world champion. They are different trophies and the ladder has to say so.
+    champion.ref.evoTitles = (champion.ref.evoTitles || 0) + 1
     eliteFragment(save, champion.ref, 'champion', {
       char: save.game.characters.find((c) => c.id === champion.charId)?.name || 'my character',
-      n: champion.ref.titles,
+      n: champion.ref.evoTitles,
     })
   }
   // The runner-up's fragment — the world's best, in one line of cope or class.

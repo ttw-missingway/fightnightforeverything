@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
 import { tabOpen } from '../game/tabs.js'
+import { MajorSplash, QualifierSeats, EntryReport, hostLine } from '../components/Circuit.jsx'
 
 export default function Tournament() {
   const { save, screen, nav, mutate } = useStore()
@@ -24,6 +25,22 @@ export default function Tournament() {
         </p>
         <button onClick={() => nav(vodId ? 'vods' : 'arcade')}>{vodId ? 'Back to VODs' : 'Back to the arcade'}</button>
       </div>
+    )
+  }
+
+  // A MAJOR ANNOUNCES ITSELF. The title card runs once, the first time the
+  // record is opened, and then never again — `splashDone` on the record, so a
+  // VOD replayed later goes straight to the bracket instead of re-staging an
+  // event you have already sat through.
+  if (t.circuitKind === 'major' && t.field && !t.splashDone) {
+    return (
+      <MajorSplash
+        record={t}
+        onDone={() => mutate((s) => {
+          if (s.lastTournament?.id === t.id) s.lastTournament.splashDone = true
+          for (const v of s.vods || []) if (v.id === t.id) v.splashDone = true
+        }, { ack: true })}
+      />
     )
   }
 
@@ -72,6 +89,7 @@ export default function Tournament() {
           <span className="dim">{t.dateLabel} · {t.entrantCount} entrants · {
             t.type === 'evo' ? 'the biggest stage in the world' : t.circuitKind === 'squad' ? 'survivor format — one player stays on until they fall' : t.type === 'teams' ? 'crew battle format' : t.circuitKind === 'major' ? "a world major — sixteen invitations" : t.circuitKind === 'qualifier' ? 'four seats on the line — two by bracket, two by vote' : t.circuitKind === 'regional' ? 'the national top sixteen' : t.format === 'doubleelim' ? 'double elimination' : t.format === 'roundrobin' ? 'round robin' : 'single elimination'
           }</span>
+          {hostLine(t) && <div className="small dim">📍 hosted in {hostLine(t)}</div>}
           {t.channelName && (
             <div className="small">
               <span className="pink">📡 live on {t.channelName}</span>
@@ -96,6 +114,12 @@ export default function Tournament() {
           {t.storylines.map((s, i) => <p key={i} className="small" style={{ margin: '4px 0' }}>📰 {s}</p>)}
         </div>
       )}
+
+      {/* WHAT AM I WATCHING. Above the bracket, not buried under it: the
+          question a circuit event has to answer is asked the moment it opens,
+          not after you have scrolled past sixteen strangers. */}
+      <EntryReport record={t} />
+      {done && <QualifierSeats record={t} />}
 
       {!done && current && (
         <NowPlaying
@@ -210,30 +234,84 @@ function NowPlaying({ m, roundTitle, onFinished }) {
       <MatchPlayback
         m={m}
         showHud={!isTeamMatch}
-        startLabel="Play the match"
+        startLabel={isTeamMatch ? 'Play the crew battle' : 'Play the match'}
         onStart={() => setStarted(true)}
         onComplete={() => setFinished(true)}
-        footer={(
-          <>
-            {isTeamMatch && m.duels.map((d, i) => (
-              <p key={`d${i}`} className="small" style={{ fontStyle: 'normal' }}>
-                {d.tiebreaker ? '⚔ tiebreaker: ' : `seat ${i + 1}: `}
-                {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
-              </p>
-            ))}
-            {m.probA != null && (
-              <p className="dim small" style={{ fontStyle: 'normal' }}>
-                odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-              </p>
-            )}
-          </>
-        )}
+        footer={isTeamMatch
+          ? <CrewBattle m={m} />
+          : (m.probA != null && (
+            <p className="dim small" style={{ fontStyle: 'normal' }}>
+              odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+            </p>
+          ))}
       />
 
       {finished && (
         <button className="primary" style={{ marginTop: 8 }} onClick={onFinished}>
           Continue to the next match ▶
         </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A CREW BATTLE IS FOUR SETS, AND YOU COULD NEVER WATCH ONE.
+ *
+ * Every duel inside a team match has always been a complete match object with
+ * its own narration — the survivor loop builds them with the same resolver a
+ * bracket set uses. The screen just threw all of it away and printed one line
+ * per duel saying who won, so the format the Squad Showdown is built around
+ * (somebody stays on the machine, gets tired, and holds the wall anyway) was
+ * invisible. This plays them back, one at a time, in order.
+ *
+ * The header on each is the thing a summary line cannot carry: how many bodies
+ * each side has left, and how long the person still standing has been standing.
+ */
+function CrewBattle({ m }) {
+  const [openSeat, setOpenSeat] = useState(0)
+  const duels = m.duels || []
+  return (
+    <div style={{ fontStyle: 'normal' }}>
+      <div className="row spread" style={{ marginTop: 6 }}>
+        <strong className="small">⚔ The duels</strong>
+        <span className="dim small">{duels.length} sets · click one to watch it back</span>
+      </div>
+      {duels.map((d, i) => {
+        const streak = Math.max(d.streakA || 0, d.streakB || 0)
+        const open = openSeat === i
+        return (
+          <div key={d.id || i} className="card sub" style={{ margin: '6px 0', padding: '6px 8px' }}>
+            <div className="row spread clickable" style={{ cursor: 'pointer' }}
+              onClick={() => setOpenSeat(open ? -1 : i)}>
+              <span className="small">
+                <span className="dim">set {i + 1}</span>{' '}
+                <span className={d.winnerName === d.aName ? 'winner' : 'loser'}>{d.aName}</span>
+                <span className="dim"> vs </span>
+                <span className={d.winnerName === d.bName ? 'winner' : 'loser'}>{d.bName}</span>
+                {d.tiebreaker && <span className="pink small"> · ⚔ aces, tiebreaker</span>}
+                {streak >= 2 && (
+                  <span className="gold small" title="they have been on the machine this long without losing">
+                    {' '}· 🔥 {streak} straight
+                  </span>
+                )}
+              </span>
+              <span className="small">
+                <span className="gold">{d.setScore || ''}</span>
+                {d.aliveA != null
+                  ? <span className="dim"> · {d.aliveA}v{d.aliveB} left</span>
+                  : d.scoreAfter ? <span className="dim"> · {d.scoreAfter}</span> : null}
+                <span className="cyan"> {open ? '▾' : '▸'}</span>
+              </span>
+            </div>
+            {open && <MatchPlayback m={d} spoil autoStart />}
+          </div>
+        )
+      })}
+      {m.probA != null && (
+        <p className="dim small" style={{ fontStyle: 'normal' }}>
+          odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+        </p>
       )}
     </div>
   )
@@ -283,21 +361,13 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext, onJump }) {
           <MatchPlayback
             m={m}
             spoil
-            footer={(
-              <>
-                {m.duels && m.duels.map((d, i) => (
-                  <p key={i} className="small" style={{ fontStyle: 'normal' }}>
-                    {d.tiebreaker ? '⚔ tiebreaker: ' : `seat ${i + 1}: `}
-                    {d.aName} vs {d.bName} → <span className="gold">{d.winnerName}</span>
-                  </p>
-                ))}
-                {m.probA != null && (
-                  <p className="dim small" style={{ fontStyle: 'normal' }}>
-                    odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-                  </p>
-                )}
-              </>
-            )}
+            footer={m.duels
+              ? <CrewBattle m={m} />
+              : (m.probA != null && (
+                <p className="dim small" style={{ fontStyle: 'normal' }}>
+                  odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+                </p>
+              ))}
           />
         </div>
       )}

@@ -476,6 +476,10 @@ function maybeAutoStream(next) {
 function idleRun(next, maxSteps, revealTournaments = false) {
   const idle = next.idle
   if (!idle || runEnded(next)) return null // no idling past the end of a run
+  // A speed this lineage hasn't earned can't be run, however it got onto the
+  // save (an older save, an import, a lineage reset). The picker greys it out;
+  // this is the belt to that braces, and it applies to offline catch-up too.
+  if (!isUnlocked(next, `idle-${idle.speed}`)) idle.speed = 'realtime'
   const speed = idleSpeedOf(idle.speed)
   const now = Date.now()
   if (idle.lastTickAt == null) { idle.lastTickAt = now; return null }
@@ -727,6 +731,7 @@ export function StoreProvider({ children }) {
       if (run) s.idle.lastTickAt = Date.now() // don't count paused time
     }),
     setIdleSpeed: (key) => mutate((s) => {
+      if (!isUnlocked(s, `idle-${key}`)) return
       s.idle.speed = key
       s.idle.lastTickAt = Date.now() // restart the clock so a speed change can't burst
     }),

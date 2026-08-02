@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { worldRankings, rankedWorld, cutoffElo, bestRanked, theClimb, dossier, TIER_LABEL, WORLD_RANK_SIZE, WORLD_SEEN_GAMES } from '../game/world.js'
-import { regionalRankings, REGIONAL_CUT, upcomingCircuit, circuitEventName } from '../game/circuit.js'
+import { regionalRankings, REGIONAL_CUT, upcomingCircuit, circuitEventName, ENTRY_RULE } from '../game/circuit.js'
+import { CircuitPrimer, circuitMeta } from '../components/Circuit.jsx'
 import { absDayOf } from '../game/constants.js'
 import { lookOf } from '../game/skins.js'
 import { Portrait, PointDots, StatBar } from '../components/ui.jsx'
@@ -103,20 +104,27 @@ export default function World() {
       </div>
 
       {/* The world's calendar — always visible, always coming (P4). The next
-          three dates are the budget problem: did you keep the fare money? */}
+          three dates are the budget problem: did you keep the fare money?
+          Each one now says what KIND of event it is, because "Spring Major ·
+          Japan" and "Spring Qualifier · Japan" are different problems three
+          weeks apart and the names alone never said which. */}
       <div className="card">
         <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
-          {upcomingCircuit(save, 3).map(({ def, year, startAbs }) => {
+          {upcomingCircuit(save, 4).map(({ def, year, startAbs }) => {
             const away = startAbs - absDayOf(save.day, save.year)
+            const meta = circuitMeta(def.kind)
             return (
-              <span className="small" key={`${def.key}:${year}`}>
-                🗓 <strong>{circuitEventName(save, def, year)}</strong>
+              <span className="small" key={`${def.key}:${year}`} title={ENTRY_RULE[def.kind]}>
+                {meta?.icon || '🗓'} <strong style={{ color: meta?.accent }}>{circuitEventName(save, def, year)}</strong>
                 <span className="dim"> · {away} day{away === 1 ? '' : 's'}</span>
+                <br /><span className="dim" style={{ fontSize: 11 }}>{ENTRY_RULE[def.kind]}</span>
               </span>
             )
           })}
         </div>
       </div>
+
+      <CircuitPrimer />
 
       <div className="tabs">
         <button className={scope === 'top' ? 'active' : ''} onClick={() => setScope('top')}>🌍 World top 64</button>
@@ -129,7 +137,9 @@ export default function World() {
       {scope !== 'region' && <div className="card">
         <div className="table-scroll"><table>
           <thead>
-            <tr><th>#</th><th>Player</th><th>Scene</th><th>Main</th><th>Elo</th><th>Skill</th><th>EVO</th></tr>
+            <tr><th>#</th><th>Player</th><th>Scene</th><th>Main</th><th>Elo</th><th>Skill</th>
+              <th title="EVO championships — the summit, once a year">EVO</th>
+              <th title="world major titles — the circuit's three big weekends">Majors</th></tr>
           </thead>
           <tbody>
             {shown.map((r) => (
@@ -152,7 +162,16 @@ export default function World() {
                 <td className="small">{charName(r) || <span className="dim">—</span>}</td>
                 <td>{r.elo}</td>
                 <td className="cyan">{r.skill || <span className="dim">—</span>}</td>
-                <td className="gold">{r.titles ? '🏆'.repeat(Math.min(r.titles, 5)) : ''}</td>
+                {/* Counted separately and drawn separately: a stack of five
+                    identical cups told you nothing about which weekend was
+                    which. Past three, the count says it instead of the row
+                    growing a hedge of emoji. */}
+                <td className="gold" title={r.titles ? `${r.titles} EVO title${r.titles === 1 ? '' : 's'}` : undefined}>
+                  {r.titles ? (r.titles > 3 ? `🏆 ×${r.titles}` : '🏆'.repeat(r.titles)) : ''}
+                </td>
+                <td className="cyan" title={r.majorTitles ? `${r.majorTitles} world major${r.majorTitles === 1 ? '' : 's'}` : undefined}>
+                  {r.majorTitles ? (r.majorTitles > 3 ? `🏛 ×${r.majorTitles}` : '🏛'.repeat(r.majorTitles)) : ''}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -171,12 +190,30 @@ export default function World() {
  */
 function NationalBoard({ save, nav, openDossier, charName }) {
   const rows = regionalRankings(save).slice(0, 64)
+  const worldRanked = rows.filter((r) => r.kind === 'elite').length
   return (
     <div className="card">
       <p className="dim small" style={{ marginTop: 0 }}>
-        {save.arcade.country || 'Your country'}'s own ladder. The top {REGIONAL_CUT} are invited to the
-        regionals — twice a year, winner takes the season. World-ranked names hold spots here too;
-        whether they bother to show up is another matter.
+        {save.arcade.country || 'Your country'}'s own ladder, ranked by elo — everyone here is on it.
+        The top {REGIONAL_CUT} are invited to the regionals, twice a year, winner takes the season.
+      </p>
+      {/* WHY SOME NAMES ARE GOLD, AND WHY THEY AREN'T AT THE TOP.
+          Three kinds of person share this table and nothing said so, which
+          made the obvious question unanswerable: how is somebody world-ranked
+          at #15 when the fourteen names above them are not? Because the world
+          list is not an elo list. It ranks people the world has SEEN — the
+          circuit, the majors, the road — and a national grinder with a big
+          local rating has simply never left the country. Same gate your own
+          cast is held to (the road-sets counter on "Your best", above). */}
+      <div className="row small" style={{ gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
+        <span><span className="cyan">■</span> <span className="dim">yours</span></span>
+        <span><span className="gold">■</span> 🌍 <span className="dim">world-ranked ({worldRanked} of your countrymen are on the world top {64})</span></span>
+        <span><span style={{ color: 'var(--fg)' }}>■</span> <span className="dim">national circuit — never travelled, so the world list can't see them</span></span>
+      </div>
+      <p className="dim small" style={{ margin: '0 0 8px' }}>
+        A big national elo is not a world ranking. Plenty of names here out-rate a 🌍 player and
+        will never appear on the world list, because that list ranks who the world has watched —
+        and these are people who have never left the country to be watched.
       </p>
       <div className="table-scroll"><table>
         <thead>
@@ -191,7 +228,8 @@ function NationalBoard({ save, nav, openDossier, charName }) {
                 <td className="dim">{r.rank}</td>
                 <td>
                   <strong className={r.yours ? 'cyan' : r.kind === 'elite' ? 'gold' : ''}>{r.name}</strong>
-                  {r.kind === 'elite' && <span className="dim small" title="world-ranked"> 🌍</span>}
+                  {r.kind === 'elite' && <span className="dim small" title="also on the world top 64 — they travel, so the world has seen them play"> 🌍</span>}
+                  {r.kind === 'rc' && <span className="dim small" title="national circuit only — never travelled, so the world list has never seen them"> </span>}
                 </td>
                 <td className="small">{charName(r) || <span className="dim">—</span>}</td>
                 <td>{r.elo}</td>
@@ -266,6 +304,7 @@ function Dossier({ save, id, back, nav }) {
               <span className="pill">Elo {row.elo}</span>
               <span className="pill cyan">Skill {row.skill || '—'}</span>
               {row.titles > 0 && <span className="pill gold">🏆 EVO ×{row.titles}</span>}
+              {row.majorTitles > 0 && <span className="pill cyan">🏛 Majors ×{row.majorTitles}</span>}
               {char && <span className="pill on">Mains {char.name}</span>}
             </div>
           </div>
@@ -354,14 +393,14 @@ function Dossier({ save, id, back, nav }) {
         <h3 style={{ marginTop: 0 }}>At the majors</h3>
         {majors.length === 0 ? (
           <p className="dim small" style={{ marginBottom: 0 }}>
-            No EVO finish on record — either they haven't placed while you've been running this
+            No major finish on record — either they haven't placed while you've been running this
             arcade, or they haven't placed at all.
           </p>
         ) : majors.map((mj, i) => (
           <div className="row spread" key={i} style={{ padding: '3px 0' }}>
-            <span className="small">{mj.event}</span>
+            <span className="small">{mj.evo ? '🏆 ' : '🏛 '}{mj.event}</span>
             <span className={mj.place === 1 ? 'gold' : mj.place <= 8 ? 'cyan' : 'dim'}>
-              {mj.place === 1 ? '🏆 Champion' : `${ordinalish(mj.place)}`}
+              {mj.place === 1 ? 'Champion' : `${ordinalish(mj.place)}`}
             </span>
           </div>
         ))}

@@ -37,18 +37,6 @@ import { chronicle } from './model.js'
  */
 
 /**
- * The idle ladder is measured in DAYS THIS RUN HAS BEEN OPEN, and the numbers
- * are now literally the seasons: a run opens June 15, so 70 days carries you
- * to the end of August and 182 reaches New Year's Day.
- *
- * (These were written before the summer start existed, as elapsed-day
- * approximations of a calendar that hadn't landed yet. It has now — Phase 6b —
- * so they say what they always meant.)
- */
-const SUMMER = 70 // June 15 → the end of August
-const TO_NEW_YEAR = 182 // June 15 → January 1
-
-/**
  * Tournaments YOU ran. EVO and the circuit (majors, qualifiers, regionals,
  * the Squad Showdown) sit on the same hall-of-fame shelf but they are the
  * WORLD's tournaments — you did not book them, fill them, or clean up after
@@ -103,28 +91,23 @@ export const ACHIEVEMENTS = [
     check: (s) => (s.era?.n || 1) >= 2,
   },
 
-  // ---------- Idle speeds: you earn the right to skip ahead ----------
-  {
-    key: 'summer-holds', icon: '☀️', name: 'The summer holds',
-    unlock: 'idle-realtime', unlockLabel: 'Idle mode at real time', points: 0,
-    how: 'Keep the doors open through your first summer.',
-    check: (s, absDay) => absDay >= SUMMER,
-  },
-  {
-    key: 'new-year', icon: '🎆', name: 'Still here in January',
-    unlock: 'idle-fast', unlockLabel: 'Idle speed: Fast', points: 0,
-    how: "Make it to New Year's Day.",
-    check: (s, absDay) => absDay >= TO_NEW_YEAR,
-  },
-  {
-    key: 'one-year', icon: '📅', name: 'A year of this',
-    unlock: 'idle-faster', unlockLabel: 'Idle speed: Faster', points: 0,
-    how: 'Run the arcade for one whole year.',
-    check: (s, absDay) => absDay >= DAYS_PER_YEAR,
-  },
+  // ---------- Idle speed: the one tier you earn the right to skip to ----------
+  //
+  // The revision deprecated the four-rung idle ladder — an endless dynasty
+  // REQUIRES a good let-it-run mode and gating it behind tenure punished
+  // exactly the player it was for. Real time, Fast and Faster are free from
+  // day one and their achievements are gone with the locks they enforced.
+  //
+  // Blitz is the exception, and it is back. Eight seconds a day is not a speed,
+  // it is a different game: the arcade fills its own ledger in, the room's
+  // conversations blur past unread, and a breakthrough you were meant to answer
+  // resolves itself before you saw the toast. It is the most tempting button on
+  // the screen on day one and the one most likely to end a first run without
+  // the player ever finding out what the game was. So it costs five years —
+  // by which point you have seen everything it skips.
   {
     key: 'five-years', icon: '🏛', name: 'An institution',
-    unlock: 'idle-blitz', unlockLabel: 'Idle speed: Blitz', points: 0,
+    unlock: 'idle-blitz', unlockLabel: 'Idle speed: Blitz — a full day in eight seconds', points: 0,
     how: 'Five whole years, one arcade.',
     check: (s, absDay) => absDay >= DAYS_PER_YEAR * 5,
   },

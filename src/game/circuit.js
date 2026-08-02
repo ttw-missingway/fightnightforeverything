@@ -362,14 +362,22 @@ export function runRegional(save, def) {
   // only SOMETIMES show up — they have a world calendar to run, and a
   // regional pays them nothing — so the national title is usually contested
   // by the board itself, with an occasional god in the room to ruin a year.
+  const entry = castEntryReport(save, def, year)
   const field = fundedCast(save, def, year).map((p) => arcadeEntrant(save, p))
+  // Who the board sent, and who couldn't be bothered — recorded so the screen
+  // can answer "why is a world name in a national bracket, and why aren't the
+  // other three" without the player having to infer it from a coin flip.
+  const skippedElites = []
   for (const r of rows) {
     if (field.length >= REGIONAL_CUT) break
     if (r.yours || !r.ref.mainCharId) continue
-    if (r.kind === 'elite' && rand() >= 0.25) continue
+    if (r.kind === 'elite' && rand() >= 0.25) { skippedElites.push(r.name); continue }
     field.push(r.kind === 'elite' ? eliteEntrant(r.ref) : rcEntrant(r.ref))
   }
   const storylines = [`The national top ${REGIONAL_CUT}, under one roof. Winner takes the season.`]
+  if (skippedElites.length) {
+    storylines.push(`${skippedElites.slice(0, 3).join(', ')}${skippedElites.length > 3 ? ` and ${skippedElites.length - 3} more` : ''} hold board spots and didn't travel for it — a regional pays a world-ranked player nothing.`)
+  }
   stampRanked(save, field)
   const { rounds, placements, champion } = doubleElimBracket(save, field, { context: 'tournament' })
 
@@ -385,9 +393,10 @@ export function runRegional(save, def) {
     chronicle(save, '🗺', `${champion.name} won ${name}. The best in the country trains in YOUR room.`)
   } else if (castTop && castTop.place <= 4) {
     chronicle(save, '🗺', `${castTop.entrant.name} made the final four at ${name}. The country knows the arcade's name now.`)
-  } else {
-    chronicle(save, '🗺', `${champion.name} won ${name}${castTop ? `; ${castTop.entrant.name} went out ${castTop.place <= 8 ? 'top 8' : 'early'}` : ' — nobody from the arcade made the cut'}.`)
+  } else if (castTop) {
+    chronicle(save, '🗺', `${champion.name} won ${name}; ${castTop.entrant.name} went out ${castTop.place <= 8 ? 'top 8' : 'early'}.`)
   }
+  announceEntry(save, def, name, entry)
 
   const record = {
     id: uid('t'),
@@ -395,6 +404,8 @@ export function runRegional(save, def) {
     circuitKind: 'regional',
     format: 'doubleelim',
     name,
+    host: hostOf(save, def, year),
+    entry,
     day: save.day, year, dateLabel: formatDay(save.day, year),
     storylines,
     revealed: 0,
@@ -439,6 +450,7 @@ export function runQualifier(save, def) {
   // all afford the trip either), and regional-board names making the same
   // bet your players are. Density matters: a qualifier where every round-one
   // draw is a world name isn't a door, it's a wall.
+  const entry = castEntryReport(save, def, year)
   const entrants = fundedCast(save, def, year).map((p) => arcadeEntrant(save, p))
   const invited = new Set(rankedInvitables(save).slice(0, 14).map((e) => e.id))
   const hungry = [...(save.evoRoster || [])]
@@ -510,6 +522,31 @@ export function runQualifier(save, def) {
     stage: 'tournament',
     believedAt: QUALIFIER_BELIEF,
   })
+  announceEntry(save, def, name, entry)
+
+  // WHAT THE QUALIFIER WAS FOR, WRITTEN DOWN. A qualifier is thirty-two names
+  // playing for four chairs three months from now, and nothing carried that
+  // forward: the seats went into `circuit.seats` — engine state nobody can
+  // read — and the connection to the major was left for the player to hold in
+  // their head across a whole season. This is the boarding pass, on the record,
+  // where the VOD and the major's own splash can both find it.
+  const majorDef = CIRCUIT.find((e) => e.key === def.feeds)
+  const seatList = seats.map((s) => {
+    const entrant = placements.find((pl) => pl.entrant.id === s.id)?.entrant
+    return {
+      name: entrant?.name || '—',
+      via: s.via,
+      yours: entrant?.kind === 'arcade',
+      place: placements.find((pl) => pl.entrant.id === s.id)?.place ?? null,
+    }
+  })
+  const qualifiedFor = {
+    majorKey: def.feeds,
+    majorYear,
+    majorName: majorDef ? circuitEventName(save, majorDef, majorYear) : `the ${def.season} Major`,
+    daysAway: absDayOf(majorDef?.day ?? def.day, majorYear) - absDayOf(save.day, year),
+    seats: seatList,
+  }
 
   const record = {
     id: uid('t'),
@@ -517,6 +554,9 @@ export function runQualifier(save, def) {
     circuitKind: 'qualifier',
     format: 'single',
     name,
+    host: hostOf(save, def, year),
+    entry,
+    qualifiedFor,
     day: save.day, year, dateLabel: formatDay(save.day, year),
     storylines,
     revealed: 0,
@@ -569,12 +609,20 @@ export function runMajor(save, def) {
   const year = save.year
   const name = circuitEventName(save, def, year)
   const { picks, seats } = projectedMajorField(save, def, year)
+  const entry = castEntryReport(save, def, year)
   const funded = new Set(fundedCast(save, def, year).map((p) => p.id))
   const taken = new Set()
   const entrants = []
-  const push = (kind, ref) => {
+  // HOW EACH CHAIR WAS EARNED. Sixteen names arriving with no provenance is
+  // the single biggest reason a major reads as noise: four of them qualified
+  // months ago at an event you watched, four are the host country's own, eight
+  // are regional invitations, and nothing said which was which. Recorded per
+  // entrant so the splash can lay the field out as a story about who got in.
+  const via = new Map()
+  const push = (kind, ref, howIn) => {
     if (!ref || taken.has(ref.id) || entrants.length >= 16) return
     taken.add(ref.id)
+    via.set(ref.id, howIn)
     entrants.push(entrantOf(kind, save, ref))
   }
   // Seats first — a qualified name is in whatever the rankings say — then the
@@ -582,25 +630,26 @@ export function runMajor(save, def) {
   // funded: an unfunded seat is the year's most expensive empty chair.
   const wasted = []
   for (const seat of seats) {
+    const howIn = seat.via === 'vote' ? 'vote' : 'qualified'
     if (seat.kind === 'arcade') {
       const p = save.players[seat.id]
-      if (p && !p.retired && !p.banished && funded.has(p.id)) push('arcade', p)
+      if (p && !p.retired && !p.banished && funded.has(p.id)) push('arcade', p, howIn)
       else if (p && !p.retired && !p.banished) wasted.push(p)
       continue
     }
-    push(seat.kind, [...(save.evoRoster || []), ...(circuitState(save).field || [])].find((e) => e.id === seat.id))
+    push(seat.kind, [...(save.evoRoster || []), ...(circuitState(save).field || [])].find((e) => e.id === seat.id), howIn)
   }
   for (const pick of picks) {
     if (pick.kind === 'arcade') {
-      if (funded.has(pick.id)) push('arcade', pick.ref)
+      if (funded.has(pick.id)) push('arcade', pick.ref, 'region')
       continue
     }
-    push(pick.kind, pick.ref)
+    push(pick.kind, pick.ref, 'region')
   }
   // Backfill to sixteen from the best of the world not already in the room.
   for (const e of [...(save.evoRoster || [])].sort((a, b) => b.elo - a.elo)) {
     if (entrants.length >= 16) break
-    if (e.mainCharId) push('elite', e)
+    if (e.mainCharId) push('elite', e, 'ranking')
   }
 
   const storylines = [`Sixteen invitations. Three cities a year. This one answered to ${name.split(' · ')[1] || 'the host'}.`]
@@ -630,10 +679,13 @@ export function runMajor(save, def) {
     }
   }
   if (champion.kind === 'elite' && String(champion.id).startsWith('elite_')) {
-    champion.ref.titles = (champion.ref.titles || 0) + 1
-    eliteFragment(save, champion.ref, 'champion', {
+    // A major, not EVO — counted apart so the world list can show the two
+    // trophies as the two different things they are. (See runEvo's note.)
+    champion.ref.majorTitles = (champion.ref.majorTitles || 0) + 1
+    eliteFragment(save, champion.ref, 'championMajor', {
       char: save.game.characters.find((c) => c.id === champion.charId)?.name || 'my character',
-      n: champion.ref.titles,
+      n: champion.ref.majorTitles,
+      event: name,
     })
   }
   chronicle(save, '🏛', champion.kind === 'arcade'
@@ -641,9 +693,24 @@ export function runMajor(save, def) {
     : arcadePlacements.length
       ? `${champion.name} took ${name}; ${arcadePlacements[0].entrant.name} carried the arcade to ${arcadePlacements[0].place === 2 ? 'the grand finals' : `top ${arcadePlacements[0].place <= 4 ? 4 : arcadePlacements[0].place <= 8 ? 8 : 16}`}.`
       : `${name} came and went. ${champion.name} took it. Nobody from ${save.arcade.name} was in the room.`)
+  announceEntry(save, def, name, entry)
 
   // The seat state is spent either way.
   delete circuitState(save).seats[`${def.key}:${feedsYear(def, year)}`]
+
+  // The field as a card: seeded order (elo, which is exactly how the bracket
+  // is drawn), each name's provenance, and the chairs that went unused.
+  const seededField = [...entrants]
+    .sort((a, b) => (b.ref.elo || 0) - (a.ref.elo || 0))
+    .map((e, i) => ({
+      seed: i + 1,
+      name: e.name,
+      elo: Math.round(e.ref.elo || 0),
+      yours: e.kind === 'arcade',
+      region: e.kind === 'arcade' ? arcadeCountryOf(save) : (e.ref.region || null),
+      char: save.game.characters.find((c) => c.id === e.charId)?.name || null,
+      via: via.get(e.ref.id) || 'ranking',
+    }))
 
   const record = {
     id: uid('t'),
@@ -651,6 +718,11 @@ export function runMajor(save, def) {
     circuitKind: 'major',
     format: 'doubleelim',
     name,
+    host: hostOf(save, def, year),
+    season: def.season || null,
+    entry,
+    field: seededField,
+    emptyChairs: wasted.map((p) => pName(save, p)),
     day: save.day, year, dateLabel: formatDay(save.day, year),
     storylines,
     revealed: 0,
@@ -689,6 +761,18 @@ function survivorMatch(save, A, B) {
     const m = resolveEntrantMatch(save, a[ai], b[bi], {
       long: false, context: 'evo', handicapA: streakA * 0.9, handicapB: streakB * 0.9,
     })
+    // A CREW BATTLE IS FOUR SETS, NOT ONE RESULT. Each duel is already a
+    // complete match object with its own narration — it just had nowhere to be
+    // watched. These fields are what the playback needs to introduce it: whose
+    // turn it is, how long the person on the machine has been standing there,
+    // and how many bodies each side has left when it starts.
+    m.seat = duels.length + 1
+    m.squadA = A.name
+    m.squadB = B.name
+    m.streakA = streakA
+    m.streakB = streakB
+    m.aliveA = a.length - ai
+    m.aliveB = b.length - bi
     duels.push(m)
     if (m.winnerId === a[ai].id) { bi += 1; streakA += 1; streakB = 0 }
     else { ai += 1; streakB += 1; streakA = 0 }
@@ -705,6 +789,12 @@ function survivorMatch(save, A, B) {
     duels,
     narration: [
       `${A.name} vs ${B.name} — survivor rules. Lose and you're done; win and you stay on.`,
+      ...duels.map((d) => {
+        const streak = Math.max(d.streakA, d.streakB)
+        return streak >= 2
+          ? `${d.aName} vs ${d.bName} — ${d.winnerName} takes it. That's ${streak + (d.winnerName === (d.streakA > d.streakB ? d.aName : d.bName) ? 1 : 0)} on the trot for somebody who should be exhausted by now.`
+          : `${d.aName} vs ${d.bName} — ${d.winnerName} takes it.`
+      }),
       `${winner.name} take it with ${left} ${left === 1 ? 'player' : 'players'} still alive.`,
     ],
   }
@@ -844,12 +934,16 @@ export function runSquadShowdown(save, def) {
   } else {
     chronicle(save, '🏮', `${champion.name} won the Squad Showdown. ${rankedInTop(save, 64).length ? 'Your crew stayed home — the trip was never funded.' : 'A crew of yours gets the invite the day one of them cracks the world top 64.'}`)
   }
+  const entry = castEntryReport(save, def, year)
+  if (!yours) announceEntry(save, def, name, entry)
 
   const record = {
     id: uid('t'),
     type: 'teams',
     circuitKind: 'squad',
     name,
+    host: hostOf(save, def, year),
+    entry,
     day: save.day, year, dateLabel: formatDay(save.day, year),
     storylines,
     revealed: 0,
@@ -869,4 +963,142 @@ export function runCircuitEvent(save, def) {
   if (def.kind === 'qualifier') return runQualifier(save, def)
   if (def.kind === 'major') return runMajor(save, def)
   return runSquadShowdown(save, def)
+}
+
+// ---------- WHAT AM I WATCHING, AND WHY ISN'T ANYONE OF MINE IN IT? ----------
+//
+// A major arrives, sixteen strangers play a bracket, and a stranger wins it.
+// That is the mythology engine working — for the first two years you are
+// SUPPOSED to be watching — but it only reads as mythology if the game says so.
+// Left silent it reads as a bug: a screen full of names you have never seen,
+// with no statement anywhere that your room was never eligible, or was eligible
+// and you didn't pay, or entered and went out in round one.
+//
+// So every circuit event now carries an ENTRY REPORT: who of yours was in it,
+// and for everyone who wasn't, the one sentence that says why. Each reason
+// below is the negation of a specific gate in askSpecsFor/travel.js, which is
+// what makes it actionable rather than a shrug — "belief 31, the qualifier
+// wants 40" tells you what to do next; "nobody entered" does not.
+
+/** What the entry rule IS, per kind — one line, for headers and empty states. */
+export const ENTRY_RULE = {
+  regional: `the top ${REGIONAL_CUT} of your national board are invited`,
+  qualifier: `open entry to anyone with belief ${QUALIFIER_BELIEF}+ — up to four of yours ask per event`,
+  major: 'invitation only: sixteen chairs, won at a qualifier or handed out by region',
+  squad: 'one crew of four, invited once somebody of yours is in the world top 64',
+}
+
+/** How the bracket is ordered, per kind — the seeding question, answered. */
+export const SEED_RULE = {
+  regional: 'seeded strictly by elo — #1 on the board plays the lowest seed in the room',
+  qualifier: 'seeded strictly by elo, single elimination: one bad set and the road ends',
+  major: 'seeded strictly by elo, double elimination — there is a losers bracket',
+  squad: 'crews seeded by the average elo of their four; weakest sent out first, ace anchors',
+}
+
+/**
+ * Everyone of yours, and the one sentence about each. `entered` are in the
+ * field; `missed` carry a `reason` that names the gate they failed.
+ */
+export function castEntryReport(save, def, year) {
+  const cast = Object.values(save.players).filter((p) =>
+    !p.npc && p.createdBy === 'user' && p.isRegular && !p.retired && !p.banished)
+  const asks = (save.travel?.asks || []).filter((a) => a.eventKey === def.key && a.eventYear === year)
+  const askOf = (id) => asks.find((a) => a.playerId === id) || null
+  const funded = new Set(fundedCast(save, def, year).map((p) => p.id))
+  const entered = []
+  const missed = []
+
+  const rows = def.kind === 'regional' || def.kind === 'major' ? regionalRankings(save) : null
+  const seats = def.kind === 'major'
+    ? new Set((circuitState(save).seats[`${def.key}:${feedsYear(def, year)}`] || [])
+      .filter((s) => s.kind === 'arcade').map((s) => s.id))
+    : null
+  if (def.kind === 'major') {
+    for (const pick of projectedMajorField(save, def, year).picks) {
+      if (pick.kind === 'arcade') seats.add(pick.id)
+    }
+  }
+  const topRanked = [...cast].sort((a, b) => b.elo - a.elo)
+
+  for (const p of cast) {
+    const name = pName(save, p)
+    if (funded.has(p.id) && p.mainCharId) { entered.push({ id: p.id, name }); continue }
+    const ask = askOf(p.id)
+    // The trip was offered and refused — the most important reason of all,
+    // because it is the one that was entirely yours.
+    if (ask && ask.state === 'denied') {
+      missed.push({ id: p.id, name, reason: `qualified, and the trip wasn't funded — $${ask.cost} you didn't have or didn't spend`, yours: true })
+      continue
+    }
+    if (ask && ask.state === 'pending') {
+      missed.push({ id: p.id, name, reason: `asked to go and never got an answer — the date arrived and the ask lapsed`, yours: true })
+      continue
+    }
+    if (!p.mainCharId) {
+      missed.push({ id: p.id, name, reason: 'still hasn’t settled on a character — nobody enters a bracket undecided' })
+      continue
+    }
+    if (def.kind === 'regional') {
+      const row = rows.find((r) => r.id === p.id)
+      missed.push({
+        id: p.id, name,
+        reason: row
+          ? `#${row.rank} on the national board — the regionals cut is the top ${REGIONAL_CUT}`
+          : 'not on the national board at all yet',
+      })
+    } else if (def.kind === 'qualifier') {
+      const belief = Math.round(p.belief ?? 0)
+      missed.push({
+        id: p.id, name,
+        reason: belief < QUALIFIER_BELIEF
+          ? `belief ${belief} — entering a qualifier is a claim about yourself, and it takes ${QUALIFIER_BELIEF}`
+          : 'four of yours asked to go and they weren’t one of the four — belief and glory decide who does the asking',
+      })
+    } else if (def.kind === 'major') {
+      missed.push({
+        id: p.id, name,
+        reason: seats.has(p.id)
+          ? 'held a seat and never got on a plane'
+          : 'no seat — a major is invitation only: win one at a qualifier, or be one of the four your region hands out',
+      })
+    } else {
+      const inTop = rankedInTop(save, 64).length > 0
+      missed.push({
+        id: p.id, name,
+        reason: !inTop
+          ? 'the crew gets its invitation the day one of yours cracks the world top 64'
+          : cast.length < 4 ? 'a crew is four people and the room hasn’t got four'
+            : topRanked[0]?.id === p.id ? 'the ace asked for the whole crew and the fare wasn’t there'
+              : 'the crew never got on the plane',
+      })
+    }
+  }
+  return { entered, missed, rule: ENTRY_RULE[def.kind], seeding: SEED_RULE[def.kind] }
+}
+
+/**
+ * Say it out loud when a circuit date passes with nobody of yours in it. The
+ * chronicle keeps the fact; the toast points at the reason, because "why was
+ * that not us" is the question the screen has to be able to answer.
+ */
+function announceEntry(save, def, name, report) {
+  if (report.entered.length) return
+  // The sharpest reason wins the headline: something you decided beats
+  // something the world decided.
+  const yours = report.missed.find((m) => m.yours)
+  const nearest = yours || report.missed[0]
+  const kindWord = def.kind === 'major' ? 'major' : def.kind === 'qualifier' ? 'qualifier'
+    : def.kind === 'regional' ? 'regionals' : 'Squad Showdown'
+  chronicle(save, '📺', report.missed.length
+    ? `${name} ran without anybody from ${save.arcade.name} in it. ${nearest.name}: ${nearest.reason}.`
+    : `${name} ran without anybody from ${save.arcade.name} in it — the room has nobody eligible yet.`)
+  pushToast(save, {
+    icon: '📺',
+    text: `Nobody of yours is in ${name} — you're watching this one. ${
+      report.missed.length ? `Closest was ${nearest.name}: ${nearest.reason}.` : `Entry: ${report.rule}.`}`,
+    see: { screen: 'world' },
+    key: `noentry_${def.key}_${save.year}`,
+  })
+  return kindWord
 }

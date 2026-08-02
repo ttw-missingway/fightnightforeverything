@@ -11,7 +11,11 @@ export default function HallOfFame() {
   const records = [...save.hallOfFame].reverse()
   const players = Object.values(save.players).filter((p) => !p.npc)
   const mostGlorious = [...players].sort((a, b) => b.glory - a.glory).slice(0, 5).filter((p) => p.glory > 0)
-  const evoLegends = [...save.evoRoster].sort((a, b) => (b.titles || 0) - (a.titles || 0)).filter((e) => e.titles > 0)
+  // EVO titles only — majors are counted apart now (see world.js). The legacy
+  // `titles` field is read as EVO for saves written before the split.
+  const evoTitlesOf = (e) => (e.evoTitles ?? e.titles) || 0
+  const evoLegends = [...save.evoRoster].filter((e) => evoTitlesOf(e) > 0)
+    .sort((a, b) => evoTitlesOf(b) - evoTitlesOf(a))
   const archives = save.archives || []
   const earnedCount = ACHIEVEMENTS.filter((a) => save.prestige?.achievements?.[a.key]).length
 
@@ -111,7 +115,10 @@ export default function HallOfFame() {
           {evoLegends.map((e) => (
             <div className="row spread" key={e.id} style={{ padding: '3px 0' }}>
               <span>{e.alias} <span className="dim small">[{e.region}]</span></span>
-              <span className="gold">{'🏆'.repeat(Math.min(e.titles, 8))}</span>
+              <span className="gold">
+                {evoTitlesOf(e) > 4 ? `🏆 ×${evoTitlesOf(e)}` : '🏆'.repeat(evoTitlesOf(e))}
+                {e.majorTitles > 0 && <span className="cyan small" title={`${e.majorTitles} world major${e.majorTitles === 1 ? '' : 's'}`}> · 🏛 ×{e.majorTitles}</span>}
+              </span>
             </div>
           ))}
         </div>

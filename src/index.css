@@ -1316,3 +1316,44 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 .bmatch.unrevealed { opacity: 0.45; cursor: default; border-style: dashed; }
 .bmatch.up-next { border-color: var(--pink); box-shadow: 0 0 14px rgba(255, 45, 120, 0.28); }
 tr.world-mine td { background: rgba(45, 226, 230, 0.07); }
+
+/* ---------- The circuit: major splash, field reveal, crew battles ---------- */
+/* A major is three of these a year, so the takeover is a title card and a
+   start list rather than an EVO-sized broadcast — enough that the date lands
+   as an occasion, not so much that it stops the game three times a season. */
+.circuit-splash {
+  min-height: 62vh; display: flex; align-items: center; justify-content: center;
+  padding: 24px 0;
+  animation: circuit-in 420ms ease-out both;
+}
+@keyframes circuit-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.circuit-splash-inner {
+  width: 100%; max-width: 620px; text-align: center;
+  background: linear-gradient(160deg, rgba(255, 206, 79, 0.09), rgba(26, 29, 51, 0.9));
+  border: 1px solid var(--gold); border-radius: 14px; padding: 30px 26px;
+  box-shadow: 0 0 46px rgba(255, 206, 79, 0.16);
+}
+.circuit-splash-inner.wide { max-width: 860px; text-align: left; }
+.circuit-splash-kicker {
+  font-size: 12px; letter-spacing: 3px; color: var(--gold); text-transform: uppercase;
+}
+.circuit-splash-flag { font-size: 54px; line-height: 1.1; margin: 10px 0 2px; }
+.circuit-splash-title {
+  font-size: 34px; margin: 4px 0 2px; color: var(--gold);
+  text-shadow: 0 0 22px rgba(255, 206, 79, 0.45);
+}
+.circuit-splash-sub { color: var(--dim); font-size: 13px; }
+.circuit-splash-blurb { margin: 14px 0 4px; font-size: 15px; }
+.circuit-splash-warn { color: var(--orange); font-size: 13px; margin: 6px 0 10px; }
+
+.circuit-field { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
+@media (max-width: 760px) { .circuit-field { grid-template-columns: 1fr; } }
+.circuit-seat {
+  display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px;
+  align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.circuit-seat.mine { background: rgba(45, 226, 230, 0.08); }
+.circuit-seed { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.circuit-seat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-via { font-size: 11px; white-space: nowrap; }
