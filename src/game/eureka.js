@@ -62,10 +62,20 @@ export const EUREKA = {
   // candidatesFor fell through to its one-most-pressured-stat fallback. Both
   // ends of the distribution produced the same screen — a single button.
   //
-  // At 0.16 an in-row stat needs 0.128×T and a cross-row one 0.24×T, so a
-  // realistic spread has three to six things genuinely lit when the meter
-  // fills, and talentBreadth goes back to doing the job it was written for:
-  // deciding how many of them you get offered.
+  // Measured with tools/balance/choice.mjs (6 runs × 6y, ~500 breakthroughs):
+  //
+  //   GLOW_FRAC   options   only-one   fully-ready   zero-ready
+  //     0.35 (before)  —      common        —            —
+  //     0.16         3.33      0.0%       0.26         79%
+  //     0.10         3.01      0.0%       1.19         33%
+  //
+  // 0.16 fixed the single-button screen and left a worse one behind it: four
+  // things on offer and none of them actually ripe, so the panel had to caption
+  // nearly every breakthrough "half-formed". At 0.10 two thirds of choices have
+  // at least one genuinely lit option to reach for, and the remaining third is
+  // a real texture rather than the default — a scattered season where nothing
+  // came to a head and whichever way you go is a reach. talentBreadth goes back
+  // to doing the job it was written for: deciding how many you get offered.
   GLOW_FRAC: 0.10, // share of threshold a stat needs to glow on its own
   GLOW_VISIBLE: 0.45, // fraction of the requirement at which the UI shows a stat warming
   ROW_IN: 0.8, // in-temperament glow requirement multiplier (cheaper)

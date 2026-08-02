@@ -20,14 +20,23 @@
   },
 
   "identity": {
-    "rushdown": "{char} wants to be in your face and stay there. Everything in the kit is built for getting in and keeping the pressure on, and none of it is built for what happens when you get pushed out. Your whole game is the approach.",
-    "zoner": "{char} plays a different game to everyone else: the fight happens at the range YOU pick, and your entire job is refusing to have the fight anywhere else. When you are forced in close you are not playing {char} any more, you are surviving.",
-    "grappler": "Every round of {char} is the same round. They have to come to you, or they have to make a mistake reaching. Patience is not a virtue here, it is the character.",
-    "shoto": "{char} does everything acceptably and nothing spectacularly. That sounds like a criticism and it is actually the pitch — there is no matchup where you are helpless, and there is no situation where you have no button.",
-    "technical": "{char} asks more of you than the opponent does. Half of every set is against your own hands. When it works nobody can deal with it; when it doesn't, you beat yourself.",
-    "mixup": "{char} wins by making the opponent guess and then punishing the guess. The moment they stop guessing — the moment they have seen your setups — you are playing a much worse character.",
-    "puppet": "You are playing two characters at once and the opponent is playing one. That is the whole advantage and the whole difficulty.",
-    "default": "{char} is a {arch}, and everything below follows from that. If you are fighting the character's own shape you will lose to people worse than you."
+    "Rushdown": "{char} wants to be in your face and stay there. Everything in the kit is built for getting in and keeping the pressure on, and none of it is built for what happens when you get pushed out. Your whole game is the approach.",
+    "Zoner": "{char} plays a different game to everyone else: the fight happens at the range YOU pick, and your entire job is refusing to have it anywhere else. Forced in close you are not playing {char} any more, you are surviving.",
+    "Grappler": "Every round of {char} is the same round. They have to come to you, or they have to make a mistake reaching. Patience is not a virtue here, it is the character.",
+    "Shoto": "{char} does everything acceptably and nothing spectacularly. That sounds like a criticism and it is actually the pitch — there is no matchup where you are helpless and no situation where you have no button.",
+    "Charge": "{char} makes you hold a direction and think two moves ahead of your own hands. It feels like a restriction for about a month and then it feels like a plan.",
+    "Puppet": "You are playing two characters at once and the opponent is playing one. That is the whole advantage and the whole difficulty.",
+    "Setplay": "{char} does not win the round in front of you. {char} wins it three exchanges from now, off a knockdown you set up on purpose. If you are improvising you are throwing the character away.",
+    "Footsies": "{char} is a character about space and nothing else. Whoever understands the gap between two buttons wins, and most people do not want to think about the gap between two buttons.",
+    "Mix-up": "{char} wins by making the opponent guess and then punishing the guess. The moment they stop guessing — the moment they have seen your setups — you are playing a much worse character.",
+    "Glass Cannon": "{char} takes rounds off people in four seconds and loses them in three. There is no version of this that involves playing it safe; there is only picking the right four seconds.",
+    "All-Rounder": "{char} has an answer to everything and a best answer to nothing. That means the character never decides a set — you do — which is either the most freedom in the cast or the loneliest place in it.",
+    "Big Body": "You are bigger, you get hit more, and you hurt more. Every exchange is a trade you have to be sure is worth taking, because you cannot take many.",
+    "Weapon Master": "The weapon is the character. Everything is about the range it reaches and the recovery it costs, and everyone you play will spend the set trying to be inside it.",
+    "Aerial": "{char} treats the ground as somewhere you land by mistake. The whole character is committing to an arc before you know what the opponent is doing, and being right about it.",
+    "Stance Switch": "Two characters in one, and the tax is that you are always in the wrong one for about half a second. Getting good at {char} is mostly getting good at that half a second.",
+    "Counter-Puncher": "{char} does nothing until the opponent does something. That is not passivity, it is the whole plan — and against somebody equally patient it becomes the slowest game of chicken in the building.",
+    "default": "{char} is {archArticle} {arch}, and everything below follows from that. If you are fighting the character's own shape you will lose to people worse than you."
   },
 
   "gameplan": {

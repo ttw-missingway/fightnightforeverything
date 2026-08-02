@@ -292,14 +292,41 @@ export function EntryReport({ record }) {
           the circuit is something you watch until it isn't.
         </p>
       )}
-      {e.missed.map((m) => (
-        <div className="row spread" key={m.id} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
-          <span className="small">{m.yours ? '⚠️ ' : ''}{m.name}</span>
-          <span className={`small ${m.yours ? 'gold' : 'dim'}`} style={{ textAlign: 'right', maxWidth: '65%' }}>
-            {m.reason}
-          </span>
-        </div>
-      ))}
+      {/* GROUPED BY REASON. Six people can fail the same gate for the same
+          reason — "no seat: a major is invitation only" is one fact about your
+          room, not six facts about six people — and printing the sentence six
+          times buries the one line that is actually about a decision you made.
+          Anything you chose (a trip you didn't fund, an ask you never answered)
+          stays on its own row and stays first. */}
+      {(() => {
+        const mine = e.missed.filter((m) => m.yours)
+        const rest = e.missed.filter((m) => !m.yours)
+        const grouped = []
+        for (const m of rest) {
+          const g = grouped.find((x) => x.reason === m.reason)
+          if (g) g.names.push(m.name)
+          else grouped.push({ reason: m.reason, names: [m.name] })
+        }
+        return (
+          <>
+            {mine.map((m) => (
+              <div className="row spread" key={m.id} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
+                <span className="small">⚠️ {m.name}</span>
+                <span className="small gold" style={{ textAlign: 'right', maxWidth: '65%' }}>{m.reason}</span>
+              </div>
+            ))}
+            {grouped.map((g, i) => (
+              <div className="row spread" key={i} style={{ borderBottom: '1px solid var(--border)', padding: '3px 0' }}>
+                <span className="small">
+                  {g.names.slice(0, 3).join(', ')}
+                  {g.names.length > 3 && <span className="dim"> and {g.names.length - 3} more</span>}
+                </span>
+                <span className="small dim" style={{ textAlign: 'right', maxWidth: '65%' }}>{g.reason}</span>
+              </div>
+            ))}
+          </>
+        )
+      })()}
     </div>
   )
 }

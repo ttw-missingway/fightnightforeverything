@@ -1464,5 +1464,12 @@ export function summaryOf(record) {
     entrantCount: record.entrantCount,
     format: record.format || null, // achievements ask what shape it was
     circuitKind: record.circuitKind || null, // the world's events are not "yours" (achievements)
+    // The full record — the field with its provenance, the entry report, the
+    // seats a qualifier handed out — lives on `lastTournament` and its VOD
+    // copy, and VODs roll off after a dozen broadcasts. These two survive into
+    // the permanent record because they are the questions the hall of fame gets
+    // asked years later: where was it, and were we there.
+    host: record.host || null,
+    yoursIn: record.entry ? record.entry.entered.length : null,
   }
 }

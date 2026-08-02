@@ -246,6 +246,11 @@ export function readGuide(save, guide) {
     author: author ? (author.alias || author.firstName) : 'a departed regular',
     game: save.game.name,
     arch: char?.archetype || 'fighter',
+    // Only the fallback line ever prints the archetype as a noun phrase, and
+    // "a All-Rounder" is the kind of seam that makes generated prose read as
+    // generated. Every archetype has its own paragraph, so this is belt and
+    // braces for a game whose roster the player can rename.
+    archArticle: /^[aeiou]/i.test(char?.archetype || 'f') ? 'an' : 'a',
     skill: Math.round(skill),
     reps,
     best: best?.c.name || 'nobody in particular',
