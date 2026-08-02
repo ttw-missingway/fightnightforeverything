@@ -11,6 +11,7 @@ import { chronicle } from './model.js'
 import { econLog } from './economy.js'
 import { bumpPassion } from './career.js'
 import { canStream, addHype, addFollowers } from './stream.js'
+import { line as chronicleLine } from '../content/index.js'
 
 // Weighted deck. `bad` decides which way the difficulty thumb presses the
 // scale. Durations are absolute-day windows stored on save.worldEffects and
@@ -21,14 +22,14 @@ const EVENTS = [
     key: 'rival_launch', bad: true, weight: 3,
     run(save, abs) {
       save.worldEffects.push({ key: 'rival_launch', untilAbs: abs + 55, decayMult: 1.55 })
-      chronicle(save, '🎮', `A huge new fighter just launched and it's ALL anyone can talk about. ${save.game.name} will have to fight for attention for a while.`)
+      chronicle(save, '🎮', chronicleLine('worldevent.newFighter', { game: save.game.name }))
     },
   },
   {
     key: 'rent_hike', bad: true, weight: 2,
     run(save, abs) {
       save.worldEffects.push({ key: 'rent_hike', untilAbs: abs + 84, rentMult: 1.3 })
-      chronicle(save, '🏢', `The landlord "revisited the market rate." Rent is up 30% for the next three months.`)
+      chronicle(save, '🏢', chronicleLine('worldevent.rentHike'))
     },
   },
   {
@@ -36,7 +37,7 @@ const EVENTS = [
     run(save) {
       const cost = randInt(80, 160)
       econLog(save, -cost, 'emergency cabinet repair')
-      chronicle(save, '🔌', `A power surge cooked a board mid-session — $${cost} in emergency repairs.`)
+      chronicle(save, '🔌', chronicleLine('worldevent.powerSurge', { cost }))
     },
   },
   {
@@ -54,7 +55,7 @@ const EVENTS = [
       const newFollowers = Math.round((save.stream.followers || 0) * (0.06 + rand() * 0.08)) + randInt(10, 40)
       const got = addFollowers(save, newFollowers)
       addHype(save, 6)
-      chronicle(save, '📈', `A clip from the arcade went viral overnight — +${got} followers and the whole scene is suddenly on people's feeds.`)
+      chronicle(save, '📈', chronicleLine('worldevent.viralClip', { got }))
     },
   },
   {
@@ -67,7 +68,7 @@ const EVENTS = [
       }
       // The room buzzes either way; the CHANNEL only gains if there is one.
       addHype(save, 5)
-      chronicle(save, '✈️', `A touring pro dropped in unannounced and ran sets all night. The whole room is buzzing for weeks.`)
+      chronicle(save, '✈️', chronicleLine('worldevent.touringPro'))
     },
   },
   {
@@ -75,7 +76,7 @@ const EVENTS = [
     run(save) {
       save.relevance = clamp((save.relevance ?? 55) + randInt(4, 8), 0, 100)
       addHype(save, 10)
-      chronicle(save, '📰', `A gaming outlet ran a feature on ${save.arcade.name} — "the last real arcade scene." The comments are surprisingly kind.`)
+      chronicle(save, '📰', chronicleLine('worldevent.pressFeature', { arcade: save.arcade.name }))
     },
   },
 ]

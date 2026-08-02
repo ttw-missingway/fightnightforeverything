@@ -1357,3 +1357,74 @@ tr.world-mine td { background: rgba(45, 226, 230, 0.07); }
 .circuit-seed { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 .circuit-seat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .circuit-via { font-size: 11px; white-space: nowrap; }
+
+/* ---------- The eureka meter: pressure, made visible ---------- */
+/* The spine of the game used to be entirely invisible until it resolved.
+   These are the parts that make it something you watch build. */
+.eureka-card { border-color: var(--indigo); }
+.eureka-track {
+  position: relative; height: 12px; margin-top: 8px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+}
+.eureka-fill {
+  height: 100%; border-radius: 5px;
+  background: linear-gradient(90deg, var(--indigo), var(--magenta));
+  transition: width 400ms ease;
+}
+.eureka-fill.full {
+  background: linear-gradient(90deg, var(--gold), var(--pink));
+  animation: eureka-pulse 1.6s ease-in-out infinite;
+}
+@keyframes eureka-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 206, 79, 0); }
+  50% { box-shadow: 0 0 16px rgba(255, 206, 79, 0.75); }
+}
+/* Where one runaway stat sits against the resolve-itself-badly line (§1.4). */
+.eureka-force {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--red); box-shadow: 0 0 6px var(--red);
+}
+
+.eureka-glows { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.eureka-glow {
+  flex: 1 1 190px; min-width: 170px; max-width: 260px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+  background: var(--bg2);
+}
+.eureka-glow.ready { background: var(--card2); box-shadow: 0 0 12px rgba(255, 255, 255, 0.05); }
+.eureka-subtrack {
+  height: 4px; margin-top: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;
+}
+.eureka-subtrack > div { height: 100%; border-radius: 2px; transition: width 400ms ease; }
+
+.eureka-choice {
+  border-color: var(--gold);
+  box-shadow: 0 0 30px rgba(255, 206, 79, 0.18);
+}
+.eureka-candidates { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.eureka-cand { flex: 1 1 240px; max-width: 320px; }
+.eureka-cand.half { opacity: 0.72; }
+
+/* A stat row that is under pressure. Warm rows breathe; ready rows are lit. */
+.pdots.glow-warm .label, .pdots.glow-ready .label { color: var(--glow-color); }
+.pdots.glow-warm { animation: pdot-breathe 2.6s ease-in-out infinite; }
+.pdots.glow-ready .dots { filter: drop-shadow(0 0 5px var(--glow-color)); }
+@keyframes pdot-breathe { 0%, 100% { opacity: 0.82; } 50% { opacity: 1; } }
+.pdot.pdot-next {
+  border-color: var(--glow-color);
+  background: color-mix(in srgb, var(--glow-color) calc(var(--glow-heat) * 60%), transparent);
+}
+.pdot-spark { margin-left: 5px; font-size: 11px; }
+
+.mini-meter {
+  position: relative; display: inline-block; width: 46px; height: 7px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  vertical-align: middle;
+}
+.mini-meter-fill {
+  position: absolute; inset: 0 auto 0 0; height: 100%;
+  background: linear-gradient(90deg, var(--indigo), var(--magenta));
+}
+.mini-meter-dots {
+  position: absolute; right: 2px; top: -4px; color: var(--gold); font-size: 11px; letter-spacing: -1px;
+}

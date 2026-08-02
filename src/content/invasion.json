@@ -1,0 +1,105 @@
+{
+  "CLUSTER_VOICE": {
+    "JP": {
+      "hello": "このゲームセンターが大好きです",
+      "tongue": "Japanese"
+    },
+    "KR": {
+      "hello": "이 오락실 분위기 진짜 좋네요",
+      "tongue": "Korean"
+    },
+    "CN": {
+      "hello": "这家机厅太棒了",
+      "tongue": "Mandarin"
+    },
+    "VN": {
+      "hello": "chỗ này chơi vui thật sự",
+      "tongue": "Vietnamese"
+    },
+    "TH": {
+      "hello": "ที่นี่สนุกมากเลย",
+      "tongue": "Thai"
+    },
+    "ARB": {
+      "hello": "هذه الصالة أسطورية",
+      "tongue": "Arabic"
+    },
+    "CIS": {
+      "hello": "этот зал — просто пушка",
+      "tongue": "Russian"
+    },
+    "PL": {
+      "hello": "ta salka jest niesamowita",
+      "tongue": "Polish"
+    },
+    "IT": {
+      "hello": "questa sala è fantastica",
+      "tongue": "Italian"
+    },
+    "BR": {
+      "hello": "esse fliperama é muito melhor ao vivo",
+      "tongue": "Portuguese"
+    },
+    "ES": {
+      "hello": "oigan, este lugar está increíble",
+      "tongue": "Spanish"
+    },
+    "FR": {
+      "hello": "cette salle est incroyable, franchement",
+      "tongue": "French"
+    },
+    "DE": {
+      "hello": "diese Halle ist der Wahnsinn",
+      "tongue": "German"
+    },
+    "SE": {
+      "hello": "det här stället är helt otroligt",
+      "tongue": "Swedish"
+    },
+    "IN": {
+      "hello": "yaar, this arcade is unreal",
+      "tongue": null
+    },
+    "SG": {
+      "hello": "wah, the setups here damn solid ah",
+      "tongue": null
+    },
+    "MY": {
+      "hello": "the setups here are too good lah",
+      "tongue": null
+    },
+    "ID": {
+      "hello": "tempat ini keren banget",
+      "tongue": "Indonesian"
+    },
+    "PH": {
+      "hello": "grabe, ang ganda ng lugar na to",
+      "tongue": "Tagalog"
+    }
+  },
+  "VISITOR_LINES": [
+    "This place looks like a dump on stream. It's actually really nice?",
+    "I flew eleven hours for this and I would do it again.",
+    "Your setups are better than the ones at our majors. Genuinely.",
+    "Okay, who here is the best? Point at them. I'll wait.",
+    "Back home nobody would play me at this hour. I love it here.",
+    "I don't know what you put in this game's neutral but we don't have it.",
+    "Somebody explain the food to me. What is that. I want one.",
+    "You have a REGULAR who plays that character? On purpose?"
+  ],
+  "HOST_REPLIES": [
+    "uhhh. thanks?",
+    "I'm going to take that as a compliment.",
+    "Please stop three-oh-ing our best player.",
+    "You can just say you like it, man.",
+    "Mate, you are ranked eleventh in the world. Be nice.",
+    "That's the nicest thing anyone's said about this carpet.",
+    "We were doing fine before you got here, you know."
+  ],
+  "LOST_IN_TRANSLATION": [
+    "oh — sorry, I don't speak {tongue}.",
+    "I have absolutely no idea what that meant, but same to you.",
+    "...is that {tongue}? I did two weeks of {tongue} on an app once.",
+    "nodding politely. Nodding politely."
+  ]
+}

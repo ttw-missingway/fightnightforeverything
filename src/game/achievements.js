@@ -1,5 +1,6 @@
 import { runAge, DAYS_PER_YEAR, STAT_MAX_POINTS, STAT_UNIT } from './constants.js'
 import { chronicle } from './model.js'
+import { line as chronicleLine } from '../content/index.js'
 
 /**
  * The permanent ladder: what a lineage keeps when a run ends.
@@ -482,7 +483,7 @@ export function checkAchievements(save) {
     }
     save.prestige.points = (save.prestige.points || 0) + a.points
     const pay = a.points > 0 ? ` (+${a.points} prestige)` : ''
-    chronicle(save, a.icon, `${a.name} — ${a.unlockLabel} is yours for good${pay}`)
+    chronicle(save, a.icon, chronicleLine('achievement.earned', { name: a.name, unlockLabel: a.unlockLabel, pay }))
     save.unlockNotices.push(a.key)
     earned.push(a)
   }

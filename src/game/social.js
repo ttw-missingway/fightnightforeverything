@@ -6,6 +6,7 @@ import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
 import { tokenFeel } from './economy.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export function getRel(a, b) {
   return a.relationships[b.id] || 0
@@ -191,7 +192,7 @@ export function checkFallingOut(save, player, events) {
       text: `${player.alias || player.firstName} had a falling out with ${team.name} and left the team.`,
     })
     // Storming out of your crew is the kind of thing the arcade retells.
-    chronicle(save, '💥', `${player.alias || player.firstName} stormed out of ${team.name} after a falling out`)
+    chronicle(save, '💥', chronicleLine('team.stormedOut', { name: player.alias || player.firstName, team: team.name }))
   }
 }
 
@@ -221,7 +222,7 @@ function disbandTeam(save, team, events, reason) {
     if (p) { p.teamId = null; p.mood = clamp(p.mood - 0.5, 0, 10) }
   }
   events.push({ type: 'team', text: `${team.name} [${team.acronym}] ${reason}` })
-  chronicle(save, '🪦', `${team.name} [${team.acronym}] is no more — ${reason}`)
+  chronicle(save, '🪦', chronicleLine('team.disbanded', { team: team.name, acronym: team.acronym, reason }))
   delete save.teams[team.id]
 }
 
@@ -272,7 +273,7 @@ function maybeBetrayal(save, events) {
       type: 'team',
       text: `🗡 ${name} LEFT ${team.name} [${team.acronym}] for ${dest.name} [${dest.acronym}]. Mid-session. The room went silent.`,
     })
-    chronicle(save, '🗡', `The day ${name} betrayed ${team.name} and walked across the arcade to join ${dest.name}`)
+    chronicle(save, '🗡', chronicleLine('team.betrayal', { name, team: team.name, dest: dest.name }))
     return // one betrayal a day is plenty of drama
   }
 }

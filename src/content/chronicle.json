@@ -1,0 +1,102 @@
+{
+  "_readme": "The chronicle — the room's collective memory. Keys are stable; the engine calls line('key', {data}) and never contains the sentence itself. Placeholders in {braces} are filled from whatever the call site passes; a missing one renders as an ellipsis. Keep these numberless and occasional: the chronicle is the feed for things that happened to EVERYBODY, and the one-announcement rule (REVISION §0.4) says a stat change speaks only in a player's journal, never here.",
+
+  "achievement.earned": "{name} — {unlockLabel} is yours for good{pay}",
+
+  "career.retire.glorious": "{name} retired — an all-time great of {arcade}, walking away on their own terms",
+  "career.retire.age": "{name} played their last night at {arcade} after {nights} of them",
+  "career.retire.quiet": "{name} quietly retired from the game after {nights} nights",
+
+  "circuit.regional.castWon": "{champion} won {event}. The best in the country trains in YOUR room.",
+  "circuit.regional.castTop4": "{name} made the final four at {event}. The country knows the arcade's name now.",
+  "circuit.regional.castOut": "{champion} won {event}; {name} went out {how}.",
+  "circuit.qualifier.seatWon": "{name} punched their ticket to the {season} Major at {event}.",
+  "circuit.qualifier.seatVoted": "The crowd voted {name} into the {season} Major. Personality is access.",
+  "circuit.major.emptyChair": "{name} QUALIFIED for {event} and stayed home. The seat was won weeks ago; the fare had to still be there today.",
+  "circuit.major.castWon": "{champion} WON {event}. A world major. From this arcade.",
+  "circuit.major.castPlaced": "{champion} took {event}; {name} carried the arcade to {how}.",
+  "circuit.major.watched": "{event} came and went. {champion} took it. Nobody from {arcade} was in the room.",
+  "circuit.squad.called_off": "{event} was called off — the scene couldn't field the crews.",
+  "circuit.squad.castWon": "TEAM {arcadeUpper} WON THE SQUAD SHOWDOWN. Four of yours against the world, and the world blinked.",
+  "circuit.squad.castRan": "Squad Showdown, Year {year}: your crew {ran}; {champion} took the lanterns home.",
+  "circuit.squad.unfunded": "{champion} won the Squad Showdown. Your crew stayed home — the trip was never funded.",
+  "circuit.squad.uninvited": "{champion} won the Squad Showdown. A crew of yours gets the invite the day one of them cracks the world top 64.",
+  "circuit.noEntry.reason": "{event} ran without anybody from {arcade} in it. {name}: {reason}.",
+  "circuit.noEntry.bare": "{event} ran without anybody from {arcade} in it — the room has nobody eligible yet.",
+
+  "era.sequel": "{oldName} is over. {game} ships today, and every player on earth is a beginner again — including yours. {arcade} has a name that carries; that is the only thing that does.",
+  "era.retiredWithIt": "{names} {isAre} not starting over. {careerWord} that belonged to {oldName}, and {itThey} with it.",
+
+  "economy.shutdown": "The health department shut {arcade} down for {days} days. Nobody let the regulars forget it.",
+  "economy.foreclosed": "{arcade} was foreclosed on. The last night, nobody wanted to go home.",
+
+  "eureka.temperamentShift": "{name} isn't who they were. The room would tell you: they're {row} now.",
+  "eureka.veteran.technique": "{name} has been sitting on something. It has a name now, and by the weekend everybody in the room is trying it.",
+  "eureka.veteran.guide": "{name} wrote it all down — everything they know, for anyone who wants it.",
+  "eureka.veteran.meta": "{name} said something about {game} this week that half the scene is still arguing about. The other half has already changed how they play.",
+
+  "discipline.peaceAfterBan": "With {name} gone, a few people who had stopped speaking started again. Whatever that was about, it left with them.",
+  "discipline.banned": "{name} was banned from {arcade}",
+
+  "prestige.milestone.repeat": "{text} (+{paid} legacy point{s} — this lineage has been here before)",
+  "prestige.milestone": "{text} (+{paid} legacy point{s})",
+
+  "patch.hotfix": "A quiet hotfix went out — {note}",
+  "patch.damaged": "Patch v{version} did real damage — interest in {game} took a hit the scene may not recover from",
+  "patch.recovered": "Patch v{version} landed — {game} is back in the conversation",
+  "patch.labBuzz": "The v{version} meta has everyone in the lab — the room hasn't buzzed like this in months.",
+  "patch.released": "Patch v{version} released — {label}{why}",
+  "patch.announced": "{game} v{version} announced for {date}",
+
+  "succession.mentorship": "{mentor} has taken {student} under their wing. Whatever {mentor} knows, {student} is going to know.",
+  "succession.prodigy": "Some kid has been quietly demolishing people on the corner cabinet all week. Somebody should find out who they are.",
+  "succession.poached": "{name} stopped coming in. Word is they're travelling with a crew across town now. That one is going to hurt to watch.",
+  "succession.noSuccessors": "Look around {arcade}: the people who built this place are all near the end of it, and there is nobody standing behind them.",
+
+  "invasion.arrive": "{flag} A crew from {region} is in town for {days} day{s} — {names}. Everybody is going to want a set.",
+  "invasion.leave.beaten": "{flag} {crew} went home — and {beaten} of them left with a worse ranking than they arrived with.",
+  "invasion.leave": "{flag} {crew} went home. Everybody in the arcade got a story out of it.",
+
+  "worldevent.newFighter": "A huge new fighter just launched and it's ALL anyone can talk about. {game} will have to fight for attention for a while.",
+  "worldevent.rentHike": "The landlord \"revisited the market rate.\" Rent is up 30% for the next three months.",
+  "worldevent.powerSurge": "A power surge cooked a board mid-session — ${cost} in emergency repairs.",
+  "worldevent.viralClip": "A clip from the arcade went viral overnight — +{got} followers and the whole scene is suddenly on people's feeds.",
+  "worldevent.touringPro": "A touring pro dropped in unannounced and ran sets all night. The whole room is buzzing for weeks.",
+  "worldevent.pressFeature": "A gaming outlet ran a feature on {arcade} — \"the last real arcade scene.\" The comments are surprisingly kind.",
+
+  "team.stormedOut": "{name} stormed out of {team} after a falling out",
+  "team.disbanded": "{team} [{acronym}] is no more — {reason}",
+  "team.betrayal": "The day {name} betrayed {team} and walked across the arcade to join {dest}",
+
+  "relevance.goldenAgeEnds": "The golden age of {game} has cooled into something quieter. What a stretch it was.",
+  "relevance.slumpEnds": "{game} has pulled out of its slump — people are coming back.",
+  "relevance.goldenAge": "A GOLDEN AGE: {game} is the center of the fighting-game world right now.",
+  "relevance.slump": "{game} has slid into a real slump — the room feels it every night.",
+  "relevance.championGoldenAge": "A world champion, from THIS arcade. {game} is back in every conversation — a golden age begins.",
+  "relevance.phenomenon": "{name} has become a national phenomenon — the whole scene is buzzing",
+  "relevance.thriving": "{name} is thriving again — interest is on the rise",
+  "relevance.slipping": "{name} is slipping out of the national conversation",
+  "relevance.fading": "Interest in {name} is fading fast — the golden age is ending",
+  "relevance.forgotten": "{name} is nearly forgotten. What was once a scene is now a handful of holdouts.",
+
+  "sim.firstTech": "{name} discovered the scene's first original tech: \"{tech}\"",
+  "sim.moneyMatch": "{winner} beat {loser} {score} in the money match everyone still talks about",
+  "sim.mortalEnemies": "{a} and {b} became mortal enemies — the arcade quietly picks sides",
+  "sim.becameStar": "{name} became a star of {arcade}",
+  "sim.becameLegend": "{name} reached legend status at {arcade}",
+  "sim.schoolBack": "School went back. {arcade} is going to feel empty for a while.",
+  "sim.schoolOut": "School is out. {arcade} is about to get busy.",
+  "sim.coreAgeing": "The core of {arcade} is getting older. {names}{andOthers} aren't quite what they were, and everybody can see it.",
+
+  "stream.stageWin": "{who} did it under the lights with {crowd} — you can see it in how they carry themselves now",
+  "stream.stageChoke": "{who} came apart on stream in front of {crowd}. Something went out of them that night.",
+
+  "tournament.potTaken": "{name} came for the {event} pot and took it home. The room watched every game of it.",
+  "tournament.banishedWon": "{name} — the one you banned — won {event} in your own room and walked out with the pot. Nobody said much after that.",
+  "tournament.firstTitle": "{name} won their first-ever title at {event}",
+  "tournament.won": "{name} won {event} ({size} entrants{viewers})",
+  "tournament.teamWon": "{champion} won {event} as a crew",
+  "evo.castWon": "{champion} WON EVO Year {year}. From this arcade. Nothing will ever top this.",
+  "evo.won": "EVO Year {year}: {champion} took the crown{ours}",
+  "evo.watched": "EVO {year} came and went and nobody from {arcade} was in it. {champion} took the title."
+}

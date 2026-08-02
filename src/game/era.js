@@ -33,6 +33,7 @@ import { writeJournal } from './journal.js'
 import { pushToast } from './notify.js'
 import { careerStageOf, yearsPastPeak } from './career.js'
 import { GAME_TITLE_PARTS } from './names.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export const newEraState = (abs) => ({ n: 1, startAbs: abs, titles: [], base: null, peakRel: 0 })
 
@@ -257,9 +258,15 @@ export function beginNewEra(save) {
   }
   save.lastEraChange = report
 
-  chronicle(save, '🌅', `${oldName} is over. ${save.game.name} ships today, and every player on earth is a beginner again — including yours. ${save.arcade.name} has a name that carries; that is the only thing that does.`)
+  chronicle(save, '🌅', chronicleLine('era.sequel', { oldName, game: save.game.name, arcade: save.arcade.name }))
   if (retiredNames.length) {
-    chronicle(save, '🏁', `${retiredNames.join(', ')} ${retiredNames.length === 1 ? 'is' : 'are'} not starting over. ${retiredNames.length === 1 ? 'A career' : 'Careers'} that belonged to ${oldName}, and ${retiredNames.length === 1 ? 'it ends' : 'they end'} with it.`)
+    chronicle(save, '🏁', chronicleLine('era.retiredWithIt', {
+      names: retiredNames.join(', '),
+      isAre: retiredNames.length === 1 ? 'is' : 'are',
+      careerWord: retiredNames.length === 1 ? 'A career' : 'Careers',
+      oldName,
+      itThey: retiredNames.length === 1 ? 'it ends' : 'they end',
+    }))
   }
   pushToast(save, {
     icon: '🌅',

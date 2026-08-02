@@ -39,6 +39,7 @@ import { bumpPassion } from './career.js'
 import { rivalOf } from './social.js'
 import { writeJournal, openThread, threadOf, closeThread, isJournaled } from './journal.js'
 import { pushToast, dismissToastByKey } from './notify.js'
+import { line as chronicleLine } from '../content/index.js'
 
 // ---------- Tuning (§1.10's hypothesis, adjusted by measurement) ----------
 // The targets: 2–4 productive pressure/week for a focused player, 8–11
@@ -48,7 +49,25 @@ export const EUREKA = {
   GROWTH: 1.35, // threshold multiplier per breakthrough
   FORCED_MULT: 2.5, // a single stat at this × threshold stops being a choice
   CARRY: 0.55, // unchosen candidates keep this share (§1.4: wounds return)
-  GLOW_FRAC: 0.35, // share of threshold a stat needs to glow on its own
+  // HOW MANY THINGS CAN BE GLOWING AT ONCE — the number that decided whether
+  // §1.3 existed at all, and it was set too high to let it.
+  //
+  // The meter is the SUM of per-stat pressure and fills at `threshold`. A stat
+  // glows at GLOW_FRAC × threshold × row multiplier. So the arithmetic caps
+  // how many stats can POSSIBLY be glowing when the meter fills: at 0.35, an
+  // in-row stat needed 0.28×T and a cross-row one 0.525×T, meaning at most
+  // three same-row stats or one cross-row stat could ever qualify at once.
+  // And that was the good case. The bad case is worse and much more common:
+  // pressure spread evenly over four stats put NONE of them over the line, so
+  // candidatesFor fell through to its one-most-pressured-stat fallback. Both
+  // ends of the distribution produced the same screen — a single button.
+  //
+  // At 0.16 an in-row stat needs 0.128×T and a cross-row one 0.24×T, so a
+  // realistic spread has three to six things genuinely lit when the meter
+  // fills, and talentBreadth goes back to doing the job it was written for:
+  // deciding how many of them you get offered.
+  GLOW_FRAC: 0.10, // share of threshold a stat needs to glow on its own
+  GLOW_VISIBLE: 0.45, // fraction of the requirement at which the UI shows a stat warming
   ROW_IN: 0.8, // in-temperament glow requirement multiplier (cheaper)
   ROW_OUT: 1.5, // cross-row multiplier (identity costs more — §1.5)
   REPEAT: 0.35, // extra requirement per prior breakthrough on the same stat
@@ -222,14 +241,64 @@ export function glowRequirement(player, stat) {
 const eligible = (player, stat) =>
   (bagOf(player, stat)?.[stat] ?? 0) < STAT_MAX_POINTS * STAT_UNIT
 
-/** Stats past a visible fraction of their requirement — the foreshadow read. */
+/**
+ * Stats past a visible fraction of their requirement — the foreshadow read,
+ * and now also the LIVE read the player card draws every day.
+ *
+ * `ready` is the hard line: past it the stat can be broken through on. Below
+ * it, `heat` is how far along it is, which is what makes a stat visibly warm
+ * up over weeks instead of appearing fully formed at the moment of choice.
+ * That progression is most of what §1.1 was promising and none of it was ever
+ * on screen — the whole system lived behind a toast.
+ */
 export function glowingStats(player) {
   const e = player.eureka
   if (!e) return []
   return Object.entries(e.pressure)
-    .filter(([stat, p]) => eligible(player, stat) && p >= 0.65 * glowRequirement(player, stat))
-    .sort((a, b) => b[1] - a[1])
-    .map(([stat, p]) => ({ stat, pressure: p, requirement: glowRequirement(player, stat) }))
+    .map(([stat, p]) => {
+      const requirement = glowRequirement(player, stat)
+      return {
+        stat,
+        pressure: p,
+        requirement,
+        heat: clamp(p / Math.max(0.001, requirement), 0, 1.4),
+        ready: p >= requirement,
+        kind: dominantKindOf(player, stat),
+        label: STAT_LABEL[stat] || stat,
+        inRow: rowOfStat(stat)?.key === playerRowKey(player, stat),
+      }
+    })
+    .filter((g) => eligible(player, g.stat) && g.heat >= EUREKA.GLOW_VISIBLE)
+    .sort((a, b) => b.heat - a.heat)
+}
+
+/** Heat per stat as a plain map — for drawing the glow on the stat sheet. */
+export function glowMap(player) {
+  const out = {}
+  for (const g of glowingStats(player)) out[g.stat] = g
+  return out
+}
+
+/**
+ * The meter itself, as the card draws it: how much pressure has gathered
+ * against how much it takes. This is the bar the player watches fill.
+ */
+export function eurekaMeter(player) {
+  const e = player.eureka
+  if (!e) return null
+  const pressure = Object.values(e.pressure).reduce((s, v) => s + v, 0)
+  return {
+    pressure,
+    threshold: e.threshold,
+    frac: clamp(pressure / Math.max(0.001, e.threshold), 0, 1),
+    full: pressure >= e.threshold,
+    pending: !!e.pending,
+    count: e.count || 0,
+    // The deadline §1.4 imposes: one stat this far past the threshold and the
+    // choice is taken away. Shown as a warning band on the bar.
+    forcedAt: EUREKA.FORCED_MULT * e.threshold,
+    hottest: Math.max(0, ...Object.values(e.pressure)),
+  }
 }
 
 /** The kind that has fed this stat most — labels the choice and the log. */
@@ -240,28 +309,56 @@ export function dominantKindOf(player, stat) {
   return Object.entries(byKind).sort((a, b) => b[1] - a[1])[0]?.[0] || 'wound'
 }
 
-/** When the meter fills: the top K glowing stats, wound and edge distinct. */
+/**
+ * The evidence under a candidate, DEDUPED.
+ *
+ * The source ring keeps the last six entries verbatim, and the influence
+ * channel writes the same sentence every attended day — so a character-demand
+ * stat's evidence rendered as "Crono demands it / Crono demands it / Crono
+ * demands it", which reads as a bug and tells you nothing. Same sentence, one
+ * line, with how many times and how much it added.
+ */
+export function evidenceFor(player, stat) {
+  const ring = player.eureka?.sources?.[stat] || []
+  const byWhy = new Map()
+  for (const s of ring) {
+    const cur = byWhy.get(s.why) || { why: s.why, kind: s.kind, n: 0, amt: 0, lastAbs: 0 }
+    cur.n += 1
+    cur.amt += s.amt
+    cur.lastAbs = Math.max(cur.lastAbs, s.absDay)
+    byWhy.set(s.why, cur)
+  }
+  return [...byWhy.values()].sort((a, b) => b.amt - a.amt)
+}
+
+/**
+ * When the meter fills: the top K glowing stats — K is talent breadth, floored
+ * at two, because a choice of one is not a choice (see talentBreadth).
+ *
+ * `ready` marks the ones genuinely over their glow line. If fewer than two are
+ * (a thin, evenly-spread month), the next most-pressured eligible stats stand
+ * in, flagged so the panel can say what they are: something half-formed you
+ * can still reach for. Better than the old single-button fallback, and honest.
+ */
 export function candidatesFor(player) {
   const e = player.eureka
   const k = talentBreadth(player)
-  const qualified = Object.entries(e.pressure)
-    .filter(([stat, p]) => eligible(player, stat) && p >= glowRequirement(player, stat))
-    .sort((a, b) => b[1] - a[1])
-  let picks = qualified.slice(0, k)
-  if (!picks.length) {
-    // Meter full but pressure spread thin — the most-pressured stat stands in.
-    picks = Object.entries(e.pressure)
-      .filter(([stat]) => eligible(player, stat))
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 1)
-  }
-  return picks.map(([stat, pressure]) => ({
-    stat,
-    pressure: Math.round(pressure * 10) / 10,
-    kind: dominantKindOf(player, stat),
-    label: STAT_LABEL[stat] || stat,
-    inRow: rowOfStat(stat)?.key === playerRowKey(player, stat),
-  }))
+  const scored = Object.entries(e.pressure)
+    .filter(([stat]) => eligible(player, stat))
+    .map(([stat, pressure]) => ({
+      stat,
+      pressure: Math.round(pressure * 10) / 10,
+      requirement: glowRequirement(player, stat),
+      ready: pressure >= glowRequirement(player, stat),
+      kind: dominantKindOf(player, stat),
+      label: STAT_LABEL[stat] || stat,
+      inRow: rowOfStat(stat)?.key === playerRowKey(player, stat),
+      evidence: evidenceFor(player, stat),
+    }))
+    .sort((a, b) => (b.ready - a.ready) || (b.pressure / b.requirement) - (a.pressure / a.requirement))
+  const ready = scored.filter((c) => c.ready)
+  if (ready.length >= 2) return ready.slice(0, k)
+  return scored.slice(0, Math.max(2, Math.min(k, scored.length)))
 }
 
 const meterOf = (e) => Object.values(e.pressure).reduce((s, v) => s + v, 0)
@@ -273,7 +370,9 @@ const meterOf = (e) => Object.values(e.pressure).reduce((s, v) => s + v, 0)
 export function autoPickStat(player, candidates) {
   let best = null
   for (const c of candidates) {
-    const score = c.pressure * (c.inRow ? 1.5 : 1)
+    // A fully-lit stat beats a half-formed one outright — the sim never
+    // reaches for something that isn't ready when something is.
+    const score = c.pressure * (c.inRow ? 1.5 : 1) * (c.ready === false ? 0.4 : 1)
     if (!best || score > best.score) best = { ...c, score }
   }
   return best?.stat || null
@@ -358,13 +457,24 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
       if (!player.npc) {
         // The room noticing is a collective moment, and numberless — the
         // chronicle may keep it. The stat mechanics stay in the journal.
-        chronicle(save, '🦋', `${name} isn't who they were. The room would tell you: they're ${row.label} now.`)
+        chronicle(save, '🦋', chronicleLine('eureka.temperamentShift', { name, row: row.label }))
         remember(save, player, 'eureka', `becoming ${row.label}`)
       }
     }
   }
 
-  e.log.push({ absDay: today, stat, kind, cross: !!cross, forced })
+  // WHAT WAS ON THE TABLE. Recorded because "was this a choice or a chore"
+  // turned out to be unmeasurable after the fact — the shortlist evaporated
+  // the moment it was answered, so nothing could tell a genuine three-way
+  // decision from a single button. Two integers per breakthrough; see
+  // tools/balance/choice.mjs.
+  const offer = e.pending?.candidates || null
+  e.log.push({
+    absDay: today, stat, kind, cross: !!cross, forced,
+    offered: offer ? offer.length : null,
+    offeredReady: offer ? offer.filter((c) => c.ready !== false).length : null,
+    offeredKinds: offer ? new Set(offer.map((c) => c.kind)).size : null,
+  })
   e.count += 1
   e.perStat[stat] = (e.perStat[stat] || 0) + 1
   e.threshold = Math.round(e.threshold * EUREKA.GROWTH * 10) / 10
@@ -467,10 +577,18 @@ export function veteranTier(player) {
   if (past < 1) return false
   const e = player.eureka
   if (!e) return false
+  // Measured against the OLD glow line, on purpose. GLOW_FRAC was cut from
+  // 0.35 to 0.16 so that a breakthrough is a choice between several lit stats
+  // rather than a single button — but this gate asks a different question,
+  // "has this career stopped producing anything that really burns", and if it
+  // rode the same constant the handover to the veteran tier would have quietly
+  // stopped happening. VETERAN_GLOW restores the ratio the P5 measurements
+  // were taken at (0.35 / 0.16), so ageing behaves exactly as it did.
   const qualified = Object.entries(e.pressure)
-    .some(([stat, p]) => eligible(player, stat) && p >= glowRequirement(player, stat))
+    .some(([stat, p]) => eligible(player, stat) && p >= glowRequirement(player, stat) * VETERAN_GLOW)
   return !qualified
 }
+const VETERAN_GLOW = 2.19
 
 /** Everything a veteran's pressure can come out as instead of a stat point. */
 const VETERAN_OUTPUTS = ['technique', 'guide', 'coach', 'meta']
@@ -509,12 +627,12 @@ export function veteranBreakthrough(save, player) {
     })
     save.innovations.push(inv)
     detail = { tech: inv.name }
-    chronicle(save, '🔬', `${name} has been sitting on something. It has a name now, and by the weekend everybody in the room is trying it.`)
+    chronicle(save, '🔬', chronicleLine('eureka.veteran.technique', { name }))
   } else if (kind === 'guide') {
     player.guidesWritten = (player.guidesWritten || 0) + 1
     const char = save.game.characters.find((c) => c.id === player.mainCharId)
     detail = { char: char?.name || 'the game' }
-    chronicle(save, '📓', `${name} wrote it all down — everything they know, for anyone who wants it.`)
+    chronicle(save, '📓', chronicleLine('eureka.veteran.guide', { name }))
   } else if (kind === 'coach' && protege) {
     // The handoff, paid out. A veteran's breakthrough lands on the person
     // they are building instead of on themselves.
@@ -534,7 +652,7 @@ export function veteranBreakthrough(save, player) {
     // because somebody finally understood something.
     save.freshMetaUntilAbs = Math.max(save.freshMetaUntilAbs || 0, today + 45)
     detail = { game: save.game.name }
-    chronicle(save, '🧠', `${name} said something about ${save.game.name} this week that half the scene is still arguing about. The other half has already changed how they play.`)
+    chronicle(save, '🧠', chronicleLine('eureka.veteran.meta', { name, game: save.game.name }))
   }
 
   player.techniques = [...(player.techniques || []), { kind, absDay: today, ...detail }]
@@ -881,7 +999,11 @@ function weeklyPass(save, player, e, today) {
   // the two-hands-ahead read, in fiction.
   {
     e.glowNoted ??= {}
-    for (const g of glowingStats(player).slice(0, 2)) {
+    // The card shows a stat warming from 45% of its requirement; the JOURNAL
+    // waits until it is nearly there. Same event, two audiences: the meter is
+    // for reading at a glance, an entry is a page in somebody's diary and
+    // competes for §2.3's weekly budget like everything else.
+    for (const g of glowingStats(player).filter((x) => x.heat >= 0.8).slice(0, 2)) {
       if (e.glowNoted[g.stat]) continue
       e.glowNoted[g.stat] = true
       writeJournal(save, player, 'glow', { stat: g.stat })

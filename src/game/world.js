@@ -14,6 +14,8 @@ import { choice, chance } from './util.js'
 import { statusOf, absDayOf, DAYS_PER_YEAR, EVO_DAY } from './constants.js'
 import { regionFlag, arcadeFlag } from './flags.js'
 import { countryName } from './geo.js'
+import { fill } from '../content/index.js'
+import WORLD_TALK from '../content/worldtalk.json' with { type: 'json' }
 
 const bestSkillOf = (p) => Math.max(0, ...Object.values(p.charSkill || {}), 0)
 
@@ -243,39 +245,13 @@ export const TIER_LABEL = {
 
 // ---------- The room talks about the world ----------
 
-const WORLD_TALK = [
-  (c) => [
-    `Did you see ${c.top} at that invitational? Nobody is touching them right now.`,
-    choice(['I refuse to believe a human being plays like that.', 'One day somebody from here beats them. Calling it.', 'They drop one set a year and it makes the news.']),
-  ],
-  (c) => [
-    `${c.riser} keeps winning. Like, keeps winning winning.`,
-    choice([`Ranked players are ducking them already.`, `I watched three of their sets and learned nothing. Too fast.`, `Give it a year and they're top eight, watch.`]),
-  ],
-  (c) => [
-    `Hot take: ${c.top} is overrated.`,
-    choice([`You are describing the best player alive.`, `Say that louder so everyone can hear you be wrong.`, `Okay but have you SEEN their ${c.char}? Actually unfair.`]),
-  ],
-  (c) => [
-    `If you could take one set off anyone in the top eight, who?`,
-    choice([`${c.top}. Straight to the final boss.`, `${c.riser}, purely so they'd remember my name.`, `None of them. I'd like to keep my dignity.`]),
-  ],
-]
-
-const EVO_TALK = [
-  (c) => [
-    `${c.days} days to EVO. I have opinions and nobody asked.`,
-    choice([`${c.top} three-peats. Ask me nothing further.`, `Somebody out of pools nobody's heard of makes top eight. Happens every year.`, `I'm calling an upset in the finals. I can feel it.`]),
-  ],
-  (c) => [
-    `EVO pools drop soon. ${c.top} versus literally anyone, I'm watching.`,
-    choice([`I'd sell an organ to be there live.`, `The whole planet watches one weekend a year and it's this one.`, `Imagine one of ours on that stage. Just imagine it for a second.`]),
-  ],
-  (c) => [
-    `Who wins EVO this year — ${c.top} or ${c.riser}?`,
-    choice([`${c.top}. Boring answer, correct answer.`, `${c.riser}. The torch gets passed this year.`, `Neither. Chaos wins. Chaos always wins eventually.`]),
-  ],
-]
+/**
+ * Counter talk about the world, as an OPENER and a set of REPLIES. The prose
+ * lives in `src/content/worldtalk.json`; this file only decides when two
+ * people at the concession stand feel like talking about somebody they have
+ * never met. Placeholders: {top} the best player alive, {riser} a name on the
+ * way up, {char} a character, {days} days until EVO.
+ */
 
 /**
  * Two regulars at the counter, talking about people they have never met and
@@ -303,11 +279,11 @@ export function worldTalkExchange(save, group, nameOf) {
     char: (save.game.characters || [])[0]?.name || 'their character',
     days: toEvo,
   }
-  const pair = choice(nearEvo ? EVO_TALK : WORLD_TALK)(ctx)
+  const beat = choice(nearEvo ? WORLD_TALK.evo : WORLD_TALK.world)
   const a = choice(locals)
   const b = choice(locals.filter((p) => p !== a))
   return [
-    { speaker: nameOf(a), text: pair[0] },
-    { speaker: nameOf(b), text: pair[1] },
+    { speaker: nameOf(a), text: fill(beat.open, ctx) },
+    { speaker: nameOf(b), text: fill(choice(beat.replies), ctx) },
   ]
 }

@@ -11,6 +11,7 @@ import { statLevel } from './constants.js'
 import { chronicle, remember } from './model.js'
 import { writeJournal, isJournaled } from './journal.js'
 import { pushToast } from './notify.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export const PASSION_MAX = 100
 
@@ -280,11 +281,9 @@ export function checkRetirement(save, player, events) {
       ? `🏁 ${name} is calling it — ${player.daysAttended} nights, ${player.wins}–${player.losses}, and a body that's done arguing. ${glorious ? 'A legend of the scene steps away.' : 'They got further than most.'}`
       : `🏁 ${name} is hanging it up — after ${player.daysAttended} nights and ${player.wins}–${player.losses}, the fire's gone out. ${glorious ? 'A legend of the scene steps away.' : 'One more regular moves on with life.'}`,
   })
-  chronicle(save, '🏁', glorious
-    ? `${name} retired — an all-time great of ${save.arcade.name}, walking away on their own terms`
-    : viaAge
-      ? `${name} played their last night at ${save.arcade.name} after ${player.daysAttended} of them`
-      : `${name} quietly retired from the game after ${player.daysAttended} nights`)
+  chronicle(save, '🏁', chronicleLine(
+    glorious ? 'career.retire.glorious' : viaAge ? 'career.retire.age' : 'career.retire.quiet',
+    { name, arcade: save.arcade.name, nights: player.daysAttended }))
   if (glorious) remember(save, player, 'retire', `retiring as a legend of ${save.arcade.name}`)
   return true
 }

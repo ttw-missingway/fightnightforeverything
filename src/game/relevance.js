@@ -11,6 +11,7 @@ import { absDayOf, runAge, DAYS_PER_YEAR, difficultyOf } from './constants.js'
 import { isUnlocked } from './achievements.js'
 import { chronicle, awardMilestone } from './model.js'
 import { communityGameOpinion } from './social.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export function relevanceLabel(v) {
   if (v >= 82) return 'a national phenomenon'
@@ -154,20 +155,20 @@ function updateMomentum(save, abs) {
       // halves relevance decay, anything that once crossed 88 stayed there for
       // good — the single biggest reason a well-run scene became immortal.
       save.momentum = { state: 'steady', untilAbs: 0, nextGoldenAbs: abs + GOLDEN_COOLDOWN }
-      chronicle(save, '🌇', `The golden age of ${save.game.name} has cooled into something quieter. What a stretch it was.`)
+      chronicle(save, '🌇', chronicleLine('relevance.goldenAgeEnds', { game: save.game.name }))
     }
   } else if (m.state === 'slump') {
     if (rel > 45) {
       save.momentum = { state: 'steady', untilAbs: 0 }
-      chronicle(save, '🌅', `${save.game.name} has pulled out of its slump — people are coming back.`)
+      chronicle(save, '🌅', chronicleLine('relevance.slumpEnds', { game: save.game.name }))
     }
   } else {
     if (rel >= 88 && abs >= (m.nextGoldenAbs || 0)) {
       save.momentum = { state: 'golden', untilAbs: abs + 75 }
-      chronicle(save, '🌟', `A GOLDEN AGE: ${save.game.name} is the center of the fighting-game world right now.`)
+      chronicle(save, '🌟', chronicleLine('relevance.goldenAge', { game: save.game.name }))
     } else if (rel < 20) {
       save.momentum = { state: 'slump', untilAbs: 0 }
-      chronicle(save, '🕳', `${save.game.name} has slid into a real slump — the room feels it every night.`)
+      chronicle(save, '🕳', chronicleLine('relevance.slump', { game: save.game.name }))
     }
   }
 }
@@ -203,7 +204,7 @@ export function applyChampionDividend(save) {
   const gain = Math.round((100 - before) * 0.45)
   save.relevance = clamp(before + gain, 0, 100)
   save.momentum = { state: 'golden', untilAbs: abs + 100 }
-  chronicle(save, '🌟', `A world champion, from THIS arcade. ${save.game.name} is back in every conversation — a golden age begins.`)
+  chronicle(save, '🌟', chronicleLine('relevance.championGoldenAge', { game: save.game.name }))
   markMilestones(save, before, save.relevance)
   return save.relevance - before
 }
@@ -213,13 +214,13 @@ function markMilestones(save, before, after) {
   const crossedDown = (th) => before >= th && after < th
   const crossedUp = (th) => before < th && after >= th
   if (crossedUp(82)) {
-    chronicle(save, '📈', `${name} has become a national phenomenon — the whole scene is buzzing`)
+    chronicle(save, '📈', chronicleLine('relevance.phenomenon', { name }))
     if (save.settings?.mode !== 'sandbox') awardMilestone(save, 'phenomenon', 3, `${name} became a national phenomenon`)
   }
-  else if (crossedUp(62)) chronicle(save, '📈', `${name} is thriving again — interest is on the rise`)
-  if (crossedDown(42)) chronicle(save, '📉', `${name} is slipping out of the national conversation`)
-  else if (crossedDown(24)) chronicle(save, '📉', `Interest in ${name} is fading fast — the golden age is ending`)
-  else if (crossedDown(9)) chronicle(save, '🪦', `${name} is nearly forgotten. What was once a scene is now a handful of holdouts.`)
+  else if (crossedUp(62)) chronicle(save, '📈', chronicleLine('relevance.thriving', { name }))
+  if (crossedDown(42)) chronicle(save, '📉', chronicleLine('relevance.slipping', { name }))
+  else if (crossedDown(24)) chronicle(save, '📉', chronicleLine('relevance.fading', { name }))
+  else if (crossedDown(9)) chronicle(save, '🪦', chronicleLine('relevance.forgotten', { name }))
 }
 
 /**

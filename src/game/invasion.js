@@ -25,6 +25,11 @@ import { newPlayer, chronicle } from './model.js'
 import { rankedInTop } from './world.js'
 import { regionFlag } from './flags.js'
 import { countryName, countryCluster } from './geo.js'
+import { line as chronicleLine } from '../content/index.js'
+import CONTENT from '../content/invasion.json' with { type: 'json' }
+import { fill } from '../content/index.js'
+const { CLUSTER_VOICE, VISITOR_LINES, HOST_REPLIES, LOST_IN_TRANSLATION } = CONTENT
+
 
 /** How long a visit lasts, by how much of a destination you have become. */
 export const INVASION_MIN_DAYS = 1
@@ -38,27 +43,6 @@ const INVASION_COOLDOWN = 40 // days after one ends before another can start
  * way from home; clusters without an entry just speak English-adjacent
  * arcade-ese and skip the language-barrier gag.
  */
-const CLUSTER_VOICE = {
-  JP: { hello: 'このゲームセンターが大好きです', tongue: 'Japanese' },
-  KR: { hello: '이 오락실 분위기 진짜 좋네요', tongue: 'Korean' },
-  CN: { hello: '这家机厅太棒了', tongue: 'Mandarin' },
-  VN: { hello: 'chỗ này chơi vui thật sự', tongue: 'Vietnamese' },
-  TH: { hello: 'ที่นี่สนุกมากเลย', tongue: 'Thai' },
-  ARB: { hello: 'هذه الصالة أسطورية', tongue: 'Arabic' },
-  CIS: { hello: 'этот зал — просто пушка', tongue: 'Russian' },
-  PL: { hello: 'ta salka jest niesamowita', tongue: 'Polish' },
-  IT: { hello: 'questa sala è fantastica', tongue: 'Italian' },
-  BR: { hello: 'esse fliperama é muito melhor ao vivo', tongue: 'Portuguese' },
-  ES: { hello: 'oigan, este lugar está increíble', tongue: 'Spanish' },
-  FR: { hello: 'cette salle est incroyable, franchement', tongue: 'French' },
-  DE: { hello: 'diese Halle ist der Wahnsinn', tongue: 'German' },
-  SE: { hello: 'det här stället är helt otroligt', tongue: 'Swedish' },
-  IN: { hello: 'yaar, this arcade is unreal', tongue: null },
-  SG: { hello: 'wah, the setups here damn solid ah', tongue: null },
-  MY: { hello: 'the setups here are too good lah', tongue: null },
-  ID: { hello: 'tempat ini keren banget', tongue: 'Indonesian' },
-  PH: { hello: 'grabe, ang ganda ng lugar na to', tongue: 'Tagalog' },
-}
 export const voiceOf = (code) => CLUSTER_VOICE[countryCluster(code)] || null
 
 export const regionName = (key) => countryName(key)
@@ -177,7 +161,7 @@ export function maybeInvasion(save) {
 
   const flag = regionFlag(region)
   const names = crew.map((e) => e.alias).join(', ')
-  chronicle(save, '✈️', `${flag} A crew from ${regionName(region)} is in town for ${untilAbs - abs} day${untilAbs - abs === 1 ? '' : 's'} — ${names}. Everybody is going to want a set.`)
+  chronicle(save, '✈️', chronicleLine('invasion.arrive', { flag, region: regionName(region), days: untilAbs - abs, s: untilAbs - abs === 1 ? '' : 's', names }))
   return save.invasion
 }
 
@@ -219,9 +203,8 @@ export function endInvasion(save) {
     delete save.players[id]
   }
   const flag = regionFlag(inv.region)
-  chronicle(save, '👋', beaten
-    ? `${flag} ${crewName(inv.region)} went home — and ${beaten} of them left with a worse ranking than they arrived with.`
-    : `${flag} ${crewName(inv.region)} went home. Everybody in the arcade got a story out of it.`)
+  chronicle(save, '👋', chronicleLine(beaten ? 'invasion.leave.beaten' : 'invasion.leave',
+    { flag, crew: crewName(inv.region), beaten }))
   save.invasion = null
   save.nextInvasionAbs = abs + INVASION_COOLDOWN
 }
@@ -241,34 +224,9 @@ export const currentVisitors = (save) =>
 
 // ---------- What a visitor says ----------
 
-const VISITOR_LINES = [
-  'This place looks like a dump on stream. It\'s actually really nice?',
-  'I flew eleven hours for this and I would do it again.',
-  'Your setups are better than the ones at our majors. Genuinely.',
-  'Okay, who here is the best? Point at them. I\'ll wait.',
-  'Back home nobody would play me at this hour. I love it here.',
-  'I don\'t know what you put in this game\'s neutral but we don\'t have it.',
-  'Somebody explain the food to me. What is that. I want one.',
-  'You have a REGULAR who plays that character? On purpose?',
-]
 
-const HOST_REPLIES = [
-  'uhhh. thanks?',
-  "I'm going to take that as a compliment.",
-  'Please stop three-oh-ing our best player.',
-  'You can just say you like it, man.',
-  'Mate, you are ranked eleventh in the world. Be nice.',
-  "That's the nicest thing anyone's said about this carpet.",
-  'We were doing fine before you got here, you know.',
-]
 
 /** "…I don't speak Japanese." */
-const LOST_IN_TRANSLATION = [
-  (t) => `oh — sorry, I don't speak ${t}.`,
-  (t) => `I have absolutely no idea what that meant, but same to you.`,
-  (t) => `...is that ${t}? I did two weeks of ${t} on an app once.`,
-  (t) => `nodding politely. Nodding politely.`,
-]
 
 /**
  * A visitor exchange for the concession stand: what they say, and what a local
@@ -288,7 +246,7 @@ export function visitorExchange(save, group, nameOf) {
   if (voice?.tongue && chance(0.35)) {
     return [
       { speaker: nameOf(visitor), text: voice.hello },
-      { speaker: nameOf(local), text: choice(LOST_IN_TRANSLATION)(voice.tongue) },
+      { speaker: nameOf(local), text: fill(choice(LOST_IN_TRANSLATION), { tongue: voice.tongue }) },
     ]
   }
   if (voice?.hello && !voice.tongue && chance(0.2)) {

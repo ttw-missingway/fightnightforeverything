@@ -47,19 +47,39 @@ export function StatBar({ label, value, max = 10, title, color }) {
  * `compact` is the header variant: smaller, inline, and it wraps — the total
  * allowance can run to thirty dots once a lineage has banked some legacy.
  */
-export function PointDots({ label, value, max = 5, granted = 0, color, title, onChange, compact = false }) {
+export function PointDots({ label, value, max = 5, granted = 0, color, title, onChange, compact = false, glow = null }) {
   const v = Math.round(value)
+  // A STAT THAT IS ABOUT TO MOVE SHOULD LOOK LIKE IT. `glow` is the live
+  // pressure read from eureka.js: `heat` 0..1.4 against its own requirement,
+  // `ready` once it is over the line. Warming stats pulse faintly and the next
+  // empty dot fills in ghost; a ready one is lit and haloed. This is the whole
+  // reason the eureka system now reads as something building over weeks rather
+  // than as a toast that appears one morning with a button on it.
+  const heat = glow ? Math.min(1, glow.heat) : 0
+  const kindColor = glow
+    ? (glow.kind === 'edge' ? 'var(--gold)' : glow.kind === 'influence' ? 'var(--cyan)' : 'var(--red)')
+    : null
   return (
-    <div className={`pdots${compact ? ' compact' : ''}`} title={title}>
+    <div
+      className={`pdots${compact ? ' compact' : ''}${glow ? (glow.ready ? ' glow-ready' : ' glow-warm') : ''}`}
+      title={glow
+        ? `${title || ''}${title ? ' — ' : ''}${glow.ready
+          ? 'ready: this can break through the moment the meter fills'
+          : `${Math.round(heat * 100)}% of the way to glowing`}`
+        : title}
+      style={glow ? { '--glow-color': kindColor, '--glow-heat': heat } : undefined}
+    >
       {label != null && <span className="label">{label}</span>}
       <span className="dots">
         {Array.from({ length: max }, (_, i) => i + 1).map((i) => {
           const filled = i <= v
           const isGranted = filled && i <= granted
+          // The dot the pressure is reaching for — drawn as a ghost of itself.
+          const isNext = !filled && i === v + 1 && !!glow
           return (
             <span
               key={i}
-              className={`pdot${filled ? ' on' : ''}${onChange ? ' clickable' : ''}`}
+              className={`pdot${filled ? ' on' : ''}${onChange ? ' clickable' : ''}${isNext ? ' pdot-next' : ''}`}
               style={isGranted && color ? { background: color, borderColor: color } : undefined}
               // Clicking the topmost filled dot clears it, so the same row that
               // spends a point can take it back without a second control.
@@ -68,6 +88,11 @@ export function PointDots({ label, value, max = 5, granted = 0, color, title, on
           )
         })}
       </span>
+      {glow && (
+        <span className="pdot-spark" style={{ color: kindColor }}>
+          {glow.ready ? '✦' : '·'}
+        </span>
+      )}
     </div>
   )
 }

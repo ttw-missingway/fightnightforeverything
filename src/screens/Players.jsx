@@ -5,7 +5,8 @@ import { playerArt, lookArt } from '../components/art.js'
 import { lookOf } from '../game/skins.js'
 import PlayerForm from '../components/PlayerForm.jsx'
 import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, spiritOf } from '../game/constants.js'
-import { chooseBreakthrough } from '../game/eureka.js'
+import { chooseBreakthrough, eurekaMeter, glowingStats, glowMap, evidenceFor, candidatesFor, veteranTier } from '../game/eureka.js'
+import { isJournaled } from '../game/journal.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
 import { passionLabel, careerStageOf } from '../game/career.js'
 import { INTEREST_LABEL } from '../game/interest.js'
@@ -136,6 +137,7 @@ export default function Players() {
             <Th k="respect">Respect</Th>
             <Th k="mood">Mood</Th>
             <Th k="passion">Passion</Th>
+            <th title="how close they are to a breakthrough — fills as things happen to them">✨</th>
             <Th k="standing">Liked/Hated</Th>
             <Th k="status">Status</Th>
           </tr>
@@ -181,6 +183,11 @@ export default function Players() {
                   title={`${passionLabel(p.passion ?? 80)} — ${Math.round(p.passion ?? 80)}/100`}>
                   {p.retired ? <span className="dim">retired</span> : Math.round(p.passion ?? 80)}
                 </td>
+                {/* THE BAR, IN THE LIST. Which of six people is closest to
+                    something is a question about the roster, not about one
+                    card — and it is the read that decides who you point the
+                    camera at this week. */}
+                <td><MiniMeter player={p} /></td>
                 <td className="small">
                   {p.retired || p.banished ? <span className="dim">—</span> : (() => {
                     const s = standingLabel(standings[p.id])
@@ -244,6 +251,21 @@ const STATUS_COLORS = {
   legend: 'var(--pink)',
 }
 
+/** The eureka meter at roster scale — a bar and nothing else. */
+function MiniMeter({ player }) {
+  if (player.retired || player.banished || !isJournaled(player)) return <span className="dim small">—</span>
+  const m = eurekaMeter(player)
+  if (!m) return <span className="dim small">—</span>
+  if (m.pending) return <span className="gold" title="on the verge — open them and choose">✨ ready</span>
+  const ready = glowingStats(player).filter((g) => g.ready).length
+  return (
+    <span className="mini-meter" title={`${Math.round(m.frac * 100)}% to a breakthrough${ready ? ` · ${ready} stat${ready === 1 ? '' : 's'} ready to take it` : ''}`}>
+      <span className="mini-meter-fill" style={{ width: `${m.frac * 100}%` }} />
+      {ready > 0 && <span className="mini-meter-dots">{'·'.repeat(Math.min(ready, 4))}</span>}
+    </span>
+  )
+}
+
 function StatusCell({ player }) {
   if (player.retired) return <td className="small" style={{ color: 'var(--dim)' }}>🏁 retired</td>
   const st = statusOf(player)
@@ -273,6 +295,9 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
   // Locked once the doors open — but a run that hasn't started yet is still
   // yours to set up, which is the window a reset lands you in. See rosterOpen.
   const canEdit = rosterOpen(save)
+  // Live pressure per stat, so the sheet below can glow. Cheap — it reads the
+  // pressure map the sim already maintains and derives nothing.
+  const glows = glowMap(p)
 
   const patch = (fn) => mutate((s) => {
     const live = s.players[p.id]
@@ -398,12 +423,18 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
       )}
 
       <EurekaPanel save={save} player={p} mutate={mutate} />
+      <EurekaMeter player={p} />
       <BanishPanel save={save} player={p} mutate={mutate} />
       {!p.retired && !p.banished && <ComparePanel save={save} player={p} mutate={mutate} goTo={goTo} />}
 
       <div className="grid2">
         <div className="card">
           <h3>Stats <span className="dim small">(0–{STAT_MAX_POINTS} points, by temperament)</span></h3>
+          {/* THE SHEET IS THE METER'S OTHER HALF. Pressure lands on specific
+              stats, so the stats themselves say so — warming rows pulse, ready
+              ones are lit, and the dot the pressure is reaching for is drawn
+              as a ghost. Reading down this column tells you what kind of player
+              they are becoming before it happens. */}
           {TEMPERAMENTS.map((t) => (
             <div key={t.key} style={{ marginBottom: 8 }}>
               <h4 style={{ margin: '6px 0 2px', color: t.color }}>
@@ -414,6 +445,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
                 <PointDots key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
                   value={Math.round((p.personal[k] || 0) / STAT_UNIT)}
                   granted={p.temperament === t.key ? 1 : 0}
+                  glow={glows[k] || null}
                   title={Object.fromEntries(PERSONAL_STATS)[k]} />
               ))}
             </div>
@@ -429,6 +461,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
                 <PointDots key={k} label={k} color={t.color} max={STAT_MAX_POINTS}
                   value={Math.round((p.social[k] || 0) / STAT_UNIT)}
                   granted={p.socialTemperament === t.key ? 1 : 0}
+                  glow={glows[k] || null}
                   title={Object.fromEntries(SOCIAL_STATS)[k]} />
               ))}
             </div>
@@ -557,11 +590,120 @@ const EUREKA_KIND = {
 }
 
 /**
+ * THE METER, ON THE CARD, EVERY DAY.
+ *
+ * The eureka spine is the most important system in the game and it used to be
+ * completely invisible until the instant it resolved: pressure accrued in
+ * silence for weeks, then a toast appeared with a single button on it. Nothing
+ * about that reads as "something has been building" — it reads as a chore the
+ * game periodically hands you.
+ *
+ * So the bar is here, always, filling. Under it are the stats that are warming
+ * up, with the evidence that warmed them. You can watch a loss land on
+ * composure. You can see three things approaching the line at once and start
+ * hoping for the one you want. By the time the meter fills you already know
+ * what the choice is going to be about — which is what makes answering it feel
+ * like a decision instead of a notification.
+ */
+function EurekaMeter({ player: p }) {
+  const [openStat, setOpenStat] = useState(null)
+  if (!p.eureka || p.retired || p.banished || !isJournaled(p)) return null
+  const m = eurekaMeter(p)
+  if (!m) return null
+  const glowing = glowingStats(p)
+  const ready = glowing.filter((g) => g.ready)
+  // The deadline band: how close the hottest single stat is to resolving
+  // itself badly (§1.4). Only drawn once it is genuinely in play.
+  const forceFrac = m.hottest / m.forcedAt
+  const veteran = veteranTier(p)
+
+  return (
+    <div className="card eureka-card">
+      <div className="row spread">
+        <h3 style={{ margin: 0 }}>
+          ✨ Pressure
+          <span className="dim small">
+            {' '}— {m.count === 0 ? 'no breakthroughs yet' : `${m.count} breakthrough${m.count === 1 ? '' : 's'} so far`}
+          </span>
+        </h3>
+        <span className="small" style={{ color: m.full ? 'var(--gold)' : 'var(--dim)' }}>
+          {m.full ? 'FULL — something is about to give' : `${Math.round(m.frac * 100)}%`}
+        </span>
+      </div>
+
+      <div className="eureka-track" title={`${Math.round(m.pressure * 10) / 10} of ${Math.round(m.threshold * 10) / 10} — the bar fills as things happen to them, good and bad`}>
+        <div className={`eureka-fill${m.full ? ' full' : ''}`} style={{ width: `${m.frac * 100}%` }} />
+        {forceFrac > 0.5 && !m.full && (
+          <div className="eureka-force" style={{ left: `${Math.min(99, forceFrac * 100)}%` }}
+            title="one thing is building far faster than the rest — past the line it resolves itself, badly" />
+        )}
+      </div>
+
+      <p className="dim small" style={{ margin: '6px 0 0' }}>
+        {veteran
+          ? 'Their climbing years are behind them. What builds up now comes out as tech, teaching and reads on the game — not as a point on their sheet.'
+          : m.full
+            ? 'The meter is full. Pick what clicks — below.'
+            : ready.length
+              ? `${ready.length} thing${ready.length === 1 ? ' is' : 's are'} ready to break. The meter has to fill before ${ready.length === 1 ? 'it' : 'any of them'} can.`
+              : glowing.length
+                ? 'Something is starting to gather. Nothing is ready yet.'
+                : 'Quiet. Wins that mean nothing and losses that cost nothing build no pressure — this fills when things actually happen to them.'}
+      </p>
+
+      {glowing.length > 0 && (
+        <div className="eureka-glows">
+          {glowing.slice(0, 8).map((g) => {
+            const kind = EUREKA_KIND[g.kind] || EUREKA_KIND.wound
+            const open = openStat === g.stat
+            return (
+              <div key={g.stat} className={`eureka-glow${g.ready ? ' ready' : ''}`}
+                style={{ borderColor: kind.color, cursor: 'pointer' }}
+                onClick={() => setOpenStat(open ? null : g.stat)}>
+                <div className="row spread">
+                  <span className="small">
+                    <span style={{ color: kind.color }}>{kind.icon}</span>{' '}
+                    <strong style={{ color: g.ready ? kind.color : undefined }}>{g.stat}</strong>
+                    {!g.inRow && <span className="dim small" title="outside their temperament — becoming someone a bit different"> ↗</span>}
+                  </span>
+                  <span className="small" style={{ color: g.ready ? kind.color : 'var(--dim)' }}>
+                    {g.ready ? 'ready' : `${Math.round(Math.min(1, g.heat) * 100)}%`}
+                  </span>
+                </div>
+                <div className="eureka-subtrack">
+                  <div style={{ width: `${Math.min(100, g.heat * 100)}%`, background: kind.color }} />
+                </div>
+                {open && (
+                  <div style={{ marginTop: 4 }}>
+                    {evidenceFor(p, g.stat).map((ev, i) => (
+                      <p key={i} className="small dim" style={{ margin: '1px 0' }}>
+                        · {ev.why}{ev.n > 1 && <span style={{ opacity: 0.7 }}> ×{ev.n}</span>}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * The breakthrough choice (REVISION §1). You cannot call a eureka, only
  * answer it when it arrives — and leaving one unanswered has a deadline:
  * pressure keeps building, and past ~2.5× the threshold it stops being a
  * choice. The WHY under each candidate is the inspector's evidence, so the
  * most opaque system in the game stays defensible.
+ *
+ * It is a REAL choice now. Talent breadth floors at two and the glow line was
+ * cut to a fraction the arithmetic can actually clear several times over, so
+ * this panel shows two to five genuinely different directions rather than one
+ * button labelled "click me". The evidence under each is deduped — the old
+ * version printed the same influence sentence three times, which read as a bug
+ * and told you nothing about why the stat was lit.
  */
 function EurekaPanel({ save, player: p, mutate }) {
   const pending = p.eureka?.pending
@@ -572,36 +714,61 @@ function EurekaPanel({ save, player: p, mutate }) {
       if (live?.eureka?.pending) chooseBreakthrough(s, live, stat)
     }, { kind: 'eureka' })
   }
+  // Candidates are recomputed live rather than read off the frozen `pending`
+  // snapshot: pressure keeps accruing while you think about it, and a panel
+  // showing last week's shortlist would contradict the meter directly above it.
+  const candidates = candidatesFor(p)
+  const anyReady = candidates.some((c) => c.ready !== false)
+
   return (
-    <div className="card" style={{ borderColor: 'var(--gold)' }}>
+    <div className="card eureka-choice">
       <h3 style={{ marginTop: 0 }}>✨ Breakthrough — {displayName(p, save)} is on the verge</h3>
       <p className="small dim" style={{ marginTop: 0 }}>
-        Something has been building. Choose what clicks — the point is permanent, and everything
-        else keeps simmering. Sit on it too long and it resolves itself, badly.
+        The pressure is at the top of the meter and it is going to come out somewhere. Everything
+        below has been building; pick the one that clicks. The point is permanent, the rest keeps
+        simmering — and sit on this too long and they resolve it themselves, badly.
       </p>
-      <div className="row" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
-        {pending.candidates.map((c) => {
+      <div className="eureka-candidates">
+        {candidates.map((c) => {
           const kind = EUREKA_KIND[c.kind] || EUREKA_KIND.wound
-          const sources = (p.eureka.sources?.[c.stat] || []).slice(-3)
+          const half = c.ready === false
           return (
-            <div key={c.stat} className="card sub" style={{ margin: 0, borderColor: kind.color, maxWidth: 300 }}>
+            <div key={c.stat} className={`card sub eureka-cand${half ? ' half' : ''}`}
+              style={{ margin: 0, borderColor: half ? 'var(--border)' : kind.color }}>
               <div className="row spread">
-                <strong style={{ color: kind.color }}>{kind.icon} {c.stat}</strong>
-                <span className="small" style={{ color: kind.color }}>{kind.label}</span>
+                <strong style={{ color: half ? 'var(--dim)' : kind.color }}>{kind.icon} {c.stat}</strong>
+                <span className="small" style={{ color: half ? 'var(--dim)' : kind.color }}>{kind.label}</span>
               </div>
-              <p className="dim small" style={{ margin: '4px 0' }}>
+              <p className="dim small" style={{ margin: '4px 0 2px' }}>
                 {kind.verb}{c.inRow ? '' : ' — outside who they are today'}.
               </p>
-              {sources.map((s, i) => (
-                <p key={i} className="small" style={{ margin: '1px 0', color: 'var(--dim)' }}>· {s.why}</p>
+              {/* THE INSPECTOR'S EVIDENCE. Deduped and counted, so a stat lit by
+                  one bad night reads differently from one lit by four months of
+                  the same character asking the same thing. */}
+              {c.evidence.slice(0, 4).map((ev, i) => (
+                <p key={i} className="small" style={{ margin: '1px 0', color: 'var(--dim)' }}>
+                  · {ev.why}{ev.n > 1 && <span style={{ opacity: 0.7 }}> ×{ev.n}</span>}
+                </p>
               ))}
-              <button className="primary small" style={{ marginTop: 6 }} onClick={() => doChoose(c.stat)}>
+              {half && (
+                <p className="small" style={{ color: 'var(--orange)', margin: '4px 0 0' }}>
+                  Half-formed — nothing pushed this far enough on its own. It will land, but it is
+                  the reach, not the obvious answer.
+                </p>
+              )}
+              <button className={`small ${half ? '' : 'primary'}`} style={{ marginTop: 6 }} onClick={() => doChoose(c.stat)}>
                 Break through on {c.stat}
               </button>
             </div>
           )
         })}
       </div>
+      {!anyReady && (
+        <p className="small dim" style={{ margin: '8px 0 0' }}>
+          A thin month: plenty gathered, none of it in one place. Whichever way you go here is a
+          reach rather than a payoff — that is what a scattered season produces.
+        </p>
+      )}
     </div>
   )
 }

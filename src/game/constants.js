@@ -155,14 +155,24 @@ export const SPIRIT_ROLL = [75, 100]
  * focused glows; a 90/88/86 is a generalist with wide ones. Orthogonal to
  * power, so there is no rich-get-richer loop, and it makes roll variance do
  * real work instead of sitting there as noise.
+ *
+ * THE FLOOR IS TWO, AND IT IS NOT NEGOTIABLE. This used to clamp to 1–4, and
+ * a specialist's breakthrough therefore arrived as a single button with one
+ * label on it. §1.3 says the choice between fixing the flaw and sharpening
+ * the blade IS the system; a choice of one is not a smaller version of that
+ * system, it is the absence of it — a chore with a modal. So breadth now
+ * decides how WIDE the choice is, from two to five, and never whether there
+ * is one. (The specialist is still a specialist: they get two options where a
+ * generalist gets five, and their options are more likely to be the same
+ * stats over and over, which is what being narrow actually feels like.)
  */
 export function talentBreadth(player) {
   const rolls = player.spiritRolls
-  if (!rolls || rolls.length < 3) return 2
+  if (!rolls || rolls.length < 3) return 3
   const spread = rolls[0] - rolls[2] // 0..25 on the current range
-  return clampBreadth(4 - Math.floor(spread / 7))
+  return clampBreadth(5 - Math.floor(spread / 6))
 }
-const clampBreadth = (k) => Math.max(1, Math.min(4, k))
+const clampBreadth = (k) => Math.max(2, Math.min(5, k))
 
 // Stats are stored internally on the same 0–10 scale the engine has always
 // used; creation works in 0–5 display points (1 point = 2 internal). This is

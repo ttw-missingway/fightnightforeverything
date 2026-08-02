@@ -18,6 +18,7 @@ import { rankedWorld } from './world.js'
 import { tournamentMess } from './bandwidth.js'
 import { buildStream, personalityOf, elitePersonality, applyStageReps, addHype } from './stream.js'
 import { speak } from './dialogue.js'
+import { line as chronicleLine } from '../content/index.js'
 
 const pName = (save, p) => displayName(p, save)
 
@@ -669,7 +670,7 @@ export function runSinglesTournament(save, scheduleEntry) {
       // An outsider placing is the pot doing its job; an outsider WINNING is
       // the bill arriving — the money leaves the building in their pocket.
       if (place === 1) {
-        chronicle(save, '💸', `${entrant.name} came for the ${name} pot and took it home. The room watched every game of it.`)
+        chronicle(save, '💸', chronicleLine('tournament.potTaken', { name: entrant.name, event: name }))
         eliteFragment(save, entrant.ref, 'beaten') // their side of the story, in character
       }
       continue
@@ -678,7 +679,7 @@ export function runSinglesTournament(save, scheduleEntry) {
       // The banished are not yours to reward — but the room remembers when
       // one of them wins in your building.
       if (place === 1) {
-        chronicle(save, '🚫', `${entrant.name} — the one you banned — won ${name} in your own room and walked out with the pot. Nobody said much after that.`)
+        chronicle(save, '🚫', chronicleLine('tournament.banishedWon', { name: entrant.name, event: name }))
       }
       continue
     }
@@ -696,9 +697,9 @@ export function runSinglesTournament(save, scheduleEntry) {
       }
       if (p.tournamentWins === 1) {
         p.glory += 5
-        chronicle(save, '🏆', `${entrant.name} won their first-ever title at ${name}`)
+        chronicle(save, '🏆', chronicleLine('tournament.firstTitle', { name: entrant.name, event: name }))
       } else if (size >= 16 || cadence === 'yearly') {
-        chronicle(save, '🏆', `${entrant.name} won ${name} (${size} entrants${finalsViewers ? `, ${finalsViewers} watching the finals` : ''})`)
+        chronicle(save, '🏆', chronicleLine('tournament.won', { name: entrant.name, event: name, size, viewers: finalsViewers ? `, ${finalsViewers} watching the finals` : '' }))
       }
       // The journal keeps the wins that mean something; the weekly grind is
       // what the budget is for.
@@ -900,7 +901,7 @@ export function runTeamTournament(save, scheduleEntry) {
   // Winning together bonds a team.
   for (const a of champion.squad) for (const b of champion.squad) if (a !== b) shiftRel(a, b, 4)
   teamLog(save, champion.team, `🏆 Won ${scheduleEntry?.name || 'a team battle'} (${entrants.length} teams)`)
-  chronicle(save, '🛡', `${champion.name} won ${scheduleEntry?.name || 'the team battle'} as a crew`)
+  chronicle(save, '🛡', chronicleLine('tournament.teamWon', { champion: champion.name, event: scheduleEntry?.name || 'the team battle' }))
 
   const record = {
     id: uid('t'),
@@ -1279,8 +1280,13 @@ export function runEvo(save) {
   if (second) eliteFragment(save, second.entrant.ref, 'beaten')
   const bestArcade = arcadePlacements[0]
   chronicle(save, '🌏', champion.kind === 'arcade'
-    ? `${champion.name} WON EVO Year ${save.year}. From this arcade. Nothing will ever top this.`
-    : `EVO Year ${save.year}: ${champion.name} took the crown${bestArcade ? `; ${bestArcade.entrant.name} carried the arcade to ${bestArcade.place === 1 ? 'victory' : `top ${bestArcade.place <= 4 ? 4 : bestArcade.place <= 8 ? 8 : 17}`}` : ''}`)
+    ? chronicleLine('evo.castWon', { champion: champion.name, year: save.year })
+    : chronicleLine('evo.won', {
+      year: save.year, champion: champion.name,
+      ours: bestArcade
+        ? `; ${bestArcade.entrant.name} carried the arcade to ${bestArcade.place === 1 ? 'victory' : `top ${bestArcade.place <= 4 ? 4 : bestArcade.place <= 8 ? 8 : 17}`}`
+        : '',
+    }))
   // The mythology engine at work (§0): for the first years your players
   // mostly WATCH the majors. Watching writes a page too — "someday" is where
   // every one of these careers starts.
@@ -1369,7 +1375,7 @@ export function runEvo(save) {
   save.evoWeek = { step: 'intro', poolRound: 0, openPool: null, watched: [] }
   // The year you send nobody is the year the goal gets set. Say so, plainly.
   if (!qualified.length) {
-    chronicle(save, '📺', `EVO ${save.year} came and went and nobody from ${save.arcade.name} was in it. ${champion.name} took the title.`)
+    chronicle(save, '📺', chronicleLine('evo.watched', { year: save.year, arcade: save.arcade.name, champion: champion.name }))
   }
   save.hallOfFame.push(summaryOf(record))
   save.lastTournament = record

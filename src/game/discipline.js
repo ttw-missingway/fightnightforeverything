@@ -11,6 +11,7 @@ import { chronicle } from './model.js'
 import { getRel, shiftRel } from './social.js'
 import { bumpPassion } from './career.js'
 import { writeJournal } from './journal.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export function banish(save, player, events) {
   if (player.banished) return
@@ -73,9 +74,9 @@ export function banish(save, player, events) {
     }
   }
   if (healed > 0) {
-    chronicle(save, '🕊', `With ${name} gone, a few people who had stopped speaking started again. Whatever that was about, it left with them.`)
+    chronicle(save, '🕊', chronicleLine('discipline.peaceAfterBan', { name }))
   }
 
   if (events) events.push({ type: 'staff', text: `🚫 ${name} has been banned from ${save.arcade.name}. The room is quieter — for better or worse.` })
-  chronicle(save, '🚫', `${name} was banned from ${save.arcade.name}`)
+  chronicle(save, '🚫', chronicleLine('discipline.banned', { name, arcade: save.arcade.name }))
 }

@@ -11,11 +11,11 @@ import { observedPower } from './balance.js'
 import { worldRankings, rankedInTop } from './world.js'
 import { regionFlag } from './flags.js'
 import { countryName } from './geo.js'
+import { fill } from '../content/index.js'
+import CONTENT from '../content/socialmedia.json' with { type: 'json' }
+const { BOARD_HANDLES, WORLD_TAKES, WORLD_ABOUT_YOU, EVO_COUNTDOWN, EVO_BUILDUP, EVO_AFTERMATH, WORLD_UPSET_TAKES } = CONTENT
 
-const BOARD_HANDLES = {
-  a: ['Throwaway', 'Actual', 'Definitely_Not', 'Local', 'Former', 'Certified', 'Anonymous', 'Ex'],
-  b: ['Grappler', 'TopPlayer', 'Railbird', 'ArcadeRat', 'FrameNerd', 'Spectator', 'PotMonster', 'Lurker'],
-}
+
 
 function chirpHandle() {
   return `@${choice(CHAT_NAME_PARTS.a)}${choice(CHAT_NAME_PARTS.b)}${choice(CHAT_NAME_PARTS.c)}`
@@ -76,26 +76,7 @@ function post(save, { platform, text, title = null, scope = 'arcade', agoDays = 
 // you grow is how often YOUR people are the subject: the feed starts as other
 // people's business and becomes yours, without a filter being touched.
 
-const WORLD_TAKES = [
-  (c) => `${c.top} is playing a different game to everyone else right now. it's not close`,
-  (c) => `hot take: ${c.rando} is the most underrated player in the world and it isn't close`,
-  (c) => `${c.rando} switching to ${c.char} mid-season is either genius or a cry for help`,
-  (c) => `every time i think i understand ${c.game} ${c.top} does something that resets me to zero`,
-  (c) => `${c.rando} [${c.region}] has quietly won three events this season and nobody is talking about it`,
-  (c) => `the ${c.char} matchup discourse is out of control. it's fine. it's FINE`,
-  (c) => `people forget ${c.top} has been top 5 for years. longevity is a skill`,
-  (c) => `${c.rando} vs ${c.top} is the set i'd pay actual money to see again`,
-  (c) => `${c.char} is either the best character in ${c.game} or i am bad. researching`,
-  (c) => `regional check: ${c.region} is stacked right now and everyone else is coping`,
-]
 
-const WORLD_ABOUT_YOU = [
-  (c) => `who is ${c.mine}?? just saw them ranked #${c.rank} and i've never heard the name`,
-  (c) => `${c.mine} is ranked #${c.rank} in the WORLD out of a local arcade. that's the story of the season`,
-  (c) => `been watching ${c.mine} tape all week. the neutral is legit. remember the name`,
-  (c) => `if ${c.mine} keeps this up we're going to have to start taking ${c.arcade} seriously`,
-  (c) => `${c.mine} at #${c.rank}. from a ROOM. not a team house, a room`,
-]
 
 
 // ---------- EVO buzz ----------
@@ -105,33 +86,6 @@ const WORLD_ABOUT_YOU = [
 // the entire game is on the calendar before you have done anything at all, and
 // the timeline should be shouting about it.
 
-const EVO_COUNTDOWN = [
-  { at: 30, lines: [
-    (c) => `a month out from EVO. time to decide if you're actually going or just saying you are`,
-    (c) => `EVO seeding discourse season is officially open. everybody log off`,
-  ] },
-  { at: 14, lines: [
-    (c) => `two weeks to EVO. ${c.fav} looks unbeatable and i hate it`,
-    (c) => `every year i tell myself i'll practice before EVO and every year it is now two weeks out`,
-  ] },
-  { at: 7, lines: [
-    (c) => `ONE WEEK. ${c.game} at EVO. i'm not going to sleep properly until it's over`,
-    (c) => `a week out and the pools aren't even up yet. classic`,
-    (c) => `who are we watching at EVO? i've got ${c.fav} and whoever comes out of the bottom half`,
-  ] },
-  { at: 3, lines: [
-    (c) => `three days. if you haven't picked your ${c.game} horse yet you're out of time`,
-    (c) => `EVO in three days and i genuinely could not tell you who wins it`,
-  ] },
-  { at: 1, lines: [
-    (c) => `EVO. TOMORROW.`,
-    (c) => `last night of sleep before EVO, allegedly`,
-  ] },
-  { at: 0, lines: [
-    (c) => `IT'S EVO DAY`,
-    (c) => `pools start today. ${c.game} on the big stage. let's go`,
-  ] },
-]
 
 /**
  * EVO buildup that isn't pinned to an exact day.
@@ -142,30 +96,10 @@ const EVO_COUNTDOWN = [
  * a new owner's first screen never says what the year is FOR. These carry the
  * same appetite without claiming a date, so any day in the run-up can use one.
  */
-const EVO_BUILDUP = [
-  (c) => `${c.game} at EVO is the only thing on my calendar. everything else is a rehearsal`,
-  (c) => `the ${c.game} EVO entrant list is going to be absurd this year`,
-  (c) => `booked the flights for EVO. no plan beyond that. no plan needed`,
-  (c) => `every local from here to EVO is just seeding practice and we all know it`,
-  (c) => `if ${c.fav} doesn't at least top 8 at EVO i'm giving up analysis forever`,
-  (c) => `EVO brackets are where ${c.game} careers get made. one weekend. that's the whole thing`,
-  (c) => `the run-up to EVO is my favourite time of year. everyone thinks they're winning it`,
-  (c) => `people practising for EVO right now: everyone. people ready for EVO: nobody`,
-  (c) => `whoever takes ${c.game} at EVO decides what the next year looks like. no pressure`,
-  (c) => `my EVO prediction is ${c.fav} and my EVO prediction is always wrong`,
-  (c) => `the ${c.char} players are all going to EVO thinking this is their year. it never is`,
-  (c) => `nothing in this game means anything until EVO. then it all means everything`,
-]
 
 /** Close enough to EVO that the buildup pool is fair game. */
 const BUILDUP_WINDOW = 40
 
-const EVO_AFTERMATH = [
-  (c) => `still thinking about ${c.champ} winning EVO. what a run`,
-  (c) => `${c.champ} is the EVO champion and the whole meta just moved`,
-  (c) => `post-EVO ${c.game} is going to look completely different. mark it`,
-  (c) => `whatever you thought about ${c.game} before EVO, throw it out`,
-]
 
 /** How many days until EVO fires, 0 on the day itself. */
 export const daysToEvo = (save, agoDays = 0) => {
@@ -183,15 +117,15 @@ export const daysToEvo = (save, agoDays = 0) => {
 function evoBuzz(save, ctx, agoDays = 0, { buildup = false } = {}) {
   const left = daysToEvo(save, agoDays)
   const beat = EVO_COUNTDOWN.find((b) => b.at === left)
-  if (beat) return choice(beat.lines)(ctx)
+  if (beat) return fill(choice(beat.lines), ctx)
   // Any other day in the run-up, when the caller wants the date pushed —
   // seeding the opening timeline does, an ordinary Tuesday doesn't.
-  if (buildup && left <= BUILDUP_WINDOW) return choice(EVO_BUILDUP)(ctx)
+  if (buildup && left <= BUILDUP_WINDOW) return fill(choice(EVO_BUILDUP), ctx)
   // The week after: everyone is still chewing on it.
   const since = (DAYS_PER_YEAR - left) % DAYS_PER_YEAR
   if (since >= 1 && since <= 6 && agoDays === 0) {
     const last = [...(save.hallOfFame || [])].reverse().find((r) => r.type === 'evo')
-    if (last) return choice(EVO_AFTERMATH)({ ...ctx, champ: last.champion })
+    if (last) return fill(choice(EVO_AFTERMATH), { ...ctx, champ: last.champion })
   }
   return null
 }
@@ -248,18 +182,12 @@ export function seedWorldFeed(save, count = 9) {
  * nobody was streaming. This is most of how the rankings feel ALIVE — the
  * list moves between your tournaments, not just at them.
  */
-const WORLD_UPSET_TAKES = [
-  (c) => `${c.wFlag} ${c.w} just took a set off ${c.lFlag} ${c.l} at a local. No footage. I am BEGGING someone to have filmed it`,
-  (c) => `hearing ${c.lFlag} ${c.l} dropped a money match to ${c.wFlag} ${c.w} last night. the ladder is going to feel that one`,
-  (c) => `${c.wFlag} ${c.w} over ${c.lFlag} ${c.l} at some invitational?? results page or it didn't happen`,
-  (c) => `don't look now but ${c.wFlag} ${c.w} is beating ranked players offline. ${c.l} today. who tomorrow`,
-]
 export function postWorldUpset(save, { winner, loser }) {
   if (!save.socialFeed) return
   post(save, {
     platform: 'chirper',
     scope: 'world',
-    text: choice(WORLD_UPSET_TAKES)({
+    text: fill(choice(WORLD_UPSET_TAKES), {
       w: winner.alias, l: loser.alias,
       wFlag: regionFlag(winner.region), lFlag: regionFlag(loser.region),
     }),
@@ -300,8 +228,8 @@ export function worldFeedDaily(save, { force = false, agoDays = 0, buildup = fal
   const line = evo && (force || chance(0.75))
     ? evo
     : aboutYou
-      ? choice(WORLD_ABOUT_YOU)({ ...ctx, mine: best.name, rank: best.rank })
-      : choice(WORLD_TAKES)(ctx)
+      ? fill(choice(WORLD_ABOUT_YOU), { ...ctx, mine: best.name, rank: best.rank })
+      : fill(choice(WORLD_TAKES), ctx)
   post(save, { platform: 'chirper', text: line, scope: 'world', agoDays })
 }
 

@@ -1,0 +1,86 @@
+{
+  "_readme": "Character guides written by your scene. A guide's BODY is assembled at read time from what the author actually knew when they wrote it — their skill on the character, the tech they had, the archetype, the matchups the game's own numbers give, and how the scene rated the character that season. Nothing here is decorative: every section is filled from real state, so a guide by a mediocre player reads like one. Placeholders: {char} the character, {author} who wrote it, {game}, {arch} the archetype, {skill} their skill on it, {best}/{worst} matchup character names, {tech} a comma list of techniques, {tier} the tier the scene had it in, {reps} lifetime games on the character.",
+
+  "openings": {
+    "authority": [
+      "I have played {char} and nothing else for {reps} games. Some of that was stubbornness. Most of it was that nobody else was going to write this down.",
+      "There is no {char} guide worth reading, so here is one. {reps} games of evidence, most of them losses I earned.",
+      "People keep asking me the same three questions about {char}. This is so I can stop answering them one at a time."
+    ],
+    "journeyman": [
+      "I am not the best {char} in the world. I might not be the best one in this building. But I have {reps} games on them and I have stopped making the beginner mistakes, which is more than most write-ups can say.",
+      "Take this as notes rather than gospel. {reps} games of {char}, written down while they were still fresh.",
+      "Half of what follows I worked out myself and half of it somebody told me at the counter. I have stopped being able to tell which is which."
+    ],
+    "hopeful": [
+      "I am still figuring {char} out. Writing it down is how I figure things out. If you are further along than me, correct me — genuinely.",
+      "This is a beginner's guide by a beginner, which at least means I remember what was confusing.",
+      "{reps} games in and I still lose to things I should not lose to. Here is what I have got anyway."
+    ]
+  },
+
+  "identity": {
+    "rushdown": "{char} wants to be in your face and stay there. Everything in the kit is built for getting in and keeping the pressure on, and none of it is built for what happens when you get pushed out. Your whole game is the approach.",
+    "zoner": "{char} plays a different game to everyone else: the fight happens at the range YOU pick, and your entire job is refusing to have the fight anywhere else. When you are forced in close you are not playing {char} any more, you are surviving.",
+    "grappler": "Every round of {char} is the same round. They have to come to you, or they have to make a mistake reaching. Patience is not a virtue here, it is the character.",
+    "shoto": "{char} does everything acceptably and nothing spectacularly. That sounds like a criticism and it is actually the pitch — there is no matchup where you are helpless, and there is no situation where you have no button.",
+    "technical": "{char} asks more of you than the opponent does. Half of every set is against your own hands. When it works nobody can deal with it; when it doesn't, you beat yourself.",
+    "mixup": "{char} wins by making the opponent guess and then punishing the guess. The moment they stop guessing — the moment they have seen your setups — you are playing a much worse character.",
+    "puppet": "You are playing two characters at once and the opponent is playing one. That is the whole advantage and the whole difficulty.",
+    "default": "{char} is a {arch}, and everything below follows from that. If you are fighting the character's own shape you will lose to people worse than you."
+  },
+
+  "gameplan": {
+    "strong": [
+      "The plan is not complicated: establish the range you want, take the first opening, and make them prove they can get out. Most people can't.",
+      "Win neutral, convert once, then make them play from behind. {char} is at their best when the opponent has to do something.",
+      "Take the fight to the place your buttons are best and refuse every invitation to leave it. Everything else is details."
+    ],
+    "average": [
+      "Play the neutral honestly, take what the opponent gives you, and do not force openings that aren't there. {char} punishes impatience — yours, mostly.",
+      "The plan is to be slightly ahead and stay slightly ahead. Nothing about this character rewards gambling.",
+      "Get comfortable doing the boring thing. The flashy option is worse than it looks in almost every situation."
+    ],
+    "weak": [
+      "Honestly? Survive the first exchange and see what they do. {char} does not have an opener that beats a good player who is paying attention, so you are looking for the moment they stop paying attention.",
+      "Play defensively until you have read them, then commit hard. You do not get many chances so do not spend them early.",
+      "The plan is to not lose quickly. That is not a joke — the character gets better the longer a round goes."
+    ]
+  },
+
+  "matchups": {
+    "best": "Your best matchup is {best}. Their gameplan needs something {char} simply takes away from them, and if you play it patiently it should not be close.",
+    "worst": "The one that keeps costing you is {worst}. You will lose this more than you win it. Take the rounds you can steal and stop expecting the matchup to be fair.",
+    "even": "Most of the cast is close to even. That is not a boast — it means the matchup is decided by who has done the reps, and that is you if you want it to be."
+  },
+
+  "tech": {
+    "has": "Things that are in here and are not obvious: {tech}. Learn them in that order. None of them are optional at a high level and all of them are optional at a low one.",
+    "none": "There is nothing exotic in here yet. Nobody in this scene has found anything about {char} that isn't in the move list, which either means there is nothing to find or means nobody has looked hard enough. I know which one I think it is."
+  },
+
+  "tier": {
+    "top": "The scene has {char} near the top of the list, which mostly means people have started respecting the things this guide is about. Enjoy it; it does not last.",
+    "mid": "{char} sits in the middle of the scene's list. That is roughly right, and it means results are yours to earn rather than yours to collect.",
+    "low": "The room has {char} near the bottom. They are wrong, but not by much, and being wrong about a character has never once stopped it from beating you.",
+    "unranked": "Nobody in this scene has bothered to rate {char} yet. Take that however you like."
+  },
+
+  "closings": {
+    "authority": [
+      "That's everything I know. If you beat me with it, at least tell me which part worked.",
+      "Play them for a year before you decide they're bad. That's how long it took me to decide they weren't.",
+      "None of this replaces reps. It just means your reps will teach you something."
+    ],
+    "journeyman": [
+      "Corrections welcome. I'm at the arcade most nights.",
+      "I'll update this when I understand more. Assume the last section is wrong.",
+      "If you find something better, tell me before you use it on me."
+    ],
+    "hopeful": [
+      "If you're better than me at this character, please, genuinely, come and say so.",
+      "I'll rewrite this in six months and be embarrassed by it. That's the plan.",
+      "Written mostly so I'd have to organise my own thoughts. If it helps you too, good."
+    ]
+  }
+}

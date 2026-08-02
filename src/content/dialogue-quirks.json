@@ -1,0 +1,137 @@
+{
+  "third-person": {
+    "trashTalk": [
+      "{self} doesn't lose twice, {t}.",
+      "{self} called it. {self} always calls it."
+    ],
+    "ggWin": [
+      "{self} remains undefeated in matches that matter.",
+      "You witnessed {self}. Tell the others."
+    ],
+    "winGlow": [
+      "{self} was unstoppable today and {self} is being humble about it."
+    ],
+    "mmPre": [
+      "{self} has been waiting for this, {t}."
+    ]
+  },
+  "anime": {
+    "joke": [
+      "{t}, you're the filler episode of this arcade.",
+      "This isn't even {t}'s final form. Sadly, it's also not a good form."
+    ],
+    "trashTalk": [
+      "You've activated my trap card, {t}.",
+      "This is my training arc, {t}, and you're the first boss."
+    ],
+    "watcherHype": [
+      "IT'S JUST LIKE THE TOURNAMENT ARC!!",
+      "He's powering up. {t} is literally powering up."
+    ],
+    "ggWin": [
+      "It was a good battle, {t}. You may yet unlock your potential."
+    ]
+  },
+  "old-head": {
+    "joke": [
+      "Kids today mash three buttons and call it pressure. {t} calls it a gameplan."
+    ],
+    "trashTalk": [
+      "Back in my day we punished that on REACTION, {t}.",
+      "I was doing this before the game told you the frame data, {t}."
+    ],
+    "ggWin": [
+      "Experience, baby. There's no patch for it."
+    ],
+    "watcherHype": [
+      "THAT'S the old-school way. Beautiful."
+    ],
+    "lifeChat": [
+      "Arcades like this used to be on every corner. We're the last of something, you know.",
+      "My back's a tier list of injuries and it's all top tier. Anyway."
+    ]
+  },
+  "technical": {
+    "joke": [
+      "{t}'s blockstrings have more holes than a training-mode dummy."
+    ],
+    "trashTalk": [
+      "Your gaps are six frames wide, {t}. I measured.",
+      "I know your habits better than you do, {t}. I have notes."
+    ],
+    "watcherHype": [
+      "That was a frame trap. TEXTBOOK frame trap.",
+      "See how they banked the meter there? That's the whole game."
+    ],
+    "ggLossGood": [
+      "GGs. I know exactly which three interactions I lost that in."
+    ]
+  },
+  "humble": {
+    "ggWin": [
+      "Honestly, {t}, that could've gone either way.",
+      "I got lucky in the last game. Really."
+    ],
+    "winGlow": [
+      "I hit some things today. Felt nice."
+    ],
+    "trashTalk": [
+      "I mean... the set count does kind of speak for itself, {t}. Sorry."
+    ]
+  },
+  "menace": {
+    "trashTalk": [
+      "I've already beaten you tonight, {t}. In here. *taps temple*"
+    ],
+    "mmPre": [
+      "I'm going to take my time with this one.",
+      "I picked this date for a reason, {t}."
+    ],
+    "ggWin": [
+      "Exactly as I pictured it."
+    ],
+    "joke": [
+      "{t}, I'd explain what you did wrong, but I like watching you do it."
+    ]
+  },
+  "philosopher": {
+    "saltyLoss": [
+      "Losing is tuition.",
+      "The set was the lesson. The loss was the fee."
+    ],
+    "ggLossGood": [
+      "A worthy defeat. I'll sit with it."
+    ],
+    "winGlow": [
+      "Winning teaches nothing. Fortunately, I learn nothing gladly."
+    ],
+    "watcherWince": [
+      "Every collapse contains its own instruction."
+    ],
+    "lifeChat": [
+      "We come here to lose in a place where losing costs nothing real. Think about that.",
+      "A day outside this room is just a longer wait for the next set."
+    ]
+  },
+  "hypeman": {
+    "watcherHype": [
+      "YOOOOOO!!",
+      "THE ARCADE IS ON FIRE TONIGHT!!",
+      "I'M TELLING EVERYBODY ABOUT THIS!"
+    ],
+    "ggWin": [
+      "LET'S GOOOOO!",
+      "THAT'S what we practice for!!"
+    ],
+    "jokeLanded": [
+      "AHAHAHA no because it's TRUE—"
+    ],
+    "winGlow": [
+      "Somebody stream ME next, I was COOKING today."
+    ],
+    "lifeChat": [
+      "EVERYBODY good?? Everybody eat?? Good. Let's have the BEST night!",
+      "I love this room. I LOVE this room. Somebody had to say it."
+    ]
+  }
+}

@@ -17,6 +17,8 @@
 
 import { uid, clamp } from './util.js'
 import { absDayOf } from './constants.js'
+import { getMatchup } from './model.js'
+import { fill, guides as GUIDES } from '../content/index.js'
 
 // How many people need real reps on a character before "leads their peers"
 // means anything. Without this the contrarians the taste layer produces —
@@ -174,3 +176,111 @@ export function resolveGuides(save, events, chance, pName) {
 /** Guides for one character, newest first — for the Codex. */
 export const guidesFor = (save, charId) =>
   (save.guides || []).filter((g) => g.charId === charId)
+
+// ---------- Reading one ----------
+
+/**
+ * THE GUIDE, WRITTEN OUT.
+ *
+ * A guide used to be four fields and a boolean — author, character, date, did
+ * it catch on — which is a record that a document exists rather than a
+ * document. The Codex could list them; nobody could read one. That is a strange
+ * gap in a game whose whole argument for the Stoic and the Scholar is "the
+ * definitive write-up on a character IS the reputation".
+ *
+ * So the body is composed on demand from what the author ACTUALLY knew when
+ * they wrote it: their skill on the character, the tech the scene had found by
+ * then, the matchup chart the game's own numbers produce, the archetype, and
+ * where the community had the character on the tier list that season. Nothing
+ * is decorative and nothing is invented — a guide by a mediocre player reads
+ * like one, because every section is chosen by their own numbers.
+ *
+ * Composed rather than stored, deliberately: a stored body would be a second
+ * copy of facts that already live on the save, and it would go stale the day
+ * somebody discovers a technique. Prose lives in `src/content/guides.json`.
+ *
+ * `pick` is passed in so callers from a render can supply a stable chooser —
+ * the engine's RNG must never be advanced by drawing a screen (the P3 lesson).
+ */
+export function readGuide(save, guide) {
+  if (!guide) return null
+  const char = save.game.characters.find((c) => c.id === guide.charId)
+  const author = save.players[guide.authorId]
+  // Stable per guide: the same document reads the same way every time it is
+  // opened, without storing anything. A tiny string hash off the guide id.
+  let h = 0
+  for (const ch of String(guide.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  let n = 0
+  const pick = (arr) => arr[(h + 977 * n++) % arr.length]
+
+  const skill = guide.skill || 0
+  // Which voice they wrote it in: how much authority the numbers gave them.
+  const band = skill >= 45 ? 'authority' : skill >= 25 ? 'journeyman' : 'hopeful'
+  const planBand = skill >= 45 ? 'strong' : skill >= 25 ? 'average' : 'weak'
+  const reps = author?.charRecord?.[guide.charId]
+    ? author.charRecord[guide.charId].w + author.charRecord[guide.charId].l
+    : 0
+
+  // The matchup chart, as the author would have summarised it. Real numbers.
+  const others = save.game.characters.filter((c) => c.id !== guide.charId)
+  const scored = others.map((c) => ({ c, mu: getMatchup(save.game, guide.charId, c.id) }))
+    .sort((a, b) => b.mu - a.mu)
+  const best = scored[0]
+  const worst = scored[scored.length - 1]
+
+  // The tech that existed when they wrote it — not everything known now.
+  const tech = (save.innovations || [])
+    .filter((i) => i.charId === guide.charId && absDayOf(i.day, i.year) <= guide.absDay)
+    .map((i) => i.name)
+
+  // Where the scene had the character on the nearest tier list at the time.
+  const list = (save.tierLists || []).find((l) => absDayOf(l.day, l.year) <= guide.absDay)
+  let tierKey = 'unranked'
+  if (list) {
+    const t = Object.entries(list.tiers || {}).find(([, ids]) => (ids || []).includes(guide.charId))?.[0]
+    if (t) tierKey = t === 'S' || t === 'A' ? 'top' : t === 'B' || t === 'C' ? 'mid' : 'low'
+  }
+
+  const data = {
+    char: char?.name || 'the character',
+    author: author ? (author.alias || author.firstName) : 'a departed regular',
+    game: save.game.name,
+    arch: char?.archetype || 'fighter',
+    skill: Math.round(skill),
+    reps,
+    best: best?.c.name || 'nobody in particular',
+    worst: worst?.c.name || 'nobody in particular',
+    tech: tech.join(', '),
+    tier: tierKey,
+  }
+  const say = (t) => fill(t, data)
+
+  const sections = [
+    { heading: 'Why I wrote this', body: say(pick(GUIDES.openings[band])) },
+    { heading: 'What the character is', body: say(GUIDES.identity[data.arch] || GUIDES.identity.default) },
+    { heading: 'The gameplan', body: say(pick(GUIDES.gameplan[planBand])) },
+    {
+      heading: 'Matchups',
+      body: [say(GUIDES.matchups.best), say(GUIDES.matchups.worst), say(GUIDES.matchups.even)].join(' '),
+    },
+    { heading: 'Tech', body: say(tech.length ? GUIDES.tech.has : GUIDES.tech.none) },
+    { heading: 'What the room thinks', body: say(GUIDES.tier[tierKey]) },
+    { heading: 'Last word', body: say(pick(GUIDES.closings[band])) },
+  ]
+
+  return {
+    guide,
+    char,
+    author,
+    title: `${data.char}: ${band === 'authority' ? 'the long version' : band === 'journeyman' ? 'notes' : 'what I have so far'}`,
+    byline: data.author,
+    sections,
+    matchups: { best: best?.c.name, bestPct: best?.mu, worst: worst?.c.name, worstPct: worst?.mu },
+    tech,
+    reps,
+  }
+}
+
+/** Every guide in the run, newest first — for the Codex's library. */
+export const allGuides = (save) => [...(save.guides || [])]
+  .sort((a, b) => (b.absDay || 0) - (a.absDay || 0))

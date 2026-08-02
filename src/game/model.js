@@ -8,6 +8,7 @@ import { defaultRules, migrateRules } from './rules.js'
 import { computeMatchups } from './balance.js'
 import { pruneForms, formsOf, FORM_MOVE_TYPE } from './forms.js'
 import { reskinFresh } from './skins.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export function newCharacter(partial = {}) {
   return {
@@ -460,9 +461,8 @@ export function awardMilestone(save, key, points, text) {
   const full = Math.max(1, Math.round(points * LEGACY_PACE))
   const paid = repeat ? Math.max(1, Math.round(full * REPEAT_SHARE)) : full
   save.prestigePending = (save.prestigePending || 0) + paid
-  chronicle(save, '🏅', repeat
-    ? `${text} (+${paid} legacy point${paid === 1 ? '' : 's'} — this lineage has been here before)`
-    : `${text} (+${paid} legacy point${paid === 1 ? '' : 's'})`)
+  chronicle(save, '🏅', chronicleLine(repeat ? 'prestige.milestone.repeat' : 'prestige.milestone',
+    { text, paid, s: paid === 1 ? '' : 's' }))
   return true
 }
 

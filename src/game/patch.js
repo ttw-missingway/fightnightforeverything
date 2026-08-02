@@ -14,6 +14,7 @@ import { postPatchReaction, postPatchAnnouncement } from './socialmedia.js'
 import { computeMatchups, observedPower } from './balance.js'
 import { selectableChars, charLabel } from './forms.js'
 import { ALL_RULE_KEYS, ruleLabel, defaultRules } from './rules.js'
+import { line as chronicleLine } from '../content/index.js'
 
 // A character's power level: average matchup win% against the rest of the cast.
 export function charPower(game, charId) {
@@ -486,7 +487,7 @@ export function releaseHotfix(save) {
       if (diff.buffed.some((b) => b.char.id === p.mainCharId)) { p.mood = clamp(p.mood + 0.3, 0, 10); bumpPassion(p, 2) }
     }
   }
-  chronicle(save, '🩹', `A quiet hotfix went out — ${diff.notes[0] || 'a small correction'}`)
+  chronicle(save, '🩹', chronicleLine('patch.hotfix', { note: diff.notes[0] || 'a small correction' }))
   return hotfix
 }
 
@@ -626,9 +627,9 @@ export function releasePatch(save) {
     const relDelta = applyPatchRelevance(save, score, divisive)
     patch.relevanceDelta = relDelta
     if (relDelta <= -6) {
-      chronicle(save, '📉', `Patch v${version} did real damage — interest in ${save.game.name} took a hit the scene may not recover from`)
+      chronicle(save, '📉', chronicleLine('patch.damaged', { version, game: save.game.name }))
     } else if (relDelta >= 6) {
-      chronicle(save, '📈', `Patch v${version} landed — ${save.game.name} is back in the conversation`)
+      chronicle(save, '📈', chronicleLine('patch.recovered', { version, game: save.game.name }))
     }
   }
 
@@ -637,9 +638,9 @@ export function releasePatch(save) {
   // designer's payoff — patch QUALITY, not just cadence, fills the arcade.
   if (consequentialRun && score >= 10) {
     save.freshMetaUntilAbs = absDayOf(save.day, save.year) + 24 + Math.round(score)
-    chronicle(save, '🌊', `The v${version} meta has everyone in the lab — the room hasn't buzzed like this in months.`)
+    chronicle(save, '🌊', chronicleLine('patch.labBuzz', { version }))
   }
-  chronicle(save, '🛠', `Patch v${version} released — ${label}${why.length ? ` (${why[0]})` : ''}`)
+  chronicle(save, '🛠', chronicleLine('patch.released', { version, label, why: why.length ? ` (${why[0]})` : '' }))
   postPatchReaction(save, patch)
   // The world weighs in: a couple of ranked names react in character.
   for (const elite of (save.evoRoster || []).slice(0, 16).filter(() => rand() < 0.15)) {
@@ -665,7 +666,7 @@ export function schedulePatch(save, daysAhead) {
   const version = bumpVersion(save.game.version)
   save.scheduledPatch = { absDay, version, announcedAbs: todayAbs }
   const when = dateOfAbs(absDay)
-  chronicle(save, '📅', `${save.game.name} v${version} announced for ${formatDay(when.day, when.year)}`)
+  chronicle(save, '📅', chronicleLine('patch.announced', { game: save.game.name, version, date: formatDay(when.day, when.year) }))
   postPatchAnnouncement(save, version, formatDay(when.day, when.year), absDay - todayAbs)
   return save.scheduledPatch
 }

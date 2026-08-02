@@ -32,6 +32,7 @@ import { writeJournal } from './journal.js'
 import { pushToast, dismissToastByKey } from './notify.js'
 import { careerStageOf, yearsPastPeak, isActive } from './career.js'
 import { shiftRel } from './social.js'
+import { line as chronicleLine } from '../content/index.js'
 
 const bestSkill = (p) => Math.max(0, ...Object.values(p.charSkill || {}), 0)
 
@@ -147,7 +148,7 @@ export function takeUnderWing(save, prospectId, mentorId = null) {
   const mn = displayName(mentor, save)
   writeJournal(save, p, 'takenOn', { mentor: mn, always: true })
   writeJournal(save, mentor, 'tookOn', { student: pn, always: true })
-  chronicle(save, '🤝', `${mn} has taken ${pn} under their wing. Whatever ${mn} knows, ${pn} is going to know.`)
+  chronicle(save, '🤝', chronicleLine('succession.mentorship', { mentor: mn, student: pn }))
   dismissToastByKey(save, `prospect_${p.id}`)
   return { prospect: p, mentor }
 }
@@ -176,7 +177,7 @@ export function maybeProdigyArrives(save) {
   p.daysAttended = 14 // they have been coming in a while before anyone noticed
   save.players[p.id] = p
   const name = displayName(p, save)
-  chronicle(save, '✨', `Some kid has been quietly demolishing people on the corner cabinet all week. Somebody should find out who they are.`)
+  chronicle(save, '✨', chronicleLine('succession.prodigy'))
   pushToast(save, {
     icon: '✨',
     text: `${name} has been coming in — and they are the real thing. Take them under someone's wing before another room does.`,
@@ -201,7 +202,7 @@ export function prodigiesDrift(save) {
     p.leftForBetter = true
     dismissToastByKey(save, `prospect_${p.id}`)
     const name = displayName(p, save)
-    chronicle(save, '🚪', `${name} stopped coming in. Word is they're travelling with a crew across town now. That one is going to hurt to watch.`)
+    chronicle(save, '🚪', chronicleLine('succession.poached', { name }))
     pushToast(save, {
       icon: '🚪',
       text: `${name} has moved on to another scene. Nobody here ever took them on.`,
@@ -231,6 +232,6 @@ export function successionWarning(save) {
     sticky: true,
     key,
   })
-  chronicle(save, '⏳', `Look around ${save.arcade.name}: the people who built this place are all near the end of it, and there is nobody standing behind them.`)
+  chronicle(save, '⏳', chronicleLine('succession.noSuccessors', { arcade: save.arcade.name }))
   return oldest
 }

@@ -46,6 +46,7 @@ import { eliminationWound } from './eureka.js'
 import { updateFeedFromTournament } from './socialmedia.js'
 import { personalityOf, elitePersonality } from './stream.js'
 import { eliteFragment } from './fragments.js'
+import { line as chronicleLine } from '../content/index.js'
 
 const pName = (save, p) => displayName(p, save)
 
@@ -390,11 +391,11 @@ export function runRegional(save, def) {
   const castTop = placements.find((pl) => pl.entrant.kind === 'arcade')
   if (champion.kind === 'arcade') {
     awardMilestone(save, 'regional-champion', 3, `${champion.name} is the national champion — ${name}, Year ${year}`)
-    chronicle(save, '🗺', `${champion.name} won ${name}. The best in the country trains in YOUR room.`)
+    chronicle(save, '🗺', chronicleLine('circuit.regional.castWon', { champion: champion.name, event: name }))
   } else if (castTop && castTop.place <= 4) {
-    chronicle(save, '🗺', `${castTop.entrant.name} made the final four at ${name}. The country knows the arcade's name now.`)
+    chronicle(save, '🗺', chronicleLine('circuit.regional.castTop4', { name: castTop.entrant.name, event: name }))
   } else if (castTop) {
-    chronicle(save, '🗺', `${champion.name} won ${name}; ${castTop.entrant.name} went out ${castTop.place <= 8 ? 'top 8' : 'early'}.`)
+    chronicle(save, '🗺', chronicleLine('circuit.regional.castOut', { champion: champion.name, event: name, name: castTop.entrant.name, how: castTop.place <= 8 ? 'top 8' : 'early' }))
   }
   announceEntry(save, def, name, entry)
 
@@ -508,9 +509,9 @@ export function runQualifier(save, def) {
         : `The vote is in: ${entrant.name} is going to the ${def.season} Major as a fan favourite.`,
       see: { screen: 'players' },
     })
-    chronicle(save, seat.via === 'bracket' ? '🎫' : '📣', seat.via === 'bracket'
-      ? `${entrant.name} punched their ticket to the ${def.season} Major at ${name}.`
-      : `The crowd voted ${entrant.name} into the ${def.season} Major. Personality is access.`)
+    chronicle(save, seat.via === 'bracket' ? '🎫' : '📣',
+      chronicleLine(seat.via === 'bracket' ? 'circuit.qualifier.seatWon' : 'circuit.qualifier.seatVoted',
+        { name: entrant.name, season: def.season, event: name }))
   }
   const voteNames = ballot.slice(0, 2).map((b) => b.entrant.name)
   storylines.push(`Seats: ${placements.find((pl) => pl.place === 1)?.entrant.name} and ${placements.find((pl) => pl.place === 2)?.entrant.name} by right; ${voteNames.join(' and ')} by acclaim.`)
@@ -655,7 +656,7 @@ export function runMajor(save, def) {
   const storylines = [`Sixteen invitations. Three cities a year. This one answered to ${name.split(' · ')[1] || 'the host'}.`]
   for (const p of wasted) {
     storylines.push(`${pName(save, p)} had a seat — and no plane ticket. The chair sat empty.`)
-    chronicle(save, '🪑', `${pName(save, p)} QUALIFIED for ${name} and stayed home. The seat was won weeks ago; the fare had to still be there today.`)
+    chronicle(save, '🪑', chronicleLine('circuit.major.emptyChair', { name: pName(save, p), event: name }))
   }
 
   stampRanked(save, entrants)
@@ -689,10 +690,14 @@ export function runMajor(save, def) {
     })
   }
   chronicle(save, '🏛', champion.kind === 'arcade'
-    ? `${champion.name} WON ${name}. A world major. From this arcade.`
+    ? chronicleLine('circuit.major.castWon', { champion: champion.name, event: name })
     : arcadePlacements.length
-      ? `${champion.name} took ${name}; ${arcadePlacements[0].entrant.name} carried the arcade to ${arcadePlacements[0].place === 2 ? 'the grand finals' : `top ${arcadePlacements[0].place <= 4 ? 4 : arcadePlacements[0].place <= 8 ? 8 : 16}`}.`
-      : `${name} came and went. ${champion.name} took it. Nobody from ${save.arcade.name} was in the room.`)
+      ? chronicleLine('circuit.major.castPlaced', {
+        champion: champion.name, event: name, name: arcadePlacements[0].entrant.name,
+        how: arcadePlacements[0].place === 2 ? 'the grand finals'
+          : `top ${arcadePlacements[0].place <= 4 ? 4 : arcadePlacements[0].place <= 8 ? 8 : 16}`,
+      })
+      : chronicleLine('circuit.major.watched', { event: name, champion: champion.name, arcade: save.arcade.name }))
   announceEntry(save, def, name, entry)
 
   // The seat state is spent either way.
@@ -871,7 +876,7 @@ export function runSquadShowdown(save, def) {
   const squads = showdownSquads(save)
   if (squads.length < 4) {
     // A world this thin can't stage it — quietly skip the year.
-    chronicle(save, '🏮', `${name} was called off — the scene couldn't field the crews.`)
+    chronicle(save, '🏮', chronicleLine('circuit.squad.called_off', { event: name }))
     return { ok: false, reason: `${name} needs at least four crews.` }
   }
   for (const s of squads) {
@@ -927,12 +932,12 @@ export function runSquadShowdown(save, def) {
     }
     if (champion === yours) {
       awardMilestone(save, 'squad-champion', 4, `Team ${save.arcade.name} won the Squad Showdown, Year ${year}`)
-      chronicle(save, '🏮', `TEAM ${save.arcade.name.toUpperCase()} WON THE SQUAD SHOWDOWN. Four of yours against the world, and the world blinked.`)
+      chronicle(save, '🏮', chronicleLine('circuit.squad.castWon', { arcadeUpper: save.arcade.name.toUpperCase() }))
     } else {
-      chronicle(save, '🏮', `Squad Showdown, Year ${year}: your crew ${ran}; ${champion.name} took the lanterns home.`)
+      chronicle(save, '🏮', chronicleLine('circuit.squad.castRan', { year, ran, champion: champion.name }))
     }
   } else {
-    chronicle(save, '🏮', `${champion.name} won the Squad Showdown. ${rankedInTop(save, 64).length ? 'Your crew stayed home — the trip was never funded.' : 'A crew of yours gets the invite the day one of them cracks the world top 64.'}`)
+    chronicle(save, '🏮', chronicleLine(rankedInTop(save, 64).length ? 'circuit.squad.unfunded' : 'circuit.squad.uninvited', { champion: champion.name }))
   }
   const entry = castEntryReport(save, def, year)
   if (!yours) announceEntry(save, def, name, entry)
@@ -1091,8 +1096,8 @@ function announceEntry(save, def, name, report) {
   const kindWord = def.kind === 'major' ? 'major' : def.kind === 'qualifier' ? 'qualifier'
     : def.kind === 'regional' ? 'regionals' : 'Squad Showdown'
   chronicle(save, '📺', report.missed.length
-    ? `${name} ran without anybody from ${save.arcade.name} in it. ${nearest.name}: ${nearest.reason}.`
-    : `${name} ran without anybody from ${save.arcade.name} in it — the room has nobody eligible yet.`)
+    ? chronicleLine('circuit.noEntry.reason', { event: name, arcade: save.arcade.name, name: nearest.name, reason: nearest.reason })
+    : chronicleLine('circuit.noEntry.bare', { event: name, arcade: save.arcade.name }))
   pushToast(save, {
     icon: '📺',
     text: `Nobody of yours is in ${name} — you're watching this one. ${

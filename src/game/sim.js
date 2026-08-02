@@ -42,6 +42,7 @@ import { maybeProdigyArrives, prodigiesDrift, successionWarning } from './succes
 import { invasionDaily, currentVisitors, visitorExchange } from './invasion.js'
 import { maybeWorldEvent } from './worldevents.js'
 import { TECHNIQUE_NAME_PARTS } from './names.js'
+import { line as chronicleLine } from '../content/index.js'
 
 const pName = (save, p) => displayName(p, save)
 
@@ -561,7 +562,7 @@ function maybeInnovate(save, player, events) {
   eurekaEdge(save, player, { weight: 1.2, stats: ['innovation'], why: `"${innov.name}" is theirs` })
   writeJournal(save, player, 'innovation', { tech: innov.name, char: save.game.characters.find((c) => c.id === innov.charId)?.name })
   if (save.innovations.length === 1) {
-    chronicle(save, '💡', `${pName(save, player)} discovered the scene's first original tech: "${innov.name}"`)
+    chronicle(save, '💡', chronicleLine('sim.firstTech', { name: pName(save, player), tech: innov.name }))
   }
   const leap = gainSkill(save, player, player.mainCharId, innov.xp)
   const char = save.game.characters.find((c) => c.id === innov.charId)
@@ -1095,7 +1096,7 @@ function runMoneyMatch(save, mm, present, events) {
   witnessed(save, watchers, 'moneymatch',
     `watching ${pName(save, winner)} beat ${pName(save, loser)} in that money match`,
     { subjectIds: [winner.id, loser.id] })
-  chronicle(save, '💸', `${pName(save, winner)} beat ${pName(save, loser)} ${nar.score} in the money match everyone still talks about`)
+  chronicle(save, '💸', chronicleLine('sim.moneyMatch', { winner: pName(save, winner), loser: pName(save, loser), score: nar.score }))
   if (chance(0.3)) {
     shiftRel(winner, loser, 12)
     shiftRel(loser, winner, 12)
@@ -1150,7 +1151,7 @@ function runInteraction(save, group, where, events, results = {}) {
       if (before > -50 && after <= -50) outcomes.push(`${pName(save, a)} now considers ${pName(save, b)} an enemy.`)
       if (before > -80 && after <= -80 && getRel(b, a) <= -50) {
         outcomes.push(`${pName(save, a)} and ${pName(save, b)} are past rivalry now. This is a feud.`)
-        chronicle(save, '⚔️', `${pName(save, a)} and ${pName(save, b)} became mortal enemies — the arcade quietly picks sides`)
+        chronicle(save, '⚔️', chronicleLine('sim.mortalEnemies', { a: pName(save, a), b: pName(save, b) }))
       }
       // Innovations spread through conversation.
       maybeLearnInnovation(save, a, b, events)
@@ -1325,11 +1326,11 @@ export function startDay(save) {
         }[nowStatus.key]
         if (line) events.push({ type: 'arrival', text: line })
         if (nowStatus.key === 'star') {
-          chronicle(save, '⭐', `${pName(save, p)} became a star of ${save.arcade.name}`)
+          chronicle(save, '⭐', chronicleLine('sim.becameStar', { name: pName(save, p), arcade: save.arcade.name }))
           awardMilestone(save, 'first-star', 2, `${save.arcade.name} produced its first star`)
         }
         if (nowStatus.key === 'legend') {
-          chronicle(save, '👑', `${pName(save, p)} reached legend status at ${save.arcade.name}`)
+          chronicle(save, '👑', chronicleLine('sim.becameLegend', { name: pName(save, p), arcade: save.arcade.name }))
           awardMilestone(save, 'first-legend', 5, 'An arcade LEGEND came up under this roof')
         }
       }
@@ -2204,9 +2205,9 @@ export function advanceDay(save) {
     // Chronicle only: advanceDay is the universal tick and has no day report
     // to write into (tournament, EVO and idle catch-up days come through here).
     if (season.key === 'backtoschool') {
-      chronicle(save, '🎒', `School went back. ${save.arcade.name} is going to feel empty for a while.`)
+      chronicle(save, '🎒', chronicleLine('sim.schoolBack', { arcade: save.arcade.name }))
     } else if (season.key === 'summer' && runAge(save) > 30) {
-      chronicle(save, '☀️', `School is out. ${save.arcade.name} is about to get busy.`)
+      chronicle(save, '☀️', chronicleLine('sim.schoolOut', { arcade: save.arcade.name }))
     }
   }
   save.day += 1
@@ -2236,7 +2237,7 @@ export function advanceDay(save) {
         })
       }
       if (declined.length >= 2) {
-        chronicle(save, '⏳', `The core of ${save.arcade.name} is getting older. ${declined.slice(0, 2).map((p) => pName(save, p)).join(' and ')}${declined.length > 2 ? ' and others' : ''} aren't quite what they were, and everybody can see it.`)
+        chronicle(save, '⏳', chronicleLine('sim.coreAgeing', { arcade: save.arcade.name, names: declined.slice(0, 2).map((p) => pName(save, p)).join(' and '), andOthers: declined.length > 2 ? ' and others' : '' }))
       }
     }
     if (save.settings.mode !== 'sandbox' && save.year >= 2 && save.year <= 6) {

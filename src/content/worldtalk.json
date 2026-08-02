@@ -1,0 +1,65 @@
+{
+  "_readme": "Two regulars at the concession stand talking about people they have never met. Each beat is an opener and a set of possible replies — the second speaker picks one. {top} = the best player alive, {riser} = a name on the way up, {char} = a character, {days} = days until EVO. Nobody's stats move; this is pure texture.",
+
+  "world": [
+    {
+      "open": "Did you see {top} at that invitational? Nobody is touching them right now.",
+      "replies": [
+        "I refuse to believe a human being plays like that.",
+        "One day somebody from here beats them. Calling it.",
+        "They drop one set a year and it makes the news."
+      ]
+    },
+    {
+      "open": "{riser} keeps winning. Like, keeps winning winning.",
+      "replies": [
+        "Ranked players are ducking them already.",
+        "I watched three of their sets and learned nothing. Too fast.",
+        "Give it a year and they're top eight, watch."
+      ]
+    },
+    {
+      "open": "Hot take: {top} is overrated.",
+      "replies": [
+        "You are describing the best player alive.",
+        "Say that louder so everyone can hear you be wrong.",
+        "Okay but have you SEEN their {char}? Actually unfair."
+      ]
+    },
+    {
+      "open": "If you could take one set off anyone in the top eight, who?",
+      "replies": [
+        "{top}. Straight to the final boss.",
+        "{riser}, purely so they'd remember my name.",
+        "None of them. I'd like to keep my dignity."
+      ]
+    }
+  ],
+
+  "evo": [
+    {
+      "open": "{days} days to EVO. I have opinions and nobody asked.",
+      "replies": [
+        "{top} three-peats. Ask me nothing further.",
+        "Somebody out of pools nobody's heard of makes top eight. Happens every year.",
+        "I'm calling an upset in the finals. I can feel it."
+      ]
+    },
+    {
+      "open": "EVO pools drop soon. {top} versus literally anyone, I'm watching.",
+      "replies": [
+        "I'd sell an organ to be there live.",
+        "The whole planet watches one weekend a year and it's this one.",
+        "Imagine one of ours on that stage. Just imagine it for a second."
+      ]
+    },
+    {
+      "open": "Who wins EVO this year — {top} or {riser}?",
+      "replies": [
+        "{top}. Boring answer, correct answer.",
+        "{riser}. The torch gets passed this year.",
+        "Neither. Chaos wins. Chaos always wins eventually."
+      ]
+    }
+  ]
+}

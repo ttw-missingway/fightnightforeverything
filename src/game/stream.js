@@ -14,6 +14,7 @@ import { chronicle } from './model.js'
 import { writeJournal } from './journal.js'
 import { econLog } from './economy.js'
 import { perceivedTier } from './interest.js'
+import { line as chronicleLine } from '../content/index.js'
 
 // How famous an arcade player is, 0..1. Respect and glory are the resume; a
 // growing public profile (popularity, earned from being featured) adds to it —
@@ -73,9 +74,8 @@ function noteBeliefSwing(save, ref, delta, viewers) {
   if (Math.abs(delta) < 6) return
   const who = displayName(ref, save)
   const crowd = viewers >= 400 ? 'a packed channel' : `${viewers} watching`
-  chronicle(save, delta > 0 ? '🔥' : '💔', delta > 0
-    ? `${who} did it under the lights with ${crowd} — you can see it in how they carry themselves now`
-    : `${who} came apart on stream in front of ${crowd}. Something went out of them that night.`)
+  chronicle(save, delta > 0 ? '🔥' : '💔',
+    chronicleLine(delta > 0 ? 'stream.stageWin' : 'stream.stageChoke', { who, crowd }))
 }
 
 // A steady head doesn't spiral after a bad night. Composure was already the

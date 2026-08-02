@@ -13,6 +13,7 @@ import { chronicle, bump, bumpPeak } from './model.js'
 import { worldRentMult } from './worldevents.js'
 import { attractionIncome, attractionFootprint } from './catalog.js'
 import { isUnlocked } from './achievements.js'
+import { line as chronicleLine } from '../content/index.js'
 
 export const foodPriceOf = (save, name) => save.arcade.foodPrices?.[name] ?? DEFAULT_FOOD_PRICE
 export const gameTokensOf = (save, name) => save.arcade.gameTokens?.[name] ?? DEFAULT_GAME_TOKENS
@@ -513,7 +514,7 @@ export function staffDaily(save, attendeeCount, gamesPlayed, events) {
       type: 'economy',
       text: `🚨 The health inspector walked the floor, took one look at the concession counter, and shut the arcade down for ${days} days ($${fine} fine).`,
     })
-    chronicle(save, '🚨', `The health department shut ${save.arcade.name} down for ${days} days. Nobody let the regulars forget it.`)
+    chronicle(save, '🚨', chronicleLine('economy.shutdown', { arcade: save.arcade.name, days }))
   }
 }
 
@@ -773,7 +774,7 @@ export function landlordDaily(save, events) {
   } else if (e.redDays > grace) {
     e.foreclosed = true
     events.push({ type: 'economy', text: '🔒 The locks were changed overnight. The landlord has foreclosed on the arcade.' })
-    chronicle(save, '🔒', `${save.arcade.name} was foreclosed on. The last night, nobody wanted to go home.`)
+    chronicle(save, '🔒', chronicleLine('economy.foreclosed', { arcade: save.arcade.name }))
   }
 }
 

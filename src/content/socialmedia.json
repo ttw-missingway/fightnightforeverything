@@ -1,0 +1,114 @@
+{
+  "BOARD_HANDLES": {
+    "a": [
+      "Throwaway",
+      "Actual",
+      "Definitely_Not",
+      "Local",
+      "Former",
+      "Certified",
+      "Anonymous",
+      "Ex"
+    ],
+    "b": [
+      "Grappler",
+      "TopPlayer",
+      "Railbird",
+      "ArcadeRat",
+      "FrameNerd",
+      "Spectator",
+      "PotMonster",
+      "Lurker"
+    ]
+  },
+  "WORLD_TAKES": [
+    "{top} is playing a different game to everyone else right now. it's not close",
+    "hot take: {rando} is the most underrated player in the world and it isn't close",
+    "{rando} switching to {char} mid-season is either genius or a cry for help",
+    "every time i think i understand {game} {top} does something that resets me to zero",
+    "{rando} [{region}] has quietly won three events this season and nobody is talking about it",
+    "the {char} matchup discourse is out of control. it's fine. it's FINE",
+    "people forget {top} has been top 5 for years. longevity is a skill",
+    "{rando} vs {top} is the set i'd pay actual money to see again",
+    "{char} is either the best character in {game} or i am bad. researching",
+    "regional check: {region} is stacked right now and everyone else is coping"
+  ],
+  "WORLD_ABOUT_YOU": [
+    "who is {mine}?? just saw them ranked #{rank} and i've never heard the name",
+    "{mine} is ranked #{rank} in the WORLD out of a local arcade. that's the story of the season",
+    "been watching {mine} tape all week. the neutral is legit. remember the name",
+    "if {mine} keeps this up we're going to have to start taking {arcade} seriously",
+    "{mine} at #{rank}. from a ROOM. not a team house, a room"
+  ],
+  "EVO_COUNTDOWN": [
+    {
+      "at": 30,
+      "lines": [
+        "a month out from EVO. time to decide if you're actually going or just saying you are",
+        "EVO seeding discourse season is officially open. everybody log off"
+      ]
+    },
+    {
+      "at": 14,
+      "lines": [
+        "two weeks to EVO. {fav} looks unbeatable and i hate it",
+        "every year i tell myself i'll practice before EVO and every year it is now two weeks out"
+      ]
+    },
+    {
+      "at": 7,
+      "lines": [
+        "ONE WEEK. {game} at EVO. i'm not going to sleep properly until it's over",
+        "a week out and the pools aren't even up yet. classic",
+        "who are we watching at EVO? i've got {fav} and whoever comes out of the bottom half"
+      ]
+    },
+    {
+      "at": 3,
+      "lines": [
+        "three days. if you haven't picked your {game} horse yet you're out of time",
+        "EVO in three days and i genuinely could not tell you who wins it"
+      ]
+    },
+    {
+      "at": 1,
+      "lines": [
+        "EVO. TOMORROW.",
+        "last night of sleep before EVO, allegedly"
+      ]
+    },
+    {
+      "at": 0,
+      "lines": [
+        "IT'S EVO DAY",
+        "pools start today. {game} on the big stage. let's go"
+      ]
+    }
+  ],
+  "EVO_BUILDUP": [
+    "{game} at EVO is the only thing on my calendar. everything else is a rehearsal",
+    "the {game} EVO entrant list is going to be absurd this year",
+    "booked the flights for EVO. no plan beyond that. no plan needed",
+    "every local from here to EVO is just seeding practice and we all know it",
+    "if {fav} doesn't at least top 8 at EVO i'm giving up analysis forever",
+    "EVO brackets are where {game} careers get made. one weekend. that's the whole thing",
+    "the run-up to EVO is my favourite time of year. everyone thinks they're winning it",
+    "people practising for EVO right now: everyone. people ready for EVO: nobody",
+    "whoever takes {game} at EVO decides what the next year looks like. no pressure",
+    "my EVO prediction is {fav} and my EVO prediction is always wrong",
+    "the {char} players are all going to EVO thinking this is their year. it never is",
+    "nothing in this game means anything until EVO. then it all means everything"
+  ],
+  "EVO_AFTERMATH": [
+    "still thinking about {champ} winning EVO. what a run",
+    "{champ} is the EVO champion and the whole meta just moved",
+    "post-EVO {game} is going to look completely different. mark it",
+    "whatever you thought about {game} before EVO, throw it out"
+  ],
+  "WORLD_UPSET_TAKES": [
+    "{wFlag} {w} just took a set off {lFlag} {l} at a local. No footage. I am BEGGING someone to have filmed it",
+    "hearing {lFlag} {l} dropped a money match to {wFlag} {w} last night. the ladder is going to feel that one",
+    "{wFlag} {w} over {lFlag} {l} at some invitational?? results page or it didn't happen",
+    "don't look now but {wFlag} {w} is beating ranked players offline. {l} today. who tomorrow"
+  ]
+}

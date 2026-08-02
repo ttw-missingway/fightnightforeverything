@@ -5,7 +5,7 @@ import { formatDay } from '../game/constants.js'
 import { Portrait } from '../components/ui.jsx'
 import { charArt } from '../components/art.js'
 import { selectableChars, formsOf, originOf } from '../game/forms.js'
-import { guidesFor } from '../game/guides.js'
+import { guidesFor, allGuides, readGuide } from '../game/guides.js'
 import TierList from './TierList.jsx'
 
 // The Codex: everything the scene knows about the cast in one place — the
@@ -21,6 +21,7 @@ export default function Codex() {
   const [tab, setTab] = useState('techniques')
   const archives = (save.archives || []).filter((a) => (a.innovations || []).length)
   const tiersOpen = (save.tierLists || []).length > 0
+  const guideCount = (save.guides || []).length
 
   return (
     <div>
@@ -29,6 +30,16 @@ export default function Codex() {
         <div className="tabs" style={{ margin: 0 }}>
           <button className={`small ${tab === 'techniques' ? 'active' : ''}`} onClick={() => setTab('techniques')}>Technique Index</button>
           <button className={`small ${tab === 'characters' ? 'active' : ''}`} onClick={() => setTab('characters')}>Character Index</button>
+          {/* THE LIBRARY. Guides were a boolean on a record — you could see
+              that one existed and never read it, which is a strange gap in a
+              game whose argument for the quiet players is that the definitive
+              write-up on a character IS the reputation. They have a shelf now. */}
+          <button className={`small ${tab === 'guides' ? 'active' : ''}`}
+            disabled={!guideCount}
+            title={guideCount ? undefined : 'Nobody in the scene has written one yet'}
+            onClick={() => { if (guideCount) setTab('guides') }}>
+            {guideCount ? `📘 Guides (${guideCount})` : '🔒 Guides'}
+          </button>
           <button className={`small ${tab === 'tiers' ? 'active' : ''}`}
             disabled={!tiersOpen}
             title={tiersOpen ? undefined : 'Locked — the community has not ranked anything yet'}
@@ -42,8 +53,99 @@ export default function Codex() {
       </div>
       {tab === 'techniques' && <TechniqueIndex save={save} />}
       {tab === 'characters' && <CharacterIndex save={save} />}
+      {tab === 'guides' && guideCount > 0 && <GuideLibrary save={save} />}
       {tab === 'tiers' && tiersOpen && <TierList />}
       {tab === 'archive' && <ArchiveIndex save={save} archives={archives} />}
+    </div>
+  )
+}
+
+/**
+ * The scene's own writing, in one place.
+ *
+ * Two columns: the shelf on the left (every guide the room has produced, with
+ * whether it travelled), the open document on the right. A guide's body is
+ * composed from what its author actually knew when they wrote it — see
+ * readGuide — so a bad guide reads like a bad guide, which is the point. Most
+ * of them sink, and saying so out loud is what makes the ones that travel mean
+ * anything.
+ */
+function GuideLibrary({ save }) {
+  const guides = allGuides(save)
+  const [openId, setOpenId] = useState(guides[0]?.id || null)
+  const guide = guides.find((g) => g.id === openId) || guides[0]
+  const doc = readGuide(save, guide)
+  const landed = guides.filter((g) => g.landed === true).length
+
+  return (
+    <div className="grid-main">
+      <div className="card" style={{ order: 2 }}>
+        {doc ? (
+          <>
+            <div className="row spread">
+              <h3 style={{ margin: 0 }}>📘 {doc.title}</h3>
+              <span className="dim small">{formatDay(guide.day, guide.year)}</span>
+            </div>
+            <p className="cyan" style={{ margin: '2px 0 2px' }}>by {doc.byline}</p>
+            <p className="dim small" style={{ margin: '0 0 10px' }}>
+              {doc.reps} lifetime games on {doc.char?.name || 'the character'} · skill {guide.skill} when it was written
+              {guide.landed === true && <span className="green"> · widely read</span>}
+              {guide.landed === null && <span> · just published, nobody has picked it up yet</span>}
+              {guide.landed === false && <span> · never caught on</span>}
+            </p>
+            {doc.sections.map((s) => (
+              <div key={s.heading} style={{ marginBottom: 10 }}>
+                <h4 style={{ margin: '0 0 2px', color: 'var(--cyan)' }}>{s.heading}</h4>
+                <p style={{ margin: 0 }}>{s.body}</p>
+              </div>
+            ))}
+            {/* The numbers the prose is describing, so the two can be checked
+                against each other — a guide claiming a good matchup while the
+                chart says otherwise is an author being wrong, not a bug. */}
+            <div className="card sub" style={{ marginTop: 4 }}>
+              <div className="row spread small">
+                <span className="green">best: {doc.matchups.best} ({Math.round(doc.matchups.bestPct)}%)</span>
+                <span className="red">worst: {doc.matchups.worst} ({Math.round(doc.matchups.worstPct)}%)</span>
+              </div>
+              {doc.tech.length > 0 && (
+                <div className="small dim" style={{ marginTop: 4 }}>tech covered: {doc.tech.join(' · ')}</div>
+              )}
+            </div>
+          </>
+        ) : <p className="dim">Nothing on the shelf yet.</p>}
+      </div>
+
+      <div className="card" style={{ order: 1 }}>
+        <h3 style={{ marginTop: 0 }}>The shelf <span className="dim small">— {guides.length} written, {landed} caught on</span></h3>
+        <p className="dim small" style={{ marginTop: 0 }}>
+          Anybody with real reps on a character can write one. Whether it travels depends on
+          whether the advice is any good — which is mostly whether the author is.
+        </p>
+        {guides.map((g) => {
+          const char = save.game.characters.find((c) => c.id === g.charId)
+          const author = save.players[g.authorId]
+          const on = g.id === (guide && guide.id)
+          return (
+            <div key={g.id} className="row spread clickable"
+              style={{
+                padding: '4px 6px', cursor: 'pointer', borderRadius: 6,
+                borderBottom: '1px solid var(--border)',
+                background: on ? 'var(--card2)' : undefined,
+              }}
+              onClick={() => setOpenId(g.id)}>
+              <span className="small">
+                <span className={g.landed ? 'cyan' : 'dim'}>📘 {char?.name || '???'}</span>
+                <span className="dim"> — {author ? displayName(author, save) : 'a departed regular'}</span>
+              </span>
+              <span className="small dim">
+                {g.landed === true ? <span className="green">read widely</span>
+                  : g.landed === null ? 'new'
+                  : 'sank'}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
