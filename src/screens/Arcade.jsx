@@ -9,48 +9,12 @@ import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
 import VenueStrip, { DayLedger } from '../components/VenueStrip.jsx'
 import MatchHud from '../components/MatchHud.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
+import CrewBattle from '../components/CrewBattle.jsx'
 import { displayName } from '../game/util.js'
 import { buildStreamForPlayers, canStream, hypeLabel } from '../game/stream.js'
 import { revealState } from '../game/tournament.js'
 import { gatherRumors, allRumors, rumorHeatLabel } from '../game/rumors.js'
-import { rosterOpen } from '../game/model.js'
 import { isUnlocked, howToUnlock } from '../game/achievements.js'
-
-/**
- * "Spend the points before you open the doors."
- *
- * A run-back hands you everything the lineage earned and then drops you here,
- * on the one screen with a button that spends the window. The notice line does
- * say so, but a notice is one line at the top of a busy page that vanishes on
- * the next navigation — and the cost of missing it is a whole run played
- * without the points you spent the last run earning.
- *
- * So it sits here, in the danger rail, for as long as it is true: `rosterOpen`
- * closes the moment the first day is banked, and the banner closes with it.
- */
-function LegacyPointsBanner() {
-  const { save, nav } = useStore()
-  const points = save?.prestige?.points || 0
-  if (!points || !rosterOpen(save) || save.settings?.mode === 'sandbox') return null
-  return (
-    <div className="dangers">
-      <div className="danger unlock">
-        <span className="d-icon">🎖</span>
-        <div>
-          <div className="d-title">
-            {points} legacy point{points === 1 ? '' : 's'} still unspent
-          </div>
-          <div className="d-detail">
-            Your last run earned these. They go into the players you take into this one —
-            open anyone on the Players tab and rebuild them.
-          </div>
-          <div className="d-fix">Spend them before you open the arcade. The window shuts on the first day.</div>
-        </div>
-        <button className="d-go" onClick={() => nav('players')}>Spend them →</button>
-      </div>
-    </div>
-  )
-}
 
 export default function Arcade() {
   const { save, screen, advance, skipDay, nav, enableIdle } = useStore()
@@ -78,7 +42,6 @@ export default function Arcade() {
   return (
     <div>
       {screen.notice && <div className="notice">{screen.notice}</div>}
-      <LegacyPointsBanner />
 
       <div className="card">
         <div className="row spread">
@@ -218,7 +181,15 @@ function LiveTournament({ save, nav }) {
               <span className="gold">{latest.m.score || (latest.m.setScore ? `${latest.m.setScore}` : '')}</span>
             </div>
             {latest.m.narrationHud && <MatchHud m={latest.m} />}
-            {(latest.m.narration || []).length > 0 && (
+            {/* A crew battle already aired by the time it lands here — the
+                idle broadcast reveals a whole match per tick — so it opens in
+                spoil mode, where every duel is a genuine rewatch rather than a
+                results table with a play button under it. */}
+            {latest.m.duels ? (
+              <Expandable summary={<span className="small pink">▸ watch the duels back</span>}>
+                <CrewBattle m={latest.m} spoil compact />
+              </Expandable>
+            ) : (latest.m.narration || []).length > 0 && (
               <Expandable summary={<span className="small pink">▸ watch the set back</span>}>
                 {/* The HUD is already on screen above, so this is narration only. */}
                 <MatchPlayback m={latest.m} showHud={false} autoStart />

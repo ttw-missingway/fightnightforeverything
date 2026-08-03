@@ -792,14 +792,14 @@ function survivorMatch(save, A, B) {
     winnerId: winner.id, winnerName: winner.name,
     score: `${left} left standing`,
     duels,
+    // FRAMING AND RESULT ONLY. An earlier cut put every duel's winner in here
+    // as a narration line, which meant the crew battle arrived as a scoreline
+    // you read and were then invited to "rewatch" — a transcript with a replay
+    // button attached, and the exact opposite of a broadcast. The duels are
+    // watched one at a time by components/CrewBattle.jsx; this is the summary
+    // the bracket cell and the VOD list fall back on.
     narration: [
       `${A.name} vs ${B.name} — survivor rules. Lose and you're done; win and you stay on.`,
-      ...duels.map((d) => {
-        const streak = Math.max(d.streakA, d.streakB)
-        return streak >= 2
-          ? `${d.aName} vs ${d.bName} — ${d.winnerName} takes it. That's ${streak + (d.winnerName === (d.streakA > d.streakB ? d.aName : d.bName) ? 1 : 0)} on the trot for somebody who should be exhausted by now.`
-          : `${d.aName} vs ${d.bName} — ${d.winnerName} takes it.`
-      }),
       `${winner.name} take it with ${left} ${left === 1 ? 'player' : 'players'} still alive.`,
     ],
   }

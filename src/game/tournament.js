@@ -878,12 +878,13 @@ export function runTeamTournament(save, scheduleEntry) {
         winnerId: winner.id, winnerName: winner.name,
         score: `${aScore}–${bScore}`,
         duels,
-        // Duel by duel, so the crew battle reads as four sets that happened in
-        // an order rather than as a scoreline. Each of these matches a duel the
-        // player can then open and watch in full.
+        // Framing and result only — the duels are WATCHED, one at a time, by
+        // components/CrewBattle.jsx. Listing each winner here made the crew
+        // battle arrive as a scoreline you read before being offered a
+        // "rewatch", which is a transcript with a replay button on it. See the
+        // same note on survivorMatch in circuit.js.
         narration: [
           `${A.name} vs ${B.name} — crew battle, four duels.`,
-          ...duels.map((d) => `${d.tiebreaker ? 'Tiebreaker — aces: ' : `Seat ${d.seat}: `}${d.aName} vs ${d.bName} → ${d.winnerName}. ${d.scoreAfter}.`),
           `${winner.name} takes the set ${Math.max(aScore, bScore)}–${Math.min(aScore, bScore)}.`,
         ],
       })

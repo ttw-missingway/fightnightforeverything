@@ -274,8 +274,15 @@ export const ACHIEVEMENTS = [
     check: (s) => (s.tally?.soloBlackDays || 0) >= 180,
   },
   {
+    // The old reward here was "a permanently larger creation allowance", which
+    // nothing ever implemented and which no longer describes anything the game
+    // does: creation points are spent once, at the start of a lineage, and a
+    // run-back no longer reopens the editor. What a lineage carries now is the
+    // PEOPLE — every stat their breakthroughs earned — so the world title pays
+    // what the other capstones pay, something to look at.
     key: 'world-champion', icon: '👑', name: 'World champion',
-    unlock: 'points', unlockLabel: 'A permanently larger creation allowance', points: 3,
+    unlock: 'cosmetic-crown', unlockLabel: 'A crown on the world champion’s portrait', points: 3,
+    cosmetic: true,
     how: 'Send a player of yours to EVO and have them win it.',
     check: (s) => Object.values(s.players).some((p) => !p.npc && (p.evoTitles || 0) >= 1),
   },
@@ -426,7 +433,7 @@ export const UNLOCK_GROUPS = [
   { key: 'counter', label: '🍟 The Counter', blurb: 'What the concession stand is allowed to carry.', match: (a) => a.unlock.startsWith('food-') },
   { key: 'floor', label: '🎳 The Floor', blurb: 'Rooms that draw a crowd of their own.', match: (a) => a.unlock.startsWith('attr-') },
   { key: 'reach', label: '📣 Reach', blurb: 'Ways of telling people you exist.', match: (a) => a.unlock.startsWith('ads-') },
-  { key: 'tools', label: '🛠 Tools', blurb: 'Levers on the scene itself.', match: (a) => ['discipline', 'hotfix', 'family', 'points'].includes(a.unlock) },
+  { key: 'tools', label: '🛠 Tools', blurb: 'Levers on the scene itself.', match: (a) => ['discipline', 'hotfix', 'family'].includes(a.unlock) },
   { key: 'calendar', label: '🗓 Calendar', blurb: 'How much tournament this room can carry.', match: (a) => a.unlock.startsWith('bandwidth-') },
   { key: 'legend', label: '🏆 The Long Haul', blurb: 'Nobody earns these by accident.', match: (a) => !!a.cosmetic },
 ]

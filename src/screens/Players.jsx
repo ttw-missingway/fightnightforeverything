@@ -42,12 +42,11 @@ const PASSION_COLOR = (v) => (v >= 55 ? 'var(--green)' : v >= 30 ? 'var(--gold)'
  * screen. This says it on the screen where it is actually true, and closes
  * with the doors.
  */
-function RosterWindow({ save, nav }) {
+function RosterWindow({ save }) {
   if (!rosterOpen(save) || save.settings?.mode === 'sandbox') return null
-  // Banked prestige no longer buys stats — the power path was deprecated with
-  // the revision (docs/DEPRECATED.md): a returning run must never start
-  // stronger, or "my player beat an elite" dies permanently. Points remain
-  // the cosmetic unlock currency, spent elsewhere.
+  // Run one only — `rosterOpen` closes for good after the first reset. There is
+  // no legacy-points economy to spend here any more: what a lineage carries is
+  // the people themselves, breakthroughs and temperaments intact.
   return (
     <div className="dangers">
       <div className="danger unlock">
@@ -55,7 +54,10 @@ function RosterWindow({ save, nav }) {
         <div>
           <div className="d-title">Your crew is still yours to change</div>
           <div className="d-detail">Nothing has happened yet. Open any player to rebuild them.</div>
-          <div className="d-fix">This closes the moment you open the arcade for the first day.</div>
+          <div className="d-fix">
+            This closes the moment you open the arcade for the first day — and it does not come
+            back. From here they grow by breaking through, not by being edited.
+          </div>
         </div>
       </div>
     </div>
@@ -112,7 +114,7 @@ export default function Players() {
 
   return (
     <div>
-      <RosterWindow save={save} nav={nav} />
+      <RosterWindow save={save} />
       <SceneHealthBanner scene={save.scene} />
       <div className="card">
       <div className="row spread">
@@ -642,13 +644,15 @@ function EurekaMeter({ player: p }) {
       <p className="dim small" style={{ margin: '6px 0 0' }}>
         {veteran
           ? 'Their climbing years are behind them. What builds up now comes out as tech, teaching and reads on the game — not as a point on their sheet.'
-          : m.full
-            ? 'The meter is full. Pick what clicks — below.'
-            : ready.length
-              ? `${ready.length} thing${ready.length === 1 ? ' is' : 's are'} ready to break. The meter has to fill before ${ready.length === 1 ? 'it' : 'any of them'} can.`
-              : glowing.length
-                ? 'Something is starting to gather. Nothing is ready yet.'
-                : 'Quiet. Wins that mean nothing and losses that cost nothing build no pressure — this fills when things actually happen to them.'}
+          : m.full && ready.length
+            ? 'The meter is full and something has come to a head. Pick what clicks — below.'
+            : m.full
+              ? 'The meter is full, and nothing has come to a head yet. Everything they do from here pushes harder on whatever is closest — it will break soon, and nothing is being lost while it waits.'
+              : ready.length
+                ? `${ready.length} thing${ready.length === 1 ? ' is' : 's are'} ready to break. The meter has to fill before ${ready.length === 1 ? 'it' : 'any of them'} can.`
+                : glowing.length
+                  ? 'Something is starting to gather. Nothing is ready yet.'
+                  : 'Quiet. Wins that mean nothing and losses that cost nothing build no pressure — this fills when things actually happen to them.'}
       </p>
 
       {glowing.length > 0 && (
@@ -698,12 +702,13 @@ function EurekaMeter({ player: p }) {
  * choice. The WHY under each candidate is the inspector's evidence, so the
  * most opaque system in the game stays defensible.
  *
- * It is a REAL choice now. Talent breadth floors at two and the glow line was
- * cut to a fraction the arithmetic can actually clear several times over, so
- * this panel shows two to five genuinely different directions rather than one
- * button labelled "click me". The evidence under each is deduped — the old
- * version printed the same influence sentence three times, which read as a bug
- * and told you nothing about why the stat was lit.
+ * It is a REAL choice now, and every option in it is genuinely lit. Talent
+ * breadth floors at two and the glow line was cut to a fraction the arithmetic
+ * can clear several times over, so this shows two to five different directions
+ * rather than one button labelled "click me" — and it does not open at all
+ * until something has actually come to a head, because a choice between things
+ * that haven't happened yet is worse than no choice. The evidence under each is
+ * deduped; the old version printed the same influence sentence three times.
  */
 function EurekaPanel({ save, player: p, mutate }) {
   const pending = p.eureka?.pending
@@ -718,26 +723,27 @@ function EurekaPanel({ save, player: p, mutate }) {
   // snapshot: pressure keeps accruing while you think about it, and a panel
   // showing last week's shortlist would contradict the meter directly above it.
   const candidates = candidatesFor(p)
-  const anyReady = candidates.some((c) => c.ready !== false)
+  // The engine withdraws a shortlist that has emptied under it on the next
+  // tick; until then, a card with no buttons is worse than no card.
+  if (!candidates.length) return null
 
   return (
     <div className="card eureka-choice">
       <h3 style={{ marginTop: 0 }}>✨ Breakthrough — {displayName(p, save)} is on the verge</h3>
       <p className="small dim" style={{ marginTop: 0 }}>
-        The pressure is at the top of the meter and it is going to come out somewhere. Everything
-        below has been building; pick the one that clicks. The point is permanent, the rest keeps
-        simmering — and sit on this too long and they resolve it themselves, badly.
+        The pressure is at the top of the meter and something has come to a head. Everything below
+        is genuinely ready to break; pick the one that clicks. The point is permanent, the rest
+        keeps simmering — and sit on this too long and they resolve it themselves, badly.
       </p>
       <div className="eureka-candidates">
         {candidates.map((c) => {
           const kind = EUREKA_KIND[c.kind] || EUREKA_KIND.wound
-          const half = c.ready === false
           return (
-            <div key={c.stat} className={`card sub eureka-cand${half ? ' half' : ''}`}
-              style={{ margin: 0, borderColor: half ? 'var(--border)' : kind.color }}>
+            <div key={c.stat} className="card sub eureka-cand"
+              style={{ margin: 0, borderColor: kind.color }}>
               <div className="row spread">
-                <strong style={{ color: half ? 'var(--dim)' : kind.color }}>{kind.icon} {c.stat}</strong>
-                <span className="small" style={{ color: half ? 'var(--dim)' : kind.color }}>{kind.label}</span>
+                <strong style={{ color: kind.color }}>{kind.icon} {c.stat}</strong>
+                <span className="small" style={{ color: kind.color }}>{kind.label}</span>
               </div>
               <p className="dim small" style={{ margin: '4px 0 2px' }}>
                 {kind.verb}{c.inRow ? '' : ' — outside who they are today'}.
@@ -750,25 +756,13 @@ function EurekaPanel({ save, player: p, mutate }) {
                   · {ev.why}{ev.n > 1 && <span style={{ opacity: 0.7 }}> ×{ev.n}</span>}
                 </p>
               ))}
-              {half && (
-                <p className="small" style={{ color: 'var(--orange)', margin: '4px 0 0' }}>
-                  Half-formed — nothing pushed this far enough on its own. It will land, but it is
-                  the reach, not the obvious answer.
-                </p>
-              )}
-              <button className={`small ${half ? '' : 'primary'}`} style={{ marginTop: 6 }} onClick={() => doChoose(c.stat)}>
+              <button className="small primary" style={{ marginTop: 6 }} onClick={() => doChoose(c.stat)}>
                 Break through on {c.stat}
               </button>
             </div>
           )
         })}
       </div>
-      {!anyReady && (
-        <p className="small dim" style={{ margin: '8px 0 0' }}>
-          A thin month: plenty gathered, none of it in one place. Whichever way you go here is a
-          reach rather than a payoff — that is what a scattered season produces.
-        </p>
-      )}
     </div>
   )
 }

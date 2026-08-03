@@ -19,17 +19,42 @@
 
 import { makeRun, playDay, DEFAULT_POLICY } from './policy.mjs'
 import { DAYS_PER_YEAR } from '../../src/game/constants.js'
+import { candidatesFor } from '../../src/game/eureka.js'
 
 const runs = Number(process.argv[2] || 8)
 const years = Number(process.argv[3] || 6)
 const difficulty = process.argv[4] || 'normal'
 
 const offers = []
+// THE WAIT. Only glowing stats are ever offered, so a meter can fill with
+// nothing lit and the panel simply holds. That is the right call — being asked
+// to pick between things that haven't happened is worse than being asked
+// nothing — but it is only defensible if the wait is SHORT, which is what
+// meterRelief is for. This counts the days between a meter filling and a
+// choice actually arriving.
+const waits = []
 const t0 = Date.now()
 
 for (let i = 0; i < runs; i++) {
   const save = makeRun({ seed: 3000 + i, difficulty, policy: DEFAULT_POLICY })
-  for (let d = 0; d < years * DAYS_PER_YEAR; d++) playDay(save, DEFAULT_POLICY)
+  const fullSince = new Map() // playerId → absDay the meter first went full
+  for (let d = 0; d < years * DAYS_PER_YEAR; d++) {
+    playDay(save, DEFAULT_POLICY)
+    const abs = (save.year - 1) * DAYS_PER_YEAR + save.day
+    for (const p of Object.values(save.players)) {
+      if (p.npc || p.createdBy !== 'user' || !p.eureka) continue
+      const e = p.eureka
+      const meter = Object.values(e.pressure).reduce((s, v) => s + v, 0)
+      const full = meter >= e.threshold
+      if (!full) { fullSince.delete(p.id); continue }
+      if (!fullSince.has(p.id)) fullSince.set(p.id, abs)
+      // The moment a choice is actually on the table, bank how long it took.
+      if (candidatesFor(p).length) {
+        waits.push(abs - fullSince.get(p.id))
+        fullSince.delete(p.id)
+      }
+    }
+  }
   for (const p of Object.values(save.players)) {
     if (p.npc || p.createdBy !== 'user') continue
     for (const l of p.eureka?.log || []) {
@@ -65,3 +90,11 @@ console.log(`  ${hist(readys)}`)
 console.log(`\ndistinct kinds on offer (wound/edge/influence) — mean ${mean(kinds).toFixed(2)}`)
 console.log(`  ${hist(kinds)}`)
 console.log(`  every option the same kind: ${(kinds.filter((k) => k <= 1).length / kinds.length * 100).toFixed(1)}%`)
+
+if (waits.length) {
+  const sorted = [...waits].sort((a, b) => a - b)
+  const p = (q) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]
+  console.log(`\ndays from METER FULL to a choice being on the table — mean ${mean(waits).toFixed(2)}`)
+  console.log(`  median ${p(0.5)} · p90 ${p(0.9)} · worst ${sorted[sorted.length - 1]}`)
+  console.log(`  same-day: ${(waits.filter((w) => w === 0).length / waits.length * 100).toFixed(1)}%  ·  over a week: ${(waits.filter((w) => w > 7).length / waits.length * 100).toFixed(1)}%`)
+}

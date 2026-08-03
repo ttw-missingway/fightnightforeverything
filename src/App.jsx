@@ -363,11 +363,10 @@ function UnlockBanner() {
 
 // Consequential mode's fail state: too long in the red and the landlord
 // takes the keys. The only way forward is a new run — the design and the
-// roster survive, fame converts to prestige.
+// people survive, with everything their careers put on the sheet.
 function ForeclosureModal() {
   const { save, resetCurrentRun, closeSave } = useStore()
   if (!save?.economy?.foreclosed) return null
-  const prestige = save.prestige?.points || 0
   return (
     <div className="modal-backdrop">
       <div className="modal card" style={{ borderColor: 'var(--red)' }}>
@@ -377,9 +376,9 @@ function ForeclosureModal() {
           this run is over.
         </p>
         <p className="small dim">
-          A new run keeps your game design and player roster (progress wiped), archives this run's
-          chronicle, hall of fame, and VODs, and converts your arcade's fame into prestige points for
-          player creation{prestige > 0 ? ` (${prestige} banked so far)` : ''}.
+          A new run keeps your game design and your people — every stat a breakthrough earned them,
+          and both temperaments — while the arcade's progress is wiped. This run's chronicle, hall
+          of fame and VODs move to the archives.
         </p>
         <div className="row" style={{ marginTop: 12 }}>
           <button className="primary" onClick={resetCurrentRun}>♻ Run it back</button>
@@ -405,8 +404,9 @@ function GameOverModal() {
         <h3 style={{ marginTop: 0 }} className="red">{icon} {over.title}</h3>
         <p>{over.text}</p>
         <p className="small dim">
-          A new run keeps your game design and player roster (progress wiped), archives this run's
-          chronicle, hall of fame, and VODs, and converts your arcade's fame into prestige points.
+          A new run keeps your game design and your people — every stat a breakthrough earned them,
+          and both temperaments — while the arcade's progress is wiped. This run's chronicle, hall
+          of fame and VODs move to the archives.
         </p>
         <div className="row" style={{ marginTop: 12 }}>
           <button className="primary" onClick={resetCurrentRun}>♻ Run it back</button>

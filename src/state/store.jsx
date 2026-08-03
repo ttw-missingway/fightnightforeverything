@@ -716,7 +716,7 @@ export function StoreProvider({ children }) {
     setSave(reloaded)
     setScreen({
       name: 'arcade',
-      notice: `♻ New run started. +${res.prestigeGain} prestige earned (${res.points} banked). Your crew crossed over — set them up on the Players tab before you open the arcade.`,
+      notice: '♻ New run started. Your crew crossed over exactly as they were — every point their breakthroughs earned, and the temperaments they grew into. The arcade starts again; they do not.',
     })
   }, [setSave])
 

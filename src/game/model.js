@@ -265,6 +265,26 @@ export function resetPlayerForNewRun(p) {
     spirit: p.spirit || null,
     spiritRolls: p.spiritRolls ? [...p.spiritRolls] : null,
     spiritCeil: p.spirit && p.spiritRolls ? spiritCeilOf(p.spirit, p.spiritRolls) : null,
+    // WHO THEY BECAME IS WHO THEY ARE. The stat sheet crosses over whole —
+    // including every point a breakthrough put there — and so do the two
+    // temperament rows.
+    //
+    // The rows were the bug: they were simply not in this list, so newPlayer's
+    // `null` default won and everybody arrived in the new run with no
+    // temperament at all. That is not a cosmetic loss. The rows decide which
+    // stats are cheap to glow (EUREKA.ROW_IN vs ROW_OUT), which journal voice
+    // writes their entries, and which stats carry the granted point — so a
+    // Killer who spent five years becoming a Killer came back as nobody in
+    // particular, and the game had no way to tell you that had happened.
+    //
+    // Carrying the sheet is also the deliberate reversal of the old legacy
+    // economy: breakthroughs ARE the thing a lineage keeps now, so there is no
+    // separate points currency and no rebuilding people between runs. Worth
+    // knowing that this does mean a returning cast starts stronger, which
+    // docs/REVISION.md §1.6 and BALANCE.md's metric 1 were written against —
+    // "my player beat an elite" gets easier every run-back, by design now.
+    temperament: p.temperament || null,
+    socialTemperament: p.socialTemperament || null,
     personal: structuredClone(p.personal),
     social: structuredClone(p.social), // includes income
     voice: p.voice ? structuredClone(p.voice) : null,
@@ -313,6 +333,17 @@ export function rosterOpen(save) {
   if (!save) return false
   if (save.settings?.mode === 'sandbox') return true
   if (save.dayInProgress) return false
+  // A RUN-BACK IS NOT A REBUILD. The window above describes run ONE — you have
+  // just come out of the creation wizard and the doors have not opened, so of
+  // course the crew is still yours to arrange.
+  //
+  // It used to reopen on every reset, because the legacy economy needed
+  // somewhere to spend banked points. That currency is gone: the breakthrough
+  // system is what a lineage carries now, and the people who come back are the
+  // people the last run made — sheet, temperaments and all. Handing you an
+  // editor over the top of that would let you erase five years of somebody's
+  // career with a click, which is the opposite of the point.
+  if ((save.prestige?.runs || 0) > 0) return false
   return (save.economy?.history || []).length === 0
 }
 

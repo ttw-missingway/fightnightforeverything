@@ -62,20 +62,23 @@ export const EUREKA = {
   // candidatesFor fell through to its one-most-pressured-stat fallback. Both
   // ends of the distribution produced the same screen — a single button.
   //
-  // Measured with tools/balance/choice.mjs (6 runs × 6y, ~500 breakthroughs):
+  // Measured with tools/balance/choice.mjs (6 runs × 6y, ~500 breakthroughs).
+  // Three configurations, and the first two are both wrong in instructive ways:
   //
-  //   GLOW_FRAC   options   only-one   fully-ready   zero-ready
-  //     0.35 (before)  —      common        —            —
-  //     0.16         3.33      0.0%       0.26         79%
-  //     0.10         3.01      0.0%       1.19         33%
+  //                              options  only-one  every option lit  wait
+  //   0.35, top up to 2            —      common          no           —
+  //   0.16, top up to 2           3.33     0.0%        21% of them      —
+  //   0.10, top up to 2           3.01     0.0%        67% of them      —
+  //   0.10, lit only, open at 1   1.56    59.1%          always      p90 36d
+  //   0.10, lit only, open at 2   2.26     0.0%          always      p90 0d ✅
   //
-  // 0.16 fixed the single-button screen and left a worse one behind it: four
-  // things on offer and none of them actually ripe, so the panel had to caption
-  // nearly every breakthrough "half-formed". At 0.10 two thirds of choices have
-  // at least one genuinely lit option to reach for, and the remaining third is
-  // a real texture rather than the default — a scattered season where nothing
-  // came to a head and whichever way you go is a reach. talentBreadth goes back
-  // to doing the job it was written for: deciding how many you get offered.
+  // Topping the shortlist up with the next most-pressured stats bought width
+  // by offering things that hadn't happened yet — a choice between reaches.
+  // Offering only lit stats and opening at the FIRST one to cross bought
+  // honesty by handing back the single button, because pressure concentrates
+  // hard in one stat and the leader crosses long before the field. Waiting for
+  // the second is the configuration that is both: a real choice, every option
+  // earned, and 98% of them arrive the same day the meter fills.
   GLOW_FRAC: 0.10, // share of threshold a stat needs to glow on its own
   GLOW_VISIBLE: 0.45, // fraction of the requirement at which the UI shows a stat warming
   ROW_IN: 0.8, // in-temperament glow requirement multiplier (cheaper)
@@ -239,13 +242,46 @@ export function edge(save, player, { weight, stats, why }) {
 
 // ---------- Glow, candidates, choice ----------
 
+/**
+ * PRESSURE HAS TO GO SOMEWHERE.
+ *
+ * Once the meter is full, every further day of pressure makes the glow line
+ * easier to cross. This is the valve that lets the choice be honest: nothing
+ * half-formed is ever offered, because the panel simply does not open until
+ * something is genuinely lit — and this guarantees that day arrives soon
+ * rather than eventually.
+ *
+ * Without it the alternative was one of two bad screens. Offer the reach
+ * anyway, and most breakthroughs are captioned "half-formed", which is a
+ * choice between things you don't want. Refuse and just wait, and a player
+ * sits on a full meter for weeks with nothing to do about it while their mood
+ * drains — punished for a distribution they never chose.
+ *
+ * So the meter overfilling IS the mechanism. At 1.5× threshold the line has
+ * dropped by a quarter, at 2× by half; something always comes to a head.
+ */
+export function meterRelief(player) {
+  const e = player.eureka
+  if (!e) return 1
+  const meter = Object.values(e.pressure).reduce((s, v) => s + v, 0)
+  const over = meter / Math.max(0.001, e.threshold) - 1
+  if (over <= 0) return 1
+  // Steep on purpose. The panel waits for TWO lit stats, not one, and measured
+  // at a gentler slope (1 − over × 0.5, floored at 0.4) the second one took a
+  // median of nothing and a p90 of five weeks — because pressure concentrates
+  // hard in one stat and the runners-up start from almost nothing. A quarter
+  // of the original line by 1.85× threshold is what makes the wait a few days
+  // rather than a season.
+  return clamp(1 - over * 0.9, 0.25, 1)
+}
+
 /** Pressure a stat needs to glow: temperament inertia and repeat escalation. */
 export function glowRequirement(player, stat) {
   const e = player.eureka
   const inRow = rowOfStat(stat)?.key === playerRowKey(player, stat)
   const rowMult = inRow ? EUREKA.ROW_IN : EUREKA.ROW_OUT
   const repeats = e.perStat[stat] || 0
-  return EUREKA.GLOW_FRAC * e.threshold * rowMult * (1 + EUREKA.REPEAT * repeats)
+  return EUREKA.GLOW_FRAC * e.threshold * rowMult * (1 + EUREKA.REPEAT * repeats) * meterRelief(player)
 }
 
 const eligible = (player, stat) =>
@@ -342,33 +378,34 @@ export function evidenceFor(player, stat) {
 }
 
 /**
- * When the meter fills: the top K glowing stats — K is talent breadth, floored
- * at two, because a choice of one is not a choice (see talentBreadth).
+ * When the meter fills: the glowing stats, most-lit first, up to K — K is
+ * talent breadth, floored at two, because a choice of one is not a choice
+ * (see talentBreadth).
  *
- * `ready` marks the ones genuinely over their glow line. If fewer than two are
- * (a thin, evenly-spread month), the next most-pressured eligible stats stand
- * in, flagged so the panel can say what they are: something half-formed you
- * can still reach for. Better than the old single-button fallback, and honest.
+ * ONLY GLOWING STATS ARE EVER OFFERED. An earlier cut topped the list up with
+ * the next most-pressured stats when fewer than two were lit, flagged as
+ * "half-formed" — which meant most breakthroughs were a choice between things
+ * that hadn't happened yet, and picking one felt like settling. If nothing is
+ * lit this returns fewer than two, or nothing at all, and checkEureka simply
+ * does not open the panel; meterRelief is what makes sure that wait is short.
  */
 export function candidatesFor(player) {
   const e = player.eureka
   const k = talentBreadth(player)
-  const scored = Object.entries(e.pressure)
-    .filter(([stat]) => eligible(player, stat))
+  return Object.entries(e.pressure)
+    .filter(([stat, pressure]) => eligible(player, stat) && pressure >= glowRequirement(player, stat))
     .map(([stat, pressure]) => ({
       stat,
       pressure: Math.round(pressure * 10) / 10,
       requirement: glowRequirement(player, stat),
-      ready: pressure >= glowRequirement(player, stat),
+      ready: true,
       kind: dominantKindOf(player, stat),
       label: STAT_LABEL[stat] || stat,
       inRow: rowOfStat(stat)?.key === playerRowKey(player, stat),
       evidence: evidenceFor(player, stat),
     }))
-    .sort((a, b) => (b.ready - a.ready) || (b.pressure / b.requirement) - (a.pressure / a.requirement))
-  const ready = scored.filter((c) => c.ready)
-  if (ready.length >= 2) return ready.slice(0, k)
-  return scored.slice(0, Math.max(2, Math.min(k, scored.length)))
+    .sort((a, b) => (b.pressure / b.requirement) - (a.pressure / a.requirement))
+    .slice(0, k)
 }
 
 const meterOf = (e) => Object.values(e.pressure).reduce((s, v) => s + v, 0)
@@ -380,9 +417,7 @@ const meterOf = (e) => Object.values(e.pressure).reduce((s, v) => s + v, 0)
 export function autoPickStat(player, candidates) {
   let best = null
   for (const c of candidates) {
-    // A fully-lit stat beats a half-formed one outright — the sim never
-    // reaches for something that isn't ready when something is.
-    const score = c.pressure * (c.inRow ? 1.5 : 1) * (c.ready === false ? 0.4 : 1)
+    const score = c.pressure * (c.inRow ? 1.5 : 1)
     if (!best || score > best.score) best = { ...c, score }
   }
   return best?.stat || null
@@ -396,6 +431,11 @@ export function autoPickStat(player, candidates) {
 export function chooseBreakthrough(save, player, stat, { forced = false } = {}) {
   const e = player.eureka
   if (!e || !eligible(player, stat)) return null
+  // Only a glowing stat can be broken through on. The panel already offers
+  // nothing else, so this catches the stale click — a card left open while the
+  // day advanced and the shortlist moved under it — rather than any live path.
+  // The forced resolution (§1.4) is exempt: that one is not a choice.
+  if (!forced && (e.pressure[stat] || 0) < glowRequirement(player, stat)) return null
   const bag = bagOf(player, stat)
   bag[stat] = Math.min(bag[stat] + STAT_UNIT, STAT_MAX_POINTS * STAT_UNIT)
 
@@ -506,29 +546,69 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
 export function checkEureka(save, player) {
   const e = player.eureka
   if (!e || player.retired || player.banished) return
-  // The deadline first — it applies whether or not a choice is pending.
-  for (const [stat, p] of Object.entries(e.pressure)) {
-    if (eligible(player, stat) && p >= EUREKA.FORCED_MULT * e.threshold) {
-      chooseBreakthrough(save, player, stat, { forced: true })
-      return
+  // THE DEADLINE ONLY APPLIES TO AN IGNORED QUESTION. §1.4's forced resolution
+  // is the cost of sitting on a choice — "you cannot call a breakthrough, only
+  // answer it, and not answering is its own answer." It used to fire on raw
+  // pressure whether or not anything had ever been asked, which was harmless
+  // while the panel opened the instant the meter filled.
+  //
+  // It is not harmless now. The panel deliberately waits for a second stat to
+  // light up, and during that wait the LEADING stat is exactly the one racing
+  // toward this line — so an unguarded deadline would punish the player, hard,
+  // for a silence the game itself chose to keep. Gated on `pending`, it means
+  // what it always meant and nothing more.
+  if (e.pending) {
+    for (const [stat, p] of Object.entries(e.pressure)) {
+      if (eligible(player, stat) && p >= EUREKA.FORCED_MULT * e.threshold) {
+        chooseBreakthrough(save, player, stat, { forced: true })
+        return
+      }
     }
   }
-  if (e.pending) return
+  if (e.pending) {
+    // A pending choice whose shortlist has emptied under it — the stat maxed
+    // out elsewhere, or a repeat escalation moved the line — is a card with no
+    // buttons on it. Withdraw the question rather than leave it hanging; the
+    // pressure is untouched, so it will be asked again the moment something
+    // lights up.
+    if (!candidatesFor(player).length) {
+      e.pending = null
+      dismissToastByKey(save, `verge_${player.id}`)
+    }
+    return
+  }
   if (meterOf(e) < e.threshold) return
-  const candidates = candidatesFor(player)
   // THE LATE-GAME PHASE TRANSITION (REVISION §1.9). A meter that fills with
   // nothing left to spend it on is not a dead end — it is the moment the
   // breakthrough changes KIND. "Young players grow themselves; veterans grow
   // the scene your next generation comes up inside" (§0). The point cap
-  // delivers this with no new mechanism: when the sheet has no eligible
-  // pressured stat left, or the competitor has simply reached the ceiling
-  // their spirit allows (§1.6 — "a topped-out competitor is genuinely
-  // finished as a competitor"), the same pressure comes out as technique,
-  // teaching and meta instead of as a point.
-  if (!candidates.length || veteranTier(player)) {
+  // delivers this with no new mechanism: when the competitor has reached the
+  // ceiling their spirit allows (§1.6 — "a topped-out competitor is genuinely
+  // finished as a competitor"), or the sheet has no room left anywhere, the
+  // same pressure comes out as technique, teaching and meta instead.
+  const anyRoomLeft = Object.keys(e.pressure).some((stat) => eligible(player, stat))
+  if (veteranTier(player) || !anyRoomLeft) {
     veteranBreakthrough(save, player)
     return
   }
+  const candidates = candidatesFor(player)
+  // FULL, BUT NOT YET A CHOICE. Two conditions have to hold together, and
+  // dropping either one produces a screen the player should never see:
+  //
+  //   · nothing that isn't glowing is ever offered — being asked to pick
+  //     between things that haven't happened is worse than being asked nothing;
+  //   · and there have to be at least TWO of them, because one button is a
+  //     chore with a modal on it, which is where this system started.
+  //
+  // Measured, opening at the FIRST stat to cross gave one option 59% of the
+  // time: pressure concentrates hard in a single stat, so the leader crosses
+  // long before anyone else. So it waits for the field to catch up, and
+  // meterRelief is what guarantees that takes days rather than months.
+  //
+  // Nothing is charged for the wait — no mood, no passion, and the pressure
+  // keeps accruing. The one thing that COULD have punished it (the forced
+  // resolution) is now gated on a question actually having been asked.
+  if (candidates.length < 2) return
   const isCast = !player.npc && player.createdBy === 'user'
   if (isCast) {
     e.pending = { sinceAbs: abs(save), candidates }

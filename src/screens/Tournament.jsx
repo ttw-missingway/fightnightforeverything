@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
+import CrewBattle from '../components/CrewBattle.jsx'
 import { tabOpen } from '../game/tabs.js'
 import { MajorSplash, QualifierSeats, EntryReport, hostLine } from '../components/Circuit.jsx'
 
@@ -219,99 +220,46 @@ function NowPlaying({ m, roundTitle, onFinished }) {
   const [finished, setFinished] = useState(false)
   const isTeamMatch = !!m.duels
 
+  // A CREW BATTLE IS NOT ONE MATCH. It is four real sets played in an order,
+  // and the order is the drama — so it gets its own player, which runs them
+  // one at a time and shows nothing past the set on screen. Wrapping it in
+  // MatchPlayback made the parent narration the broadcast and the duels a
+  // footnote you could rewatch after already knowing the score.
+  if (isTeamMatch) {
+    return (
+      <div className="card" style={{ borderColor: 'var(--pink)' }}>
+        <h3 className="pink" style={{ marginTop: 0 }}>
+          Now playing — {roundTitle}
+          {m.stream && <span className="small"> · 👁 {m.stream.viewers}</span>}
+        </h3>
+        <CrewBattle m={m} onFinished={onFinished} />
+      </div>
+    )
+  }
+
   return (
     <div className="card" style={{ borderColor: 'var(--pink)' }}>
       <h3 className="pink" style={{ marginTop: 0 }}>
         {started ? 'Now playing' : 'Up next'} — {roundTitle}
         {m.stream && started && <span className="small"> · 👁 {m.stream.viewers}</span>}
       </h3>
-      {isTeamMatch && (
-        <p style={{ fontSize: 18 }}>
-          {m.aName} <span className="dim">vs</span> {m.bName}
-        </p>
-      )}
 
       <MatchPlayback
         m={m}
-        showHud={!isTeamMatch}
-        startLabel={isTeamMatch ? 'Play the crew battle' : 'Play the match'}
+        startLabel="Play the match"
         onStart={() => setStarted(true)}
         onComplete={() => setFinished(true)}
-        footer={isTeamMatch
-          ? <CrewBattle m={m} />
-          : (m.probA != null && (
-            <p className="dim small" style={{ fontStyle: 'normal' }}>
-              odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-            </p>
-          ))}
+        footer={m.probA != null && (
+          <p className="dim small" style={{ fontStyle: 'normal' }}>
+            odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+          </p>
+        )}
       />
 
       {finished && (
         <button className="primary" style={{ marginTop: 8 }} onClick={onFinished}>
           Continue to the next match ▶
         </button>
-      )}
-    </div>
-  )
-}
-
-/**
- * A CREW BATTLE IS FOUR SETS, AND YOU COULD NEVER WATCH ONE.
- *
- * Every duel inside a team match has always been a complete match object with
- * its own narration — the survivor loop builds them with the same resolver a
- * bracket set uses. The screen just threw all of it away and printed one line
- * per duel saying who won, so the format the Squad Showdown is built around
- * (somebody stays on the machine, gets tired, and holds the wall anyway) was
- * invisible. This plays them back, one at a time, in order.
- *
- * The header on each is the thing a summary line cannot carry: how many bodies
- * each side has left, and how long the person still standing has been standing.
- */
-function CrewBattle({ m }) {
-  const [openSeat, setOpenSeat] = useState(0)
-  const duels = m.duels || []
-  return (
-    <div style={{ fontStyle: 'normal' }}>
-      <div className="row spread" style={{ marginTop: 6 }}>
-        <strong className="small">⚔ The duels</strong>
-        <span className="dim small">{duels.length} sets · click one to watch it back</span>
-      </div>
-      {duels.map((d, i) => {
-        const streak = Math.max(d.streakA || 0, d.streakB || 0)
-        const open = openSeat === i
-        return (
-          <div key={d.id || i} className="card sub" style={{ margin: '6px 0', padding: '6px 8px' }}>
-            <div className="row spread clickable" style={{ cursor: 'pointer' }}
-              onClick={() => setOpenSeat(open ? -1 : i)}>
-              <span className="small">
-                <span className="dim">set {i + 1}</span>{' '}
-                <span className={d.winnerName === d.aName ? 'winner' : 'loser'}>{d.aName}</span>
-                <span className="dim"> vs </span>
-                <span className={d.winnerName === d.bName ? 'winner' : 'loser'}>{d.bName}</span>
-                {d.tiebreaker && <span className="pink small"> · ⚔ aces, tiebreaker</span>}
-                {streak >= 2 && (
-                  <span className="gold small" title="they have been on the machine this long without losing">
-                    {' '}· 🔥 {streak} straight
-                  </span>
-                )}
-              </span>
-              <span className="small">
-                <span className="gold">{d.setScore || ''}</span>
-                {d.aliveA != null
-                  ? <span className="dim"> · {d.aliveA}v{d.aliveB} left</span>
-                  : d.scoreAfter ? <span className="dim"> · {d.scoreAfter}</span> : null}
-                <span className="cyan"> {open ? '▾' : '▸'}</span>
-              </span>
-            </div>
-            {open && <MatchPlayback m={d} spoil autoStart />}
-          </div>
-        )
-      })}
-      {m.probA != null && (
-        <p className="dim small" style={{ fontStyle: 'normal' }}>
-          odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-        </p>
       )}
     </div>
   )
@@ -358,17 +306,21 @@ function BracketMatch({ m, offScreen, revealed, determined, isNext, onJump }) {
       {open && (
         <div onClick={(e) => e.stopPropagation()}>
           {/* This set already aired — show it whole, with a replay option. */}
-          <MatchPlayback
-            m={m}
-            spoil
-            footer={m.duels
-              ? <CrewBattle m={m} />
-              : (m.probA != null && (
-                <p className="dim small" style={{ fontStyle: 'normal' }}>
-                  odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
-                </p>
-              ))}
-          />
+          {/* Already aired, so the whole card is fair game and each duel
+              opens for a genuine rewatch — which is what a rewatch is for. */}
+          {m.duels
+            ? <CrewBattle m={m} spoil compact />
+            : (
+              <MatchPlayback
+                m={m}
+                spoil
+                footer={m.probA != null && (
+                  <p className="dim small" style={{ fontStyle: 'normal' }}>
+                    odds were {Math.round(m.probA * 100)}%–{Math.round((1 - m.probA) * 100)}%
+                  </p>
+                )}
+              />
+            )}
         </div>
       )}
     </div>
