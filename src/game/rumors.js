@@ -33,7 +33,9 @@ function closestFriend(save, p) {
   let bestRel = 39
   for (const id in p.relationships || {}) {
     const other = save.players[id]
-    if (!other || !other.isRegular || other.retired || other.banished) continue
+    // Cast only — "thick as thieves with a face you've never clicked on" is
+    // not a story about anybody. Same rule the mill as a whole follows.
+    if (!other || other.npc || !other.isRegular || other.retired || other.banished) continue
     const rel = p.relationships[id]
     if (rel > bestRel || (rel === bestRel && (!best || id < best.id))) { bestRel = rel; best = other }
   }
@@ -93,7 +95,22 @@ function lifeRumors(save, p, seed) {
 export function allRumors(save) {
   const rumors = []
   const byId = save.players
-  const regs = Object.values(byId).filter((p) => p.isRegular && !p.retired && !p.banished)
+  // THE MILL IS ABOUT YOUR CAST, AND ONLY YOUR CAST.
+  //
+  // This used to walk every regular, filler included — and filler is most of a
+  // busy room. The result was a diagnostic buried under gossip about people who
+  // are, by construction, not part of anybody's story: a nameless regular
+  // souring on the arcade, two passers-through developing a rivalry, somebody
+  // you have never clicked on carpooling with somebody else you have never
+  // clicked on. None of it is actionable and none of it is about anyone. It
+  // crowded out the one thing the mill exists for, which is catching a star of
+  // YOURS going quiet a fortnight before they walk.
+  //
+  // Filler still does everything it did — feuds still poison the room, they
+  // still take sets off your people, the sim is untouched. The counter simply
+  // does not gossip about them.
+  const regs = Object.values(byId).filter((p) =>
+    p.isRegular && !p.npc && !p.retired && !p.banished)
   const nm = (p) => displayName(p, save)
   // Life gossip rotates on a slow clock so a given player's story lingers a
   // few days rather than flickering every hour.
@@ -104,7 +121,9 @@ export function allRumors(save) {
   if (mm) {
     const a = byId[mm.aId]
     const b = byId[mm.bId]
-    if (a && b) {
+    // A money match between two people you have never met is not "all anyone
+    // can talk about". One of yours has to be in it.
+    if (a && b && (!a.npc || !b.npc)) {
       rumors.push({
         id: `mm:${mm.id}`, category: 'moneymatch', icon: '💸', heat: 92, subjectIds: [a.id, b.id],
         text: seededPick([

@@ -27,6 +27,8 @@ const SORTS = {
   respect: (p) => p.respect,
   mood: (p) => p.mood,
   passion: (p) => p.passion ?? 80,
+  belief: (p) => p.belief || 0,
+  popularity: (p) => p.popularity || 0,
   status: (p) => p.daysAttended || 0,
 }
 
@@ -71,6 +73,9 @@ const beliefLabel = (v) => (
     : v >= 45 ? 'battle-tested'
     : v >= 20 ? 'still green'
     : 'untested')
+// The 40 line is QUALIFIER_BELIEF — under it they cannot enter a qualifier at
+// all, which makes it the one threshold on this scale worth colouring for.
+const BELIEF_COLOR = (v) => (v >= 70 ? 'var(--green)' : v >= 40 ? 'var(--cyan)' : 'var(--dim)')
 
 export default function Players() {
   const { save, screen, nav, mutate } = useStore()
@@ -134,14 +139,13 @@ export default function Players() {
             <th>Main</th>
             <Th k="elo">Elo</Th>
             <Th k="skill">Skill</Th>
-            <Th k="wins">W–L</Th>
-            <Th k="glory">Glory</Th>
-            <Th k="respect">Respect</Th>
             <Th k="mood">Mood</Th>
-            <Th k="passion">Passion</Th>
-            <th title="how close they are to a breakthrough — fills as things happen to them">✨</th>
+            <th title="how close they are to a breakthrough — fills as things happen to them">Eureka</th>
             <Th k="standing">Liked/Hated</Th>
             <Th k="status">Status</Th>
+            <Th k="belief">Belief</Th>
+            <Th k="wins">W–L</Th>
+            <Th k="popularity">Pop</Th>
           </tr>
         </thead>
         <tbody>
@@ -177,14 +181,7 @@ export default function Players() {
                 </td>
                 <td>{Math.round(p.elo)}</td>
                 <td className="cyan">{bestSkill(p) || <span className="dim">—</span>}</td>
-                <td className="dim">{p.wins}–{p.losses}</td>
-                <td className="gold">{Math.round(p.glory)}</td>
-                <td className="dim">{Math.round(p.respect)}</td>
                 <td title={moodLabel(p.mood)}>{moodFace(p.mood)}</td>
-                <td className="small" style={{ color: PASSION_COLOR(p.passion ?? 80) }}
-                  title={`${passionLabel(p.passion ?? 80)} — ${Math.round(p.passion ?? 80)}/100`}>
-                  {p.retired ? <span className="dim">retired</span> : Math.round(p.passion ?? 80)}
-                </td>
                 {/* THE BAR, IN THE LIST. Which of six people is closest to
                     something is a question about the roster, not about one
                     card — and it is the read that decides who you point the
@@ -197,6 +194,18 @@ export default function Players() {
                   })()}
                 </td>
                 <StatusCell player={p} />
+                {/* Belief gates the qualifier at 40 and scales what a loss is
+                    worth as pressure — a roster-level read, not a card detail. */}
+                <td className="small" style={{ color: BELIEF_COLOR(p.belief || 0) }}
+                  title={p.retired ? undefined : `${beliefLabel(p.belief || 0)} — ${Math.round(p.belief || 0)}/100 · a qualifier wants 40`}>
+                  {p.retired ? <span className="dim">—</span> : Math.round(p.belief || 0)}
+                </td>
+                <td className="dim">{p.wins}–{p.losses}</td>
+                <td className="small" title="public profile — grows when you feature them, fades when you don't">
+                  {(p.popularity || 0) >= 1
+                    ? <span className="gold">{Math.round(p.popularity)}</span>
+                    : <span className="dim">—</span>}
+                </td>
               </tr>
             )
           })}
@@ -383,9 +392,15 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
               🔥 {passionLabel(p.passion ?? 80)}
             </span>
           )}
+          {/* BELIEF IS NOT A FLAVOUR PILL. It gates entry to a qualifier
+              (40+), it scales how much a loss is even WORTH as pressure (§1.8:
+              belief sets the expectation adversity is measured against), and
+              it lifts the skill ceiling. All of that was behind a tooltip on a
+              word. The number is on the card now, like passion's is. */}
           {!p.retired && (
-            <span className="pill" title={`stage belief — the battle-tested nerve that lifts their skill ceiling and keeps them from choking at EVO. Grows from being featured on stream and going deep in tournaments. ${Math.round(p.belief || 0)}/100`}>
-              🎤 {beliefLabel(p.belief || 0)}
+            <span className="pill" title="the battle-tested nerve that lifts their skill ceiling, keeps them from choking on the big stage, and decides how much a loss is worth as pressure. Grows from being featured on stream and going deep in brackets."
+              style={{ color: BELIEF_COLOR(p.belief || 0) }}>
+              🎤 {beliefLabel(p.belief || 0)} — {Math.round(p.belief || 0)}
             </span>
           )}
           {(p.popularity || 0) >= 5 && !p.retired && (

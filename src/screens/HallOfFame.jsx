@@ -58,6 +58,31 @@ export default function HallOfFame() {
         {[...archives].reverse().map((a) => (
           <div className="card" key={a.run}>
             <h3 style={{ marginTop: 0 }}>Run {a.run} <span className="dim small">— ended {a.endedDateLabel}</span></h3>
+            {/* WHAT YOUR PEOPLE WON. Titles are wiped off the players at a
+                run-back — nobody starts a new era already a champion, and a
+                world board full of last run's silverware reads as this run's
+                history. This is where it survives instead. */}
+            {(a.castHonours || []).length > 0 && (
+              <>
+                <h4 className="cyan">Your crew</h4>
+                <div className="table-scroll"><table>
+                  <thead><tr><th>Player</th><th>EVO</th><th>Majors</th><th>Titles</th><th>W–L</th><th>Peak skill</th><th>Glory</th></tr></thead>
+                  <tbody>
+                    {a.castHonours.map((h) => (
+                      <tr key={h.name}>
+                        <td><strong>{h.name}</strong></td>
+                        <td className="gold">{h.evoTitles ? '🏆'.repeat(Math.min(h.evoTitles, 4)) : <span className="dim">—</span>}</td>
+                        <td className="cyan">{h.majorTitles ? `🏛 ×${h.majorTitles}` : <span className="dim">—</span>}</td>
+                        <td className="dim">{h.tournamentWins || '—'}</td>
+                        <td className="dim small">{h.wins}–{h.losses}</td>
+                        <td className="cyan">{h.peakSkill || <span className="dim">—</span>}</td>
+                        <td className="gold">{h.glory}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table></div>
+              </>
+            )}
             {(a.hallOfFame || []).length > 0 && (
               <>
                 <h4 className="gold">Tournament results</h4>
@@ -82,7 +107,8 @@ export default function HallOfFame() {
                 ))}
               </>
             )}
-            {(a.hallOfFame || []).length === 0 && (a.chronicle || []).length === 0 && (
+            {(a.hallOfFame || []).length === 0 && (a.chronicle || []).length === 0
+              && (a.castHonours || []).length === 0 && (
               <p className="dim small">A quiet run — nothing made the record books.</p>
             )}
           </div>

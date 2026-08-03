@@ -210,6 +210,25 @@ export function resetSaveById(id) {
     hallOfFame: save.hallOfFame || [],
     vods: (save.vods || []).slice(0, 12), // bounded — archives shouldn't balloon the save
     innovations: save.innovations || [],
+    // WHAT YOUR PEOPLE WON, KEPT WHERE IT CANNOT INTERFERE. Titles are wiped
+    // off the players themselves (a new run is a new competitive era and
+    // nobody walks in already a champion), so without this the fact that
+    // somebody once took EVO would survive only as a line in the chronicle.
+    // Small, flat, and read-only: the Hall of Fame's archive tab shows it.
+    castHonours: Object.values(save.players)
+      .filter((p) => !p.npc && p.createdBy === 'user')
+      .map((p) => ({
+        name: p.alias || `${p.firstName} ${p.lastName}`,
+        evoTitles: p.evoTitles || 0,
+        majorTitles: p.majorTitles || 0,
+        tournamentWins: p.tournamentWins || 0,
+        glory: Math.round(p.glory || 0),
+        wins: p.wins || 0,
+        losses: p.losses || 0,
+        peakSkill: Math.round(Math.max(0, ...Object.values(p.charSkill || {}), 0)),
+      }))
+      .filter((h) => h.evoTitles || h.majorTitles || h.tournamentWins || h.glory >= 50)
+      .sort((a, b) => (b.evoTitles - a.evoTitles) || (b.majorTitles - a.majorTitles) || (b.glory - a.glory)),
   }
 
   const game = structuredClone(save.game)
@@ -230,7 +249,19 @@ export function resetSaveById(id) {
     // (newSave defaults this to true; it is named here so a future edit to the
     // carry-over list can't quietly drop it.)
     grandOpening: true,
-    evoRoster: structuredClone(save.evoRoster || []),
+    // The world's people carry over; the world's TROPHY CABINET does not.
+    // A run-back is a new competitive era, and the ranked names had their
+    // titles reset the same way your cast does — otherwise the world board
+    // opens day one already stacked with silverware won in a run that has been
+    // archived, which reads as this run's history and isn't. Elo, skill and
+    // persona are who they ARE and stay; titles are what they DID and go.
+    evoRoster: structuredClone(save.evoRoster || []).map((e) => ({
+      ...e,
+      titles: 0, // the pre-split legacy field, still read as EVO by world.js
+      evoTitles: 0,
+      majorTitles: 0,
+      fragments: [], // interviews and tweets about a season that no longer exists
+    })),
     // Points are the lineage's COSMETIC currency now — the revision
     // deprecated prestige-as-power (docs/DEPRECATED.md), so nothing here buys
     // creation stats. They still accrue and still carry, because P6's
