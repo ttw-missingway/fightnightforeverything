@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { streakOf } from '../game/takes.js'
 
 export function Field({ label, children }) {
   return (
@@ -180,6 +181,29 @@ export function Portrait({ url, size = 40, alt = '', facing = 'left', className 
       src={url} width={size} height={size} alt={alt} title={alt}
       style={facing === 'right' ? { transform: 'scaleX(-1)' } : undefined}
     />
+  )
+}
+
+/**
+ * 🔥 / 🧊 — three or more of the same result in a row (see streakOf).
+ *
+ * A component rather than a string so every list that shows people shows the
+ * same thing, and NOT part of displayName: that name is written into chronicle
+ * lines, journal entries and dialogue, and a run of prose reading "🔥 Jade beat
+ * 🧊 Marcus" would bake a Tuesday afternoon's form into the permanent record.
+ * This is a live read, so it belongs only where it is rendered live.
+ *
+ * Retired and banished players are excluded — a slump nobody can break out of
+ * is not news, it is just how their last week happened to end.
+ */
+export function StreakBadge({ player }) {
+  if (player?.retired || player?.banished) return null
+  const s = streakOf(player)
+  if (!s) return null
+  return (
+    <span title={s.hot ? `won ${s.n} in a row` : `lost ${s.n} in a row`}>
+      {' '}{s.hot ? '🔥' : '🧊'}
+    </span>
   )
 }
 

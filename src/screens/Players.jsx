@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore, downloadJson, fileStem } from '../state/store.jsx'
-import { StatBar, PointDots, moodFace, Portrait } from '../components/ui.jsx'
+import { StatBar, PointDots, moodFace, Portrait, StreakBadge } from '../components/ui.jsx'
 import { playerArt, lookArt } from '../components/art.js'
 import { lookOf } from '../game/skins.js'
 import PlayerForm from '../components/PlayerForm.jsx'
@@ -159,6 +159,7 @@ export default function Players() {
                   <span className="row" style={{ gap: 8, flexWrap: 'nowrap', alignItems: 'center' }}>
                     <Portrait url={playerArt(p)} size={26} alt={displayName(p, save)} />
                     <span><strong>{displayName(p, save)}</strong>
+                      <StreakBadge player={p} />
                       {p.eureka?.pending && !p.retired && <span title="on the verge of a breakthrough — open them and choose"> ✨</span>}
                       {p.retired && <span className="dim small"> 🏁</span>}<br />
                       <span className="dim small">{p.firstName} {p.lastName}</span></span>
@@ -351,7 +352,7 @@ function PlayerDetail({ save, player: p, mutate, editing, setEditing, back, goTo
       <div className="card">
         <div className="row" style={{ gap: 12, alignItems: 'center', flexWrap: 'nowrap' }}>
           <Portrait url={playerArt(p)} size={56} alt={displayName(p, save)} className="hud-char" />
-          <h2 style={{ margin: '4px 0' }}>{displayName(p, save)} {moodFace(p.mood)}{p.retired && <span> 🏁</span>}</h2>
+          <h2 style={{ margin: '4px 0' }}>{displayName(p, save)} {moodFace(p.mood)}<StreakBadge player={p} />{p.retired && <span> 🏁</span>}</h2>
         </div>
         {p.retired && (
           <p className="dim" style={{ margin: '2px 0' }}>

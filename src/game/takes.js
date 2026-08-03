@@ -127,6 +127,29 @@ export function seedTakes(save, player) {
 }
 
 /**
+ * How many nights in a row have gone the same way, off the front of `form`.
+ *
+ * Three is the line, matching what the sim has always meant by a streak
+ * (scenes.js gates `streak:winning` and `streak:losing` at three), so the badge
+ * on the roster and the thing the room is talking about are the same event.
+ * Anything shorter is just Tuesday.
+ *
+ * Returns null when there is no streak, so a caller can render nothing without
+ * having to know the threshold.
+ */
+export const STREAK_MIN = 3
+
+export function streakOf(player) {
+  const form = player?.form || []
+  if (!form.length) return null
+  const kind = form[0]
+  let n = 0
+  while (n < form.length && form[n] === kind) n += 1
+  if (n < STREAK_MIN) return null
+  return { kind, n, hot: kind === 'w' }
+}
+
+/**
  * A loss is where most real opinions come from. Losing to a character often
  * enough turns into a conviction that it's broken; beating it chips away at
  * that, but slowly — winning doesn't feel like evidence the way losing does.

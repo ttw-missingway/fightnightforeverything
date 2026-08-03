@@ -5,7 +5,7 @@ import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { upcomingCircuit, circuitEventName } from '../game/circuit.js'
 import { moodLabel } from '../game/social.js'
-import { Expandable, moodFace, SpeechLine } from '../components/ui.jsx'
+import { Expandable, moodFace, SpeechLine, StreakBadge } from '../components/ui.jsx'
 import VenueStrip, { DayLedger } from '../components/VenueStrip.jsx'
 import MatchHud from '../components/MatchHud.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
@@ -577,7 +577,7 @@ function LiveDay({ save, nav }) {
                 ) : (
                   <span key={p.id} className="pill clickable" title={moodLabel(p.mood)}
                     onClick={() => nav('players', { playerId: p.id })}>
-                    {moodFace(p.mood)} {displayName(p, save)}
+                    {moodFace(p.mood)} {displayName(p, save)}<StreakBadge player={p} />
                   </span>
                 ))}
               {hour.presentIds.length === 0 && <p className="dim">Nobody around this hour.</p>}
@@ -906,7 +906,7 @@ function RecapView({ save, report, nav }) {
               <span className="clickable" style={{ cursor: 'pointer' }}
                 title={p.npc ? 'a regular — open their card' : undefined}
                 onClick={() => nav('players', { playerId: p.id })}>
-                {displayName(p, save)}
+                {displayName(p, save)}<StreakBadge player={p} />
               </span>
               <span className="small dim" title={p.npc ? undefined : moodLabel(p.mood)}>
                 {!p.npc && <><span className="mood-face">{moodFace(p.mood)}</span>{' '}</>}{Math.round(p.elo)}
