@@ -12,7 +12,7 @@ import { selectableChars } from './forms.js'
 import { postPatchDemand, postPatchCountdown } from './socialmedia.js'
 import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf, pickMatchChar } from './match.js'
 import { narrateSet } from './fight.js'
-import { buildStream, canStream, personalityOf, applyStageReps } from './stream.js'
+import { buildStream, canStream, personalityOf, applyStageReps, addHype, hypeCeiling } from './stream.js'
 import { attractionDrawFactor } from './catalog.js'
 import {
   staffDaily, playerSpending, settleRecurring, staffCounts,
@@ -1962,8 +1962,23 @@ export function endDay(save) {
     // the follower penalty only bites while you're actively flooding the channel.
     save.stream.fatigue = (save.stream.fatigue || 0) * 0.5
     // Advertising steers public opinion: active channels push channel hype up
-    // daily, offsetting (or reversing) the natural fade.
-    save.stream.hype = clamp(save.stream.hype - 0.08 + adHypePerDay(save), 0, 100)
+    // daily, offsetting (or reversing) the natural fade. The fade is applied
+    // directly (decay is never capped) and the ad push goes through addHype, so
+    // spend alone cannot buy a phenomenon nobody watches (see hypeCeiling).
+    save.stream.hype = clamp(save.stream.hype - 0.08, 0, 100)
+    addHype(save, adHypePerDay(save))
+    // A CHANNEL THAT LOSES ITS ROOM LOSES THE BUZZ WITH IT. The ceiling only
+    // blocks gains, so hype can still end up stranded above what the audience
+    // supports — followers churn away underneath it, and any save written
+    // before the ceiling existed opens already stranded (which is the state
+    // that reported `0 followers · a phenomenon`). At 0.08 a night that would
+    // take eight hundred days to correct itself, so the overhang gets its own
+    // fade and the invariant becomes something the world settles back to
+    // rather than something only new writes respect.
+    const cap = hypeCeiling(save)
+    if (save.stream.hype > cap) {
+      save.stream.hype = Math.max(cap, save.stream.hype - Math.max(1, (save.stream.hype - cap) * 0.15))
+    }
     // Word of mouth: a channel with real hype picks up followers organically
     // even on days nothing was streamed. Saturates like stream growth does.
     if (save.stream.hype > 8) {

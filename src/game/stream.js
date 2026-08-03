@@ -408,10 +408,51 @@ export const canStream = (save) => !!save?.arcade?.streamRig
  * somewhere cannot reintroduce it by forgetting. Both are no-ops without a
  * rig and both return what was actually applied, so callers can tell.
  */
+/**
+ * HYPE CANNOT OUTRUN THE ROOM THAT WATCHES IT.
+ *
+ * Every hype gain in the game is priced PER BROADCAST — the quality gain in
+ * buildStream, the notability swing for an upset or a low-tier win — and none
+ * of them ever asked whether a single person was watching. Followers, meanwhile,
+ * are throttled: growth is a slice of viewers, viewers are a slice of followers,
+ * and overexposure churns them back off. So the two numbers came apart. Measured
+ * on an hourly auto-stream: by day 21 the channel read `0 followers · a
+ * phenomenon · peak 4 viewers`, and by day 60 it was pinned at hype 100 with
+ * thirty-three followers and single-digit viewers.
+ *
+ * That is not a label bug. Hype is read by relevance, the social feed, tier-list
+ * votes, walk-in discovery and the catalog, so a channel nobody watches was
+ * moving the whole world as though it were a national broadcast.
+ *
+ * A gain can therefore never push hype past what the follower base supports.
+ * Buzz is allowed to run AHEAD of the audience — that is how a channel grows,
+ * and the word-of-mouth tick converts the gap back into followers — but only by
+ * a bounded amount. Calibrated against a measured healthy run, which never
+ * touches this line: 129 followers sat at hype 38 (ceiling 47), 294 at 61
+ * (ceiling 88), 424 at 85 (ceiling 100). It binds only on channels that are
+ * broadcasting into an empty room.
+ *
+ * Hype already OVER the ceiling is not dragged down — followers can churn away
+ * under it, and the nightly fade is what walks it back. Decay is never blocked.
+ */
+const HYPE_REACH_BASE = 15 // a channel with nobody watching tops out "tiny"
+const HYPE_REACH_PER_FOLLOWER = 0.25
+
+// How many streams stacked up before the room starts tuning out, and the most
+// of an audience one overexposed broadcast can drive off. See the churn block
+// in buildStream for how both were measured.
+const FATIGUE_TOLERANCE = 4
+const CHURN_MAX_SHARE = 0.08
+
+export function hypeCeiling(save) {
+  return Math.min(100, HYPE_REACH_BASE + (save?.stream?.followers || 0) * HYPE_REACH_PER_FOLLOWER)
+}
+
 export function addHype(save, amount) {
   if (!save?.stream || !canStream(save) || !amount) return 0
   const before = save.stream.hype
-  save.stream.hype = clamp(before + amount, 0, 100)
+  const cap = amount > 0 ? Math.max(before, hypeCeiling(save)) : 100
+  save.stream.hype = clamp(before + amount, 0, Math.min(100, cap))
   return save.stream.hype - before
 }
 
@@ -503,15 +544,35 @@ export function buildStream(save, {
   // Overexposure: each daily stream builds audience fatigue (it decays every
   // night in endDay). Once you're going live constantly, a genuinely WEAK
   // stream sheds followers who tuned in expecting something worth their time.
-  // A normal cadence never trips this — fatigue only bites past a couple of
-  // streams stacked up — and a good match always nets growth, so the play is
-  // still to stream OFTEN, just not to broadcast garbage on a loop.
+  // A normal cadence never trips this — fatigue only bites past a few streams
+  // stacked up — and a good match always nets growth, so the play is still to
+  // stream OFTEN, just not to broadcast garbage on a loop.
+  //
+  // THE TOLERANCE IS WHAT MAKES THAT SENTENCE TRUE. Fatigue carries half of
+  // itself overnight, so a cadence of n a day settles at n and the nth stream
+  // of the day is taken at fatigue 2n. Against the old tolerance of 2 that made
+  // "often" mean EXACTLY once a day: two a day already ran overexposed, three a
+  // day churned harder than it grew. Nothing showed it, because runaway hype
+  // was feeding the follower count faster than this could take it back (see
+  // hypeCeiling). Measured across cadences, a tolerance of 4 restores the
+  // intended curve — three a day beats one a day, and eight a day is the trap
+  // it was always described as.
+  //
+  // YOU CANNOT SHED FOLLOWERS YOU DO NOT HAVE. The penalty was a flat count, so
+  // a channel with three followers was losing up to twelve of them a stream —
+  // which pinned every from-zero channel at nought and made the whole opening
+  // of the streaming game unwinnable on its own terms. It did not LOOK
+  // unwinnable only because hype used to run away from the follower base and
+  // the nightly word-of-mouth tick bootstrapped the channel out of the hole
+  // (see hypeCeiling); with that gone, this had nowhere left to hide. Bounded
+  // as a SHARE of the audience, it costs an established channel exactly what it
+  // did before and costs an empty one nothing, because there is nobody to lose.
   let churn = 0
   if (context === 'daily') {
     st.fatigue = (st.fatigue || 0) + 1
-    const overexposed = Math.max(0, st.fatigue - 2)
+    const overexposed = Math.max(0, st.fatigue - FATIGUE_TOLERANCE)
     const weakness = clamp((50 - quality) / 40, 0, 1)
-    churn = overexposed * weakness * 3
+    churn = Math.min(overexposed * weakness * 3, st.followers * CHURN_MAX_SHARE)
   }
   st.followers = Math.max(0, st.followers + Math.round(growth - churn))
   // Hand-picked daily streams move the needle most — that's the curation
@@ -521,7 +582,10 @@ export function buildStream(save, {
     : context === 'tournament' ? (quality - 45) / 55
     : (quality - 32) / 14
   if (gain > 0) gain *= (1 - st.hype / 120) * popMult
-  st.hype = clamp(st.hype + gain, 0, 100)
+  // Through addHype, not straight onto the field: a broadcast is exactly the
+  // write that used to run away from the follower base (see hypeCeiling). It
+  // reports back what actually landed, which is what the stream card shows.
+  gain = addHype(save, gain)
 
   // Ad revenue: pennies per viewer, capped — this is a community arcade
   // channel, not a media empire.
@@ -575,8 +639,9 @@ export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily')
     probA: matchEvent.probA,
     aIsWinner: aWins,
   })
-  if (note.hype > 0) {
-    save.stream.hype = clamp(save.stream.hype + note.hype, 0, 100)
+  // An upset is a story, but a story needs somewhere to travel — through
+  // addHype so a room of four cannot make it a national one (see hypeCeiling).
+  if (note.hype > 0 && addHype(save, note.hype) > 0) {
     stream.notability = note
   }
   // Getting your set picked for the channel is a genuine thrill — the two
