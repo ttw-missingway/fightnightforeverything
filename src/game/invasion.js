@@ -28,6 +28,7 @@ import { countryName, countryCluster } from './geo.js'
 import { line as chronicleLine } from '../content/index.js'
 import CONTENT from '../content/invasion.json' with { type: 'json' }
 import { fill } from '../content/index.js'
+import { forgetPlayer } from './generate.js'
 const { CLUSTER_VOICE, VISITOR_LINES, HOST_REPLIES, LOST_IN_TRANSLATION } = CONTENT
 
 
@@ -200,7 +201,10 @@ export function endInvasion(save) {
     if (save.mentorships?.length) {
       save.mentorships = save.mentorships.filter((m) => m.mentorId !== id && m.studentId !== id)
     }
-    delete save.players[id]
+    // The room forgets them the same way it forgets any departed filler —
+    // otherwise every touring crew leaves a permanent residue of dead ids in
+    // everybody's relationship maps. See forgetPlayer.
+    forgetPlayer(save, id)
   }
   const flag = regionFlag(inv.region)
   chronicle(save, '👋', chronicleLine(beaten ? 'invasion.leave.beaten' : 'invasion.leave',

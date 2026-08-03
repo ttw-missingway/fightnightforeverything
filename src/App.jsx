@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStore, useIdleLoop } from './state/store.jsx'
+import { useStore, useIdleLoop, storageFailure, onStorageFailure } from './state/store.jsx'
 import MainMenu from './screens/MainMenu.jsx'
 import Setup from './screens/Setup.jsx'
 import Arcade from './screens/Arcade.jsx'
@@ -163,6 +163,7 @@ export default function App() {
 
       {/* Above the tab content, so a run about to end is visible from every
           page rather than only in a recap line the owner already clicked past. */}
+      <StorageBanner />
       <DangerBanner />
       {/* Above the tab content for the same reason the danger rows are: it has
           to be seen from wherever the owner happened to be standing. */}
@@ -333,6 +334,42 @@ function ToastOverlay({ onArcade }) {
  * Dismissing clears the queue — the Legacy tab is the permanent record, this
  * is just the notification.
  */
+/**
+ * THE SAVE ISN'T SAVING, AND YOU NEED TO KNOW NOW.
+ *
+ * When a write is refused, everything on screen keeps working — the day
+ * advances, the room fills, the bracket runs — and none of it survives a
+ * reload. That is the single worst way this app can fail, and it used to
+ * announce itself with a console.warn. It sits at the top of every screen now,
+ * cannot be dismissed while it is true, and says which lever to pull: this
+ * world is too big, or the other worlds beside it are.
+ */
+function StorageBanner() {
+  const [fail, setFail] = useState(storageFailure)
+  useEffect(() => onStorageFailure(setFail), [])
+  if (!fail) return null
+  const others = fail.otherSavesMB >= 1
+  return (
+    <div className="dangers">
+      <div className="danger critical">
+        <span className="d-icon">💾</span>
+        <div>
+          <div className="d-title">This is not being saved</div>
+          <div className="d-detail">
+            The browser refused the write — {fail.usedMB} MB of storage is in use and the limit is
+            about 5. Everything since is on screen only, and a reload will lose it.
+          </div>
+          <div className="d-fix">
+            {others
+              ? `Other saved worlds are holding ${fail.otherSavesMB} MB. Delete one you're finished with from the main menu — export it first if you want to keep it.`
+              : 'This world has outgrown local storage. Export it from the main menu to keep a copy.'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function UnlockBanner() {
   const { save, nav, mutate } = useStore()
   const queued = (save?.unlockNotices || [])

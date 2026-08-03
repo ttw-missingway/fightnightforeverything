@@ -202,6 +202,23 @@ export function productiveShare(save, player, convKey = 'determination') {
 // ---------- Pressure accrual ----------
 
 const SOURCE_RING = 6
+// FILLER KEEPS THE TALLY, NOT THE PROSE. Every `why` is a full sentence, and
+// the ring holds six of them per pressured stat per person. Across a hundred
+// and twenty passers-through that is by far the heaviest thing in a long save
+// — measured at 1.5 MB of a 5.9 MB year-six world, against a ~5 MB browser
+// quota — and not one character of it is ever read: the inspector, the
+// evidence list and every journal entry that quotes a source are cast-only
+// (isJournaled). The tally that survives is exactly what dominantKindOf needs,
+// so filler breakthroughs still choose and label themselves identically.
+const NPC_SOURCE_RING = 3
+// A career's breakthrough record, bounded. P5 made a lineage twenty years long
+// and this array had no ceiling; `count` is the number anything actually reads,
+// so the entries are history for the inspector and the choice instrument, and
+// the oldest fall off the back like the journal's do.
+const EUREKA_LOG_CAP = 60
+const trimEurekaLog = (e) => {
+  if (e.log.length > EUREKA_LOG_CAP) e.log.splice(0, e.log.length - EUREKA_LOG_CAP)
+}
 
 export function addPressure(save, player, stat, amount, why, kind = 'wound') {
   if (amount <= 0) return
@@ -212,7 +229,13 @@ export function addPressure(save, player, stat, amount, why, kind = 'wound') {
   if (val >= STAT_MAX_POINTS * STAT_UNIT) return
   e.pressure[stat] = (e.pressure[stat] || 0) + amount
   const ring = (e.sources[stat] ??= [])
-  ring.push({ absDay: abs(save), why, amt: Math.round(amount * 100) / 100, kind })
+  const amt = Math.round(amount * 100) / 100
+  if (player.npc) {
+    ring.push({ amt, kind })
+    if (ring.length > NPC_SOURCE_RING) ring.shift()
+    return
+  }
+  ring.push({ absDay: abs(save), why, amt, kind })
   if (ring.length > SOURCE_RING) ring.shift()
 }
 
@@ -525,6 +548,7 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
     offeredReady: offer ? offer.filter((c) => c.ready !== false).length : null,
     offeredKinds: offer ? new Set(offer.map((c) => c.kind)).size : null,
   })
+  trimEurekaLog(e)
   e.count += 1
   e.perStat[stat] = (e.perStat[stat] || 0) + 1
   e.threshold = Math.round(e.threshold * EUREKA.GROWTH * 10) / 10
@@ -753,6 +777,7 @@ export function veteranBreakthrough(save, player) {
   // The meter is spent exactly as a normal breakthrough spends it, so a
   // veteran keeps producing on the same cadence a young player improves on.
   e.log.push({ absDay: today, stat: null, kind: `veteran:${kind}`, veteran: true })
+  trimEurekaLog(e)
   e.count += 1
   e.veteranCount = (e.veteranCount || 0) + 1
   e.threshold = Math.round(e.threshold * EUREKA.GROWTH * 10) / 10

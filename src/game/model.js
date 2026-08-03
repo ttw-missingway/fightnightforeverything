@@ -822,8 +822,14 @@ export function newIdleState() {
 // tournament replay is 50-80KB — the old "40 replays ≈ 100KB" assumption was
 // off by ~30x and could push a save past the ~5MB localStorage quota. Bound by
 // BYTES (newest kept) rather than count, with a hard ceiling as a backstop.
-const VOD_CAP = 40 // hard ceiling regardless of size
-const VOD_BUDGET_BYTES = 1_500_000 // keep newest replays under ~1.5MB total
+// RE-BUDGETED after measuring a real long run. A year-six world serialises to
+// ~5 MB against a ~5 MB browser quota, and replays are the largest slice that
+// costs the simulation nothing to shed — a VOD is a thing to watch once, not
+// state anything reads. Cut to ~900 KB: still a dozen-plus tournaments deep,
+// and worth roughly half a megabyte of headroom at the point a dynasty needs
+// it most. (The other half of that measurement is in compactRecord below.)
+const VOD_CAP = 24 // hard ceiling regardless of size
+const VOD_BUDGET_BYTES = 900_000 // keep newest replays under ~900KB total
 
 // Rough serialized byte size of a JSON-able value. Good enough for budgeting —
 // mostly-ASCII content means one char ≈ one byte.
@@ -852,14 +858,84 @@ export function trimVods(save) {
   }
 }
 
+/**
+ * ONE RECORD MUST NOT BE ABLE TO FILL THE WHOLE QUOTA.
+ *
+ * EVO is a 64-player open major with sixteen pools, and its record serialises
+ * to about 1.9 MB — on its own, against a ~5 MB localStorage budget, and the
+ * "newest VOD is always kept" rule above means the byte budget cannot touch it.
+ * Measured, the day EVO fires the save is 4.1 MB, which is close enough to the
+ * ceiling that a browser with anything else on the origin simply refuses the
+ * write. The game then keeps playing and silently stops saving, which is how
+ * you end up permanently parked on EVO day.
+ *
+ * The weight is not the results — it is per-LINE playback data. For one EVO:
+ * narrationMeta 672k, narrationHud 471k, narration 425k, baked stream chat
+ * 302k. Nearly all of it belongs to pool matches, which are sixty rounds of
+ * two-player sets between people you have never heard of and which EvoWeek
+ * already presents as skippable.
+ *
+ * So an oversized record keeps its pools' NARRATION — you can still read a
+ * pool set back — and loses their health bars, per-line tick metadata and
+ * baked chat. The bracket, the exhibition and the finals keep everything.
+ */
+const RECORD_COMPACT_ABOVE = 700_000
+
+export function compactRecord(record) {
+  if (!record || roughSize(record) <= RECORD_COMPACT_ABOVE) return record
+  for (const round of record.rounds || []) {
+    // Pools and rounds that aired off-screen. Never the bracket.
+    if (round.phase !== 'pools' && !round.offScreen) continue
+    for (const m of round.matches || []) {
+      delete m.narrationMeta
+      delete m.narrationHud
+      delete m.chatter
+      if (m.stream) delete m.stream.chat
+    }
+  }
+  return record
+}
+
 // Record a finished tournament for spoiler-free replay. Pushes the SAME object
 // reference that becomes save.lastTournament, so watching it in the Tournament
 // screen and in the VOD list share one `revealed` cursor.
 export function pushVod(save, record) {
   if (!save.vods) save.vods = []
-  save.vods.unshift(record)
+  save.vods.unshift(compactRecord(record))
   trimVods(save)
 }
+
+/**
+ * THE SAME TOURNAMENT WAS BEING WRITTEN TO DISK TWICE.
+ *
+ * `save.lastTournament` and `save.vods[0]` are deliberately the SAME object —
+ * that shared reference is what makes one `revealed` cursor serve both the
+ * Tournament screen and the VOD list. JSON.stringify does not know that. It
+ * walks the graph and emits two independent copies, so on EVO day, when the
+ * record is ~1.9 MB, the save costs 3.9 MB of a ~5 MB budget for one
+ * tournament — and everything else the run has accumulated has to fit in what
+ * is left. Measured, the save on EVO day was 4.13 MB.
+ *
+ * Storing a pointer instead costs one string. Nothing else changes: the object
+ * is re-shared on load, so the cursor still behaves exactly as it did.
+ */
+export function toStorage(save) {
+  const lt = save.lastTournament
+  if (!lt?.id) return save
+  const inVods = (save.vods || []).some((v) => v === lt || v.id === lt.id)
+  if (!inVods) return save
+  return { ...save, lastTournament: undefined, lastTournamentId: lt.id }
+}
+
+export function fromStorage(save) {
+  if (!save) return save
+  if (save.lastTournamentId && !save.lastTournament) {
+    save.lastTournament = (save.vods || []).find((v) => v.id === save.lastTournamentId) || null
+  }
+  delete save.lastTournamentId
+  return save
+}
+
 
 // Total non-bye matches in a tournament record — used to tell whether a VOD has
 // been fully watched (so the list can reveal the champion) without spoiling.

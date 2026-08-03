@@ -334,6 +334,47 @@ export function npcPoolTarget(save) {
 }
 
 /**
+ * DELETING SOMEBODY IS NOT THE SAME AS FORGETTING THEM.
+ *
+ * Filler churns constantly — a hundred and fifty faces come and go over an
+ * eight-year run — and the churn removed each one from `save.players` and
+ * stopped there. Every id-keyed map on everybody ELSE kept its entry forever:
+ * relationships, met, h2h, feudOrigin, and the pair keys in the eureka bag.
+ * Nothing could read them (every call site looks the person up and bails when
+ * they are gone), so they were pure sediment, and they were the largest thing
+ * in a long save: by year eight, filler accounted for 2.7 MB of a 3.7 MB
+ * players blob, against a ~5 MB browser quota. That is the leak that makes a
+ * dynasty stop saving.
+ *
+ * So when somebody is gone, the room forgets them. Behaviourally this is a
+ * no-op — these are references to a person who no longer exists — and it is
+ * what "nobody notices, by design" was always supposed to mean.
+ */
+export function forgetPlayer(save, id) {
+  delete save.players[id]
+  for (const other of Object.values(save.players)) {
+    if (other.relationships) delete other.relationships[id]
+    if (other.met) delete other.met[id]
+    if (other.h2h) delete other.h2h[id]
+    if (other.feudOrigin) {
+      delete other.feudOrigin[id]
+      // …and anywhere they were the REASON for somebody else's grudge.
+      for (const [enemy, via] of Object.entries(other.feudOrigin)) {
+        if (via === id) delete other.feudOrigin[enemy]
+      }
+    }
+    if (other.protegeIds?.length) other.protegeIds = other.protegeIds.filter((x) => x !== id)
+    const e = other.eureka
+    if (e) {
+      // Pair keys ("a|b") and per-person seen-lists, both unbounded otherwise.
+      if (e.feudSeen?.length) e.feudSeen = e.feudSeen.filter((k) => !k.includes(id))
+      if (e.friendSeen?.length) e.friendSeen = e.friendSeen.filter((k) => !k.includes(id))
+      if (e.rivalSeen?.length) e.rivalSeen = e.rivalSeen.filter((x) => x !== id)
+    }
+  }
+}
+
+/**
  * Keep the filler pool near its target: generate newcomers to fill a gap, and
  * retire filler that's drifted away (nobody notices, by design). Called at the
  * top of every day.
@@ -355,7 +396,7 @@ export function topUpNpcs(save, absDay) {
     // regular takes far longer to drift away, which is the other half of what
     // makes a Stoic-heavy scene durable.
     const patience = 45 + (p.personal?.loyalty || 0) * 6 + Math.floor(rand() * 30)
-    if (!attached && absDay - last > patience) delete save.players[p.id]
+    if (!attached && absDay - last > patience) forgetPlayer(save, p.id)
   }
 
   const alive = Object.values(save.players).filter((p) => p.npc && !p.retired && !p.banished && !p.visitor).length

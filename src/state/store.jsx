@@ -6,7 +6,7 @@ import { runCircuitEvent, ensureRegionalField, hostsForYear } from '../game/circ
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
 import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
-import { migrateSave, newSave, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION } from '../game/model.js'
+import { migrateSave, newSave, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION, toStorage, fromStorage } from '../game/model.js'
 import { bindRng } from '../game/rng.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
@@ -65,6 +65,21 @@ function shedSaveWeight(save) {
   return false
 }
 
+/**
+ * Did the last write actually land? A save that silently stops persisting is
+ * the worst failure this app has — the game keeps playing, every screen looks
+ * right, and the moment you reload you are back where you were an hour ago.
+ * It used to report itself with a console.warn, which nobody sees. This is
+ * read by the banner in App.jsx.
+ */
+export let storageFailure = null
+const subscribers = new Set()
+export const onStorageFailure = (fn) => { subscribers.add(fn); return () => subscribers.delete(fn) }
+function setStorageFailure(value) {
+  storageFailure = value
+  for (const fn of subscribers) fn(value)
+}
+
 export function persistSave(save) {
   save.updatedAt = Date.now()
   const index = loadIndex().filter((e) => e.id !== save.id)
@@ -79,16 +94,32 @@ export function persistSave(save) {
   })
   // A too-large save must never crash the game loop. On a quota error, shed the
   // heaviest data (old replays) and retry until it fits or there's nothing left
-  // to drop; only then give up quietly with a warning.
+  // to drop; only then give up — LOUDLY.
   for (;;) {
     try {
-      localStorage.setItem(saveKey(save.id), JSON.stringify(save))
+      localStorage.setItem(saveKey(save.id), JSON.stringify(toStorage(save)))
       writeIndex(index)
+      if (storageFailure) setStorageFailure(null)
       return
     } catch (err) {
       if (isQuotaExceeded(err) && shedSaveWeight(save)) continue
       if (isQuotaExceeded(err)) {
-        console.warn('Save exceeds local storage even after trimming replays — this step may not persist.', err)
+        // How much of the quota this origin is holding, so the message can say
+        // whether the problem is THIS save or the other worlds beside it.
+        let used = 0
+        let others = 0
+        for (const k of Object.keys(localStorage)) {
+          const n = (localStorage.getItem(k) || '').length
+          used += n
+          if (k.startsWith('fightnight:save:') && k !== saveKey(save.id)) others += n
+        }
+        setStorageFailure({
+          at: Date.now(),
+          usedMB: +(used / 1048576).toFixed(1),
+          otherSavesMB: +(others / 1048576).toFixed(1),
+          saveName: save.saveName,
+        })
+        console.warn('Save exceeds local storage even after trimming replays — this step did NOT persist.', err)
         return
       }
       throw err
@@ -99,7 +130,7 @@ export function persistSave(save) {
 export function loadSaveById(id) {
   try {
     const save = JSON.parse(localStorage.getItem(saveKey(id)))
-    return save ? repairWorld(migrateSave(save)) : null
+    return save ? repairWorld(migrateSave(fromStorage(save))) : null
   } catch {
     return null
   }
@@ -208,7 +239,10 @@ export function resetSaveById(id) {
     endedDateLabel: formatDay(save.day, save.year),
     chronicle: save.chronicle || [],
     hallOfFame: save.hallOfFame || [],
-    vods: (save.vods || []).slice(0, 12), // bounded — archives shouldn't balloon the save
+    // Four, not twelve. An archive is a memento of a finished run; a lineage
+    // keeps five of them, so twelve replays each was up to sixty tournaments of
+    // dead weight riding in every single write.
+    vods: (save.vods || []).slice(0, 4),
     innovations: save.innovations || [],
     // WHAT YOUR PEOPLE WON, KEPT WHERE IT CANNOT INTERFERE. Titles are wiped
     // off the players themselves (a new run is a new competitive era and
@@ -321,7 +355,9 @@ export const fileStem = (name, fallback) =>
 export function exportSaveById(id) {
   const raw = localStorage.getItem(saveKey(id))
   if (!raw) return false
-  const save = JSON.parse(raw)
+  // Rehydrate the shared tournament reference before sharing — a file with a
+  // dangling `lastTournamentId` would open somewhere else with no live event.
+  const save = fromStorage(JSON.parse(raw))
   const payload = { format: 'fightnight-save', formatVersion: 1, exportedAt: Date.now(), save }
   downloadJson(`${fileStem(save.saveName, 'world')}.fightnight.json`, payload)
   return true
@@ -340,7 +376,7 @@ export function importSaveFromText(text) {
   } catch {
     return { ok: false, error: 'That file is not valid JSON.' }
   }
-  const save = data?.format === 'fightnight-save' ? data.save : data
+  const save = fromStorage(data?.format === 'fightnight-save' ? data.save : data)
   if (!save || typeof save !== 'object' || !save.game || !save.players || !save.arcade) {
     return { ok: false, error: 'That file does not look like a Fight Night save.' }
   }
