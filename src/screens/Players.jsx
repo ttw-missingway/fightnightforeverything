@@ -4,7 +4,7 @@ import { StatBar, PointDots, moodFace, Portrait } from '../components/ui.jsx'
 import { playerArt, lookArt } from '../components/art.js'
 import { lookOf } from '../game/skins.js'
 import PlayerForm from '../components/PlayerForm.jsx'
-import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, spiritOf } from '../game/constants.js'
+import { PERSONAL_STATS, SOCIAL_STATS, statusOf, formatDay, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, STAT_MAX_POINTS, spiritOf, talentBreadth } from '../game/constants.js'
 import { chooseBreakthrough, eurekaMeter, glowingStats, glowMap, evidenceFor, candidatesFor, veteranTier } from '../game/eureka.js'
 import { isJournaled } from '../game/journal.js'
 import { relLabel, moodLabel, gameOpinionOf, arcadeOpinionOf, opinionLabel, sceneVerdict, standingOf, standingLabel, getRel } from '../game/social.js'
@@ -629,6 +629,21 @@ function EurekaMeter({ player: p }) {
   if (!m) return null
   const glowing = glowingStats(p)
   const ready = glowing.filter((g) => g.ready)
+  // READY IS NOT THE SAME AS ON OFFER, AND THIS ROW USED TO PRETEND IT WAS.
+  //
+  // This row draws every glowing stat and marks each one past its line "ready".
+  // The choice panel below it offers `talentBreadth` of them — how many threads
+  // one person can hold at once — so a wide-spirit player with four ready stats
+  // saw four things labelled ready and two buttons, with nothing anywhere
+  // saying why. The honest reading is that all four ARE ready and this person
+  // can only take two of them on; the other two keep 0.55 of their pressure
+  // (EUREKA.CARRY) and come back, which is a good deal and was invisible.
+  //
+  // Only marked while a choice is actually open. Before the meter fills there
+  // is no shortlist yet, and guessing at one would be showing the player a
+  // ranking that has not happened.
+  const offered = new Set(m.pending ? candidatesFor(p).map((c) => c.stat) : [])
+  const held = m.pending ? ready.filter((g) => !offered.has(g.stat)) : []
   // The deadline band: how close the hottest single stat is to resolving
   // itself badly (§1.4). Only drawn once it is genuinely in play.
   const forceFrac = m.hottest / m.forcedAt
@@ -660,7 +675,9 @@ function EurekaMeter({ player: p }) {
         {veteran
           ? 'Their climbing years are behind them. What builds up now comes out as tech, teaching and reads on the game — not as a point on their sheet.'
           : m.full && ready.length
-            ? 'The meter is full and something has come to a head. Pick what clicks — below.'
+            ? held.length
+              ? `The meter is full and ${ready.length} things have come to a head. They can only take on ${talentBreadth(p)} at once — pick from those below. The rest keep most of their pressure and come back.`
+              : 'The meter is full and something has come to a head. Pick what clicks — below.'
             : m.full
               ? 'The meter is full, and nothing has come to a head yet. Everything they do from here pushes harder on whatever is closest — it will break soon, and nothing is being lost while it waits.'
               : ready.length
@@ -675,18 +692,23 @@ function EurekaMeter({ player: p }) {
           {glowing.slice(0, 8).map((g) => {
             const kind = EUREKA_KIND[g.kind] || EUREKA_KIND.wound
             const open = openStat === g.stat
+            // Ready, but not one of the ones on the table this time.
+            const isHeld = g.ready && m.pending && !offered.has(g.stat)
             return (
-              <div key={g.stat} className={`eureka-glow${g.ready ? ' ready' : ''}`}
+              <div key={g.stat} className={`eureka-glow${g.ready ? ' ready' : ''}${isHeld ? ' held' : ''}`}
                 style={{ borderColor: kind.color, cursor: 'pointer' }}
+                title={isHeld
+                  ? `Ready, but ${p.alias || p.firstName} can only take on ${talentBreadth(p)} at once and something else is further along. It keeps most of its pressure and comes back.`
+                  : undefined}
                 onClick={() => setOpenStat(open ? null : g.stat)}>
                 <div className="row spread">
                   <span className="small">
                     <span style={{ color: kind.color }}>{kind.icon}</span>{' '}
-                    <strong style={{ color: g.ready ? kind.color : undefined }}>{g.stat}</strong>
+                    <strong style={{ color: g.ready && !isHeld ? kind.color : undefined }}>{g.stat}</strong>
                     {!g.inRow && <span className="dim small" title="outside their temperament — becoming someone a bit different"> ↗</span>}
                   </span>
-                  <span className="small" style={{ color: g.ready ? kind.color : 'var(--dim)' }}>
-                    {g.ready ? 'ready' : `${Math.round(Math.min(1, g.heat) * 100)}%`}
+                  <span className="small" style={{ color: g.ready && !isHeld ? kind.color : 'var(--dim)' }}>
+                    {isHeld ? 'not this time' : g.ready ? 'ready' : `${Math.round(Math.min(1, g.heat) * 100)}%`}
                   </span>
                 </div>
                 <div className="eureka-subtrack">
@@ -741,6 +763,11 @@ function EurekaPanel({ save, player: p, mutate }) {
   // The engine withdraws a shortlist that has emptied under it on the next
   // tick; until then, a card with no buttons is worse than no card.
   if (!candidates.length) return null
+  // WHAT THIS PANEL IS NOT SHOWING. candidatesFor slices to talent breadth, so
+  // a player with more ready stats than breadth gets a shortlist that is
+  // quietly shorter than the meter above says it should be — which reads as
+  // "why can't I click that one?". Name the cap and name the leftovers.
+  const heldBack = glowingStats(p).filter((g) => g.ready && !candidates.some((c) => c.stat === g.stat))
 
   return (
     <div className="card eureka-choice">
@@ -750,6 +777,15 @@ function EurekaPanel({ save, player: p, mutate }) {
         is genuinely ready to break; pick the one that clicks. The point is permanent, the rest
         keeps simmering — and sit on this too long and they resolve it themselves, badly.
       </p>
+      {heldBack.length > 0 && (
+        <p className="small dim" style={{ marginTop: 0 }}>
+          {displayName(p, save)} can only take on {talentBreadth(p)} at a time, so{' '}
+          <strong>{heldBack.map((g) => g.stat).join(', ')}</strong>{' '}
+          {heldBack.length === 1 ? 'is' : 'are'} ready but not on the table this time. Nothing is
+          wasted — {heldBack.length === 1 ? 'it keeps' : 'they keep'} most of the pressure and{' '}
+          {heldBack.length === 1 ? 'comes' : 'come'} back.
+        </p>
+      )}
       <div className="eureka-candidates">
         {candidates.map((c) => {
           const kind = EUREKA_KIND[c.kind] || EUREKA_KIND.wound

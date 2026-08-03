@@ -1392,6 +1392,14 @@ tr.world-mine td { background: rgba(45, 226, 230, 0.07); }
   background: var(--bg2);
 }
 .eureka-glow.ready { background: var(--card2); box-shadow: 0 0 12px rgba(255, 255, 255, 0.05); }
+/* Ready, but over talent breadth — it is not on the table this time. Reads as
+   a full bar that is deliberately banked rather than a lit one you can't click:
+   the glow comes off, the border goes quiet, the fill stays. */
+.eureka-glow.ready.held {
+  background: var(--bg2); box-shadow: none;
+  border-color: var(--border) !important; opacity: 0.7;
+}
+.eureka-glow.ready.held .eureka-subtrack > div { filter: grayscale(0.65); }
 .eureka-subtrack {
   height: 4px; margin-top: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;
 }
