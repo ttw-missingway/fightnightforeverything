@@ -1046,11 +1046,21 @@ export function castEntryReport(save, def, year) {
     }
     if (def.kind === 'regional') {
       const row = rows.find((r) => r.id === p.id)
+      // THE RANK THAT DECIDED IT, NOT THE RANK RIGHT NOW. Invitations go out
+      // three weeks early (travel.js), so this used to read the live board and
+      // announce "#15 — the cut is the top 16" about somebody who was #49 when
+      // the list was drawn. Same sentence, two different days.
+      const snap = save.travel?.invites?.[`${def.key}:${year}`]
+      const then = snap?.ranks?.[p.id]
       missed.push({
         id: p.id, name,
-        reason: row
-          ? `#${row.rank} on the national board — the regionals cut is the top ${REGIONAL_CUT}`
-          : 'not on the national board at all yet',
+        reason: !row ? 'not on the national board at all yet'
+          : then == null
+            ? `#${row.rank} on the national board — the regionals cut is the top ${REGIONAL_CUT}`
+            : then > REGIONAL_CUT
+              ? `#${then} on the board when the invitations went out ${snap.daysOut} days back — the cut is the top ${REGIONAL_CUT}${
+                row.rank <= REGIONAL_CUT ? `, and they have climbed to #${row.rank} since` : ''}`
+              : `#${then} and inside the cut when the invitations went out, but not an active regular that week — the list only asks people who are still turning up`,
       })
     } else if (def.kind === 'qualifier') {
       const belief = Math.round(p.belief ?? 0)

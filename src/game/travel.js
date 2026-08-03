@@ -48,7 +48,9 @@ export const TRAVEL_TIERS = {
 export const TRAVEL_LEAD = 21
 
 export function newTravelState() {
-  return { asks: [], seen: {} }
+  // `invites` is the board as it stood when each regional's list was drawn —
+  // kept so the "why didn't they go" panel can quote the rank that decided it.
+  return { asks: [], seen: {}, invites: {} }
 }
 
 /** Distance is a standing financial fact: your region prices every trip. */
@@ -140,7 +142,25 @@ export function travelDaily(save) {
     const country = hostOf(save, occ.def, occ.year)
     const eventName = circuitEventName(save, occ.def, occ.year)
     const cost = travelCost(save, country, occ.def.kind)
-    for (const p of askSpecsFor(save, occ)) {
+    const specs = askSpecsFor(save, occ)
+    // WHAT THE BOARD LOOKED LIKE WHEN THE INVITATIONS WENT OUT.
+    //
+    // Eligibility is read ONCE, here, three weeks early — that lead time is the
+    // whole point of the ask. But the "why didn't they go" panel recomputed the
+    // board at render, so anybody who climbed during those three weeks read as
+    // `#15 on the national board — the regionals cut is the top 16`, which is a
+    // straight contradiction and looks like the rule is broken.
+    //
+    // Measured: a player at #49 when invitations went out was #15 on the day.
+    // The rank that DECIDED it is the one worth keeping, so it gets kept.
+    if (occ.def.kind === 'regional') {
+      const ranks = {}
+      for (const r of regionalRankings(save)) if (r.yours) ranks[r.id] = r.rank
+      ;(t.invites ??= {})[seenKey] = {
+        at: abs, daysOut: lead, ranks, asked: specs.map((p) => p.id),
+      }
+    }
+    for (const p of specs) {
       const ask = {
         id: uid('ask'),
         playerId: p.id,
@@ -171,9 +191,14 @@ export function travelDaily(save) {
       })
     }
   }
-  // Old seen-keys are dead weight once their year has passed.
+  // Old seen-keys are dead weight once their year has passed. The invitation
+  // snapshots ride the same broom — they only exist to explain the season the
+  // panel is showing.
   for (const k of Object.keys(t.seen)) {
     if (Number(k.split(':')[1]) < save.year) delete t.seen[k]
+  }
+  for (const k of Object.keys(t.invites || {})) {
+    if (Number(k.split(':')[1]) < save.year) delete t.invites[k]
   }
 }
 

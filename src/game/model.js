@@ -1118,7 +1118,11 @@ export function migrateSave(save) {
   save.attention ??= newAttention()
   save.toasts ??= []
   save.lastWorldNo1 ??= null
-  save.travel ??= { asks: [], seen: {} }
+  save.travel ??= { asks: [], seen: {}, invites: {} }
+  // Saves from before the invitation snapshot have none for events already in
+  // their window; the report falls back to the live rank for those (see
+  // castEntryReport) rather than inventing a number nobody was judged by.
+  save.travel.invites ??= {}
   // Auto-stream moved off `idle` and onto `stream` (see newAutoStream). Carry
   // the old config across rather than resetting it — somebody who had the
   // camera following a prospect keeps following them.
