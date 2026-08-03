@@ -667,7 +667,7 @@ export function buildStreamForPlayers(save, a, b, matchEvent, context = 'daily')
  * last auto-stream actually fired. Returns true if a stream may fire now.
  */
 export function autoStreamAllowed(save, absDay, weekday, cadence) {
-  const last = save.idle?.autoStream?.lastStreamAbsDay ?? null
+  const last = save.stream?.auto?.lastStreamAbsDay ?? null
   if (cadence === 'weekends') return weekday === 0 || weekday === 6
   if (cadence === 'daily') return last == null || absDay > last
   if (cadence === 'weekly') return last == null || absDay - last >= 7
@@ -675,19 +675,43 @@ export function autoStreamAllowed(save, absDay, weekday, cadence) {
 }
 
 /**
+ * WHICH MATCHES THE CONDITIONS ALLOW.
+ *
+ * Exclude is absolute and is checked first: a match with an excluded player in
+ * it is never streamed, even if their opponent is on the include list. An empty
+ * include list means anybody. A non-empty one is an allowlist, and an hour where
+ * nobody on it is playing has NO eligible match — which is the whole point of
+ * the list, so this must not fall back to "stream something else".
+ */
+export function autoStreamEligible(save, events) {
+  const auto = save.stream?.auto
+  const include = auto?.include || []
+  const exclude = new Set(auto?.exclude || [])
+  return (events || []).filter((e) => {
+    if (exclude.has(e.aId) || exclude.has(e.bId)) return false
+    if (!include.length) return true
+    return include.includes(e.aId) || include.includes(e.bId)
+  })
+}
+
+/**
  * Pick which match of an hour to auto-stream, per the selector. Only considers
- * live matches not already streamed. Returns the setupIndex, or null if none.
+ * live matches not already streamed and allowed by the include/exclude lists.
+ * Returns the setupIndex, or null if none.
  */
 export function pickAutoStreamSetup(save, hour, selector) {
-  const candidates = (hour?.events || []).filter((e) => e.type === 'match' && !e.stream)
+  const live = (hour?.events || []).filter((e) => e.type === 'match' && !e.stream)
+  if (!live.length) return null
+  const candidates = autoStreamEligible(save, live)
   if (!candidates.length) return null
   let pick
   if (selector === 'follow') {
     // Point the camera at one person. §1.8 makes exposure a prerequisite for
     // growth, so this is the cultivation lever aimed by hand — and it falls
     // through to the closest match on nights they are not playing rather than
-    // wasting the slot.
-    const id = save.idle?.autoStream?.followId
+    // wasting the slot. (The include list is the STRICT version of this: it
+    // does not fall through, so an empty night stays dark.)
+    const id = save.stream?.auto?.followId
     const theirs = id ? candidates.find((e) => e.aId === id || e.bId === id) : null
     if (theirs) return theirs.setupIndex
     selector = 'closest'

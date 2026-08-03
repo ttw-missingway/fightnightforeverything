@@ -3,7 +3,7 @@ import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game
 import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyOf } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
 import { runCircuitEvent, ensureRegionalField, hostsForYear } from '../game/circuit.js'
-import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed } from '../game/stream.js'
+import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed, canStream } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
 import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
 import { migrateSave, newSave, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION, toStorage, fromStorage } from '../game/model.js'
@@ -509,20 +509,38 @@ function idleArcadeStep(next) {
   return stepSave(next)
 }
 
-// Auto-stream one match of the hour just simulated, per the idle config, if
-// the cadence allows and this hour hasn't already been streamed. Mirrors the
-// manual "put this match on stream" action in the Arcade.
+/**
+ * Auto-stream one match of the hour just simulated, per the channel's config,
+ * if every condition holds. Mirrors the manual "put this match on stream"
+ * action in the Arcade.
+ *
+ * RUNS ON EVERY SIMULATED HOUR, however that hour was asked for. It used to be
+ * called only from the idle loop and the skip-to-recap path, so a player who
+ * stepped the clock by hand had auto-stream switched on and nothing ever
+ * happened — the setting was real, the feature was not.
+ *
+ * The conditions, in order, and each one records WHY it stopped: no rig, the
+ * cadence, one-stream-per-hour, and the include/exclude lists. That reason is
+ * what the console reads back, because "it didn't stream and I don't know why"
+ * is the failure mode a conditions system invites.
+ */
 function maybeAutoStream(next) {
-  const as = next.idle?.autoStream
+  const as = next.stream?.auto
   if (!as || !as.enabled) return
+  const say = (reason) => { as.lastSkipReason = reason }
+  if (!canStream(next)) return say('no rig')
   const dip = next.dayInProgress
   if (!dip || !dip.hours.length) return
   const hour = dip.hours[dip.hours.length - 1]
-  if (!hour || hour.streamedSetup != null) return // one stream per hour
+  if (!hour) return
+  if (hour.streamedSetup != null) return say('this hour was already streamed')
   const absDay = absDayOf(next.day, next.year)
-  if (!autoStreamAllowed(next, absDay, weekdayOf(next.day), as.cadence)) return
+  if (!autoStreamAllowed(next, absDay, weekdayOf(next.day), as.cadence)) return say('cadence — not due yet')
   const setupIndex = pickAutoStreamSetup(next, hour, as.selector)
-  if (setupIndex == null) return
+  if (setupIndex == null) {
+    const live = hour.events.filter((e) => e.type === 'match' && !e.stream)
+    return say(live.length ? 'nobody on the list was playing' : 'no match this hour')
+  }
   const ev = hour.events.find((e) => e.type === 'match' && e.setupIndex === setupIndex)
   if (!ev || ev.stream) return
   const a = next.players[ev.aId]
@@ -531,6 +549,7 @@ function maybeAutoStream(next) {
   hour.streamedSetup = setupIndex
   ev.stream = buildStreamForPlayers(next, a, b, ev, 'daily')
   as.lastStreamAbsDay = absDay
+  as.lastSkipReason = null
 }
 
 /**
@@ -708,6 +727,8 @@ export function StoreProvider({ children }) {
     if (!prev || runEnded(prev)) return // the run is over
     const next = structuredClone(prev)
     const outcome = stepSave(next)
+    // The clock moving by hand is still the clock moving — see maybeAutoStream.
+    if (outcome.type === 'hour') maybeAutoStream(next)
     persistSave(next)
     setSave(next)
     setScreen(outcome.type === 'tournament'
@@ -802,13 +823,30 @@ export function StoreProvider({ children }) {
       s.idle.speed = key
       s.idle.lastTickAt = Date.now() // restart the clock so a speed change can't burst
     }),
-    setAutoStream: (patch) => mutate((s) => { Object.assign(s.idle.autoStream, patch) }),
+  }), [mutate])
+
+  // Not an idle action any more — the camera belongs to the channel. Lists are
+  // toggled by id so the console never has to hand back a whole array.
+  const streamActions = useMemo(() => ({
+    setAutoStream: (patch) => mutate((s) => { Object.assign(s.stream.auto, patch) }),
+    toggleAutoStreamPlayer: (list, id) => mutate((s) => {
+      const auto = s.stream.auto
+      const other = list === 'include' ? 'exclude' : 'include'
+      auto[list] = auto[list].includes(id)
+        ? auto[list].filter((x) => x !== id)
+        // A player cannot be on both lists — picking one side takes them off
+        // the other, because "always stream them, never stream them" has no
+        // reading that isn't a bug report.
+        : [...auto[list], id]
+      auto[other] = auto[other].filter((x) => x !== id)
+    }),
+    clearAutoStreamList: (list) => mutate((s) => { s.stream.auto[list] = [] }),
   }), [mutate])
 
   const value = useMemo(() => ({
     save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay,
-    resetCurrentRun, idleAdvance, ...idleActions,
-  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay, resetCurrentRun, idleAdvance, idleActions])
+    resetCurrentRun, idleAdvance, ...idleActions, ...streamActions,
+  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay, resetCurrentRun, idleAdvance, idleActions, streamActions])
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>
 }

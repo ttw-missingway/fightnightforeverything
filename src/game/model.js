@@ -723,6 +723,7 @@ export function newSave(partial = {}) {
       totalStreams: 0,
       peakViewers: 0,
       fatigue: 0, // audience overexposure — climbs per daily stream, decays nightly
+      auto: newAutoStream(),
     },
     economy: {
       money: 500, // starting float (overridden by difficulty at save start)
@@ -799,6 +800,37 @@ export function newStaffing() {
   }
 }
 
+/**
+ * THE CAMERA IS A CHANNEL SETTING, NOT AN IDLE SETTING.
+ *
+ * This lived at `idle.autoStream` and was only reachable from the idle bar, so
+ * pointing the camera meant turning on auto-advance — which is a decision about
+ * how fast TIME moves, and has nothing to do with who you broadcast. Worse, the
+ * rule only ran inside the idle loop (and the skip-to-recap path), so stepping
+ * the clock by hand quietly streamed nothing at all.
+ *
+ * It sits on `save.stream` now, beside the followers and hype it moves, and it
+ * runs on every hour the arcade simulates however that hour was asked for.
+ *
+ * INCLUDE / EXCLUDE are the conditions, and the order matters: exclude always
+ * wins. An empty include list means "anybody"; a non-empty one is an allowlist,
+ * and a night where nobody on it plays is a night the camera stays off. That is
+ * the point — a cultivation tool that streams whoever happened to show up is
+ * just a stream button that presses itself.
+ */
+export function newAutoStream() {
+  return {
+    enabled: false, // off until asked for — it spends the channel's goodwill
+    selector: 'closest', // 'closest' | 'best' | 'first' | 'follow'
+    followId: null, // whose camera to point at when selector is 'follow'
+    cadence: 'daily', // 'hourly' | 'daily' | 'weekly' | 'weekends'
+    include: [], // player ids; non-empty = only matches featuring one of these
+    exclude: [], // player ids; never stream a match featuring one of these
+    lastStreamAbsDay: null, // last absolute day an auto-stream fired (cadence gate)
+    lastSkipReason: null, // why the most recent eligible hour produced no stream
+  }
+}
+
 // Idle mode: auto-advancing config. `running`/`lastTickAt` are the runtime
 // clock; the rest is user-chosen config. See constants.IDLE_SPEEDS.
 export function newIdleState() {
@@ -807,13 +839,6 @@ export function newIdleState() {
     running: false, // is the loop currently ticking / accruing offline time
     speed: 'fast', // key into IDLE_SPEEDS
     lastTickAt: null, // wall-clock ms of the last processed step (for catch-up)
-    autoStream: {
-      enabled: true,
-      selector: 'closest', // 'closest' | 'best' | 'first' | 'follow'
-      followId: null, // whose camera to point at when selector is 'follow'
-      cadence: 'daily', // 'hourly' | 'daily' | 'weekly' | 'weekends'
-      lastStreamAbsDay: null, // last absolute day an auto-stream fired (cadence gate)
-    },
     awayReport: null, // {steps, daysPassed, tournaments, headlines, ...} for the welcome-back modal
   }
 }
@@ -1094,6 +1119,15 @@ export function migrateSave(save) {
   save.toasts ??= []
   save.lastWorldNo1 ??= null
   save.travel ??= { asks: [], seen: {} }
+  // Auto-stream moved off `idle` and onto `stream` (see newAutoStream). Carry
+  // the old config across rather than resetting it — somebody who had the
+  // camera following a prospect keeps following them.
+  if (save.stream && !save.stream.auto) {
+    save.stream.auto = { ...newAutoStream(), ...(save.idle?.autoStream || {}) }
+    save.stream.auto.include ??= []
+    save.stream.auto.exclude ??= []
+  }
+  if (save.idle) delete save.idle.autoStream
   for (const t of save.arcade?.schedule || []) t.potBoost ??= 0
   for (const p of Object.values(save.players || {})) {
     p.memoriesWritten ??= (p.memories || []).length

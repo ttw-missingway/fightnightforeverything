@@ -81,6 +81,10 @@ export default function Arcade() {
                 {save.stream.peakViewers > 0 && <span className="dim"> · peak {save.stream.peakViewers} viewers</span>}
               </div>
             )}
+            {/* The camera lives with the channel it points, on the console you
+                actually play from — not inside the idle bar, which made aiming
+                it a side effect of turning on auto-advance. */}
+            {canStream(save) && <AutoStreamPanel save={save} />}
             <MoneyMatchBanner save={save} />
             {dip && (
               <div className="row" style={{ marginTop: 8 }}>
@@ -263,7 +267,7 @@ function formatCountdown(ms) {
 }
 
 function IdleBar({ save, buttonLabel }) {
-  const { setIdleRunning, setIdleSpeed, setAutoStream, enableIdle, advance, skipDay } = useStore()
+  const { setIdleRunning, setIdleSpeed, enableIdle, advance, skipDay } = useStore()
   const idle = save.idle
   const speed = idleSpeedOf(idle.speed)
   const [now, setNow] = useState(Date.now())
@@ -320,58 +324,114 @@ function IdleBar({ save, buttonLabel }) {
           ? <span className="cyan">▶ auto-advancing · next {revealing ? 'match' : 'hour'} in {formatCountdown(nextInMs)}</span>
           : <span className="dim">paused</span>}
       </div>
-      {/* No rig, no channel — and therefore nothing to point a camera with.
-          These controls sat here from day one, offering to auto-stream a
-          broadcast the run cannot make, which reads as a broken feature rather
-          than as an unbought one. Same gate the live stream button uses. */}
-      {canStream(save)
-        ? <AutoStreamControls save={save} autoStream={idle.autoStream} setAutoStream={setAutoStream} />
-        : (
-          <div className="small dim" style={{ textAlign: 'right', marginTop: 4 }}>
-            📡 auto-stream needs a stream rig — buy one on the Manage tab.
-          </div>
-        )}
+      {/* The camera moved to the console header, beside the channel it points
+          — see AutoStreamPanel. It ran only inside this loop, so auto-stream
+          was silently a feature of auto-advance rather than of the channel. */}
     </div>
   )
 }
 
-// `save` is needed for the follow-a-player picker. It was added to the JSX
-// before it was added to the signature, which crashed the whole app the
-// moment anyone selected 'follow' — and kept crashing on load afterwards,
-// because the choice persists in the save. See the note on the picker below.
-function AutoStreamControls({ save, autoStream, setAutoStream }) {
+/**
+ * THE CAMERA, ON THE CONSOLE.
+ *
+ * Collapsed to one line until you open it, because the arcade header is the
+ * busiest real estate in the game and this is a set-once control. The line
+ * itself is the status: on or off, and when it is on and did NOT fire, why.
+ */
+function AutoStreamPanel({ save }) {
+  const { setAutoStream, toggleAutoStreamPlayer, clearAutoStreamList } = useStore()
+  const [open, setOpen] = useState(false)
+  const auto = save.stream.auto
+  if (!auto) return null
+  // Who the lists can name: this arcade's regulars, best first. Filler drifts
+  // in and out and naming a stranger you will never see again is not a plan.
+  const roster = Object.values(save.players || {})
+    .filter((p) => !p.npc && !p.retired && !p.banished && p.isRegular)
+    .sort((a, b) => (b.elo || 0) - (a.elo || 0))
+
+  const summary = !auto.enabled ? 'off'
+    : [
+      AUTO_STREAM_SELECTORS.find((s) => s.key === auto.selector)?.label || auto.selector,
+      AUTO_STREAM_CADENCES.find((c) => c.key === auto.cadence)?.label || auto.cadence,
+      auto.include.length ? `${auto.include.length} on the list` : null,
+      auto.exclude.length ? `${auto.exclude.length} blocked` : null,
+    ].filter(Boolean).join(' · ')
+
   return (
-    <div className="col" style={{ alignItems: 'flex-end', gap: 3, marginTop: 4 }}>
-      <label className="small row" style={{ gap: 4 }}>
-        <input type="checkbox" checked={autoStream.enabled}
+    <div className="small" style={{ marginTop: 2 }}>
+      <label className="row" style={{ gap: 4, display: 'inline-flex' }}>
+        <input type="checkbox" checked={auto.enabled}
           onChange={(e) => setAutoStream({ enabled: e.target.checked })} />
-        📡 auto-stream
+        <span className="dim">🎥 auto-stream</span>
       </label>
-      {autoStream.enabled && (
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <select className="small" value={autoStream.selector}
-            onChange={(e) => setAutoStream({ selector: e.target.value })}>
-            {AUTO_STREAM_SELECTORS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <select className="small" value={autoStream.cadence}
-            onChange={(e) => setAutoStream({ cadence: e.target.value })}>
-            {AUTO_STREAM_CADENCES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-        </div>
+      <span className="dim"> · {summary}</span>
+      <button className="small" style={{ marginLeft: 6, padding: '0 6px' }}
+        onClick={() => setOpen(!open)}>{open ? 'done' : 'set up'}</button>
+      {/* WHY IT DIDN'T FIRE. A conditions system that goes quiet is
+          indistinguishable from a broken one, so the last skip says itself. */}
+      {auto.enabled && auto.lastSkipReason && (
+        <span className="dim"> · <span style={{ opacity: 0.8 }}>last hour: {auto.lastSkipReason}</span></span>
       )}
-      {/* WHO the camera follows. §1.8 makes exposure a prerequisite for
-          growth, so this is the cultivation lever pointed by hand — the
-          difference between "stream something" and "build this person". */}
-      {autoStream.enabled && autoStream.selector === 'follow' && (
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <select className="small" value={autoStream.followId || ''}
-            onChange={(e) => setAutoStream({ followId: e.target.value || null })}>
-            <option value="">— pick a player —</option>
-            {Object.values(save?.players || {})
-              .filter((p) => !p.npc && !p.retired && !p.banished && p.isRegular)
-              .sort((a, b) => (b.elo || 0) - (a.elo || 0))
-              .map((p) => <option key={p.id} value={p.id}>{displayName(p, save)}</option>)}
-          </select>
+
+      {open && (
+        <div className="card sub" style={{ marginTop: 6 }}>
+          <div className="row" style={{ gap: 6 }}>
+            <select className="small" value={auto.selector}
+              onChange={(e) => setAutoStream({ selector: e.target.value })}>
+              {AUTO_STREAM_SELECTORS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+            <select className="small" value={auto.cadence}
+              onChange={(e) => setAutoStream({ cadence: e.target.value })}>
+              {AUTO_STREAM_CADENCES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+          {/* WHO the camera follows. §1.8 makes exposure a prerequisite for
+              growth, so this is the cultivation lever pointed by hand — the
+              difference between "stream something" and "build this person". */}
+          {auto.selector === 'follow' && (
+            <div className="row" style={{ marginTop: 6 }}>
+              <select className="small" value={auto.followId || ''}
+                onChange={(e) => setAutoStream({ followId: e.target.value || null })}>
+                <option value="">— pick a player —</option>
+                {roster.map((p) => <option key={p.id} value={p.id}>{displayName(p, save)}</option>)}
+              </select>
+            </div>
+          )}
+
+          <p className="dim small" style={{ margin: '8px 0 4px' }}>
+            Conditions. <strong>Only these</strong> is an allowlist — leave it empty for anybody, and
+            a night when none of them play is a night the camera stays off.{' '}
+            <strong>Never these</strong> always wins, even against somebody on the other list.
+          </p>
+          {roster.length === 0
+            ? <p className="dim small" style={{ margin: 0 }}>No regulars yet — nobody to name.</p>
+            : (
+              <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+                {[
+                  { key: 'include', label: 'Only these', hint: 'stream only when one of them is playing' },
+                  { key: 'exclude', label: 'Never these', hint: 'never point the camera at them' },
+                ].map((col) => (
+                  <div key={col.key} style={{ flex: '1 1 200px', minWidth: 180 }}>
+                    <div className="row spread">
+                      <strong className="small" title={col.hint}>{col.label}</strong>
+                      {auto[col.key].length > 0 && (
+                        <button className="small" style={{ padding: '0 6px' }}
+                          onClick={() => clearAutoStreamList(col.key)}>clear</button>
+                      )}
+                    </div>
+                    <div className="autostream-list">
+                      {roster.map((p) => (
+                        <label key={p.id} className="small row" style={{ gap: 4 }}>
+                          <input type="checkbox" checked={auto[col.key].includes(p.id)}
+                            onChange={() => toggleAutoStreamPlayer(col.key, p.id)} />
+                          <span className={auto[col.key].includes(p.id) ? '' : 'dim'}>{displayName(p, save)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
         </div>
       )}
     </div>

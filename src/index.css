@@ -1385,6 +1385,16 @@ tr.world-mine td { background: rgba(45, 226, 230, 0.07); }
   background: var(--red); box-shadow: 0 0 6px var(--red);
 }
 
+/* The auto-stream conditions lists. A roster can be twenty people deep and this
+   sits in the console header, so it scrolls rather than pushing the arcade off
+   the screen. */
+.autostream-list {
+  max-height: 132px; overflow-y: auto; margin-top: 4px;
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px;
+  background: var(--bg2);
+}
+.autostream-list label { cursor: pointer; }
+
 .eureka-glows { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .eureka-glow {
   flex: 1 1 190px; min-width: 170px; max-width: 260px;
