@@ -1,7 +1,7 @@
 import { clamp, chance, choice, shuffle, rand, randInt, displayName, hash01, uid } from './util.js'
 import { bindRng } from './rng.js'
 import { HOURS_PER_DAY, HOUR_LABELS, DAYS_PER_YEAR, EVO_DAY, OPENING_DAYS, formatDay, weekdayOf, dayOfMonthOf, absDayOf, runAge, seasonOf, seasonFactor, statusOf, difficultyOf, statLevel } from './constants.js'
-import { driftEvoRoster, topUpNpcs, worldMatchesDaily, gravitateElites } from './generate.js'
+import { driftEvoRoster, topUpNpcs, worldMatchesDaily, gravitateElites, pruneFillerLedgers } from './generate.js'
 import { newInnovation, remember, witnessed, memoryAbout, chronicle, pushVod, awardMilestone, getMatchup, bumpPeak } from './model.js'
 import { checkAchievements } from './achievements.js'
 import { daysSincePatch, releasePatch, communityDemands } from './patch.js'
@@ -2079,6 +2079,10 @@ export function advanceDay(save) {
   // A monthly line of world texture — an interview quote, a tweet, a guide
   // sentence — attached to a ranked name. The fragment layer's idle drip.
   if (dayOfMonthOf(save.day) === 14) fragmentsMonthly(save)
+  // HOUSEKEEPING. Filler forgets the long tail of its filler-vs-filler
+  // ledgers, so a busy room stops growing a quadratic the save cannot hold.
+  // Never touches anything pointing at your cast. See pruneFillerLedgers.
+  if (dayOfMonthOf(save.day) === 21) pruneFillerLedgers(save)
   // THE MYTHOLOGY BANNERS (REVISION §6): the world's summit changing hands is
   // a moment whatever screen you're on. Checked on the universal tick so a
   // coup during EVO week still lands.

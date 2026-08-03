@@ -1,5 +1,6 @@
 import { choice, sample, randInt, rollStat, uid, chance, clamp, rand } from './util.js'
 import { bindRng } from './rng.js'
+import { pruneEureka } from './eureka.js'
 import { newPlayer, newCharacter, ensureSpirit, rollSpiritMagnitudes, spiritCeilOf } from './model.js'
 import { seedTakes } from './takes.js'
 import { PERSONAL_KEYS, SOCIAL_KEYS, ARCHETYPES, TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, SPIRITS } from './constants.js'
@@ -371,6 +372,65 @@ export function forgetPlayer(save, id) {
       if (e.friendSeen?.length) e.friendSeen = e.friendSeen.filter((k) => !k.includes(id))
       if (e.rivalSeen?.length) e.rivalSeen = e.rivalSeen.filter((x) => x !== id)
     }
+  }
+}
+
+/**
+ * WHAT FILLER IS ALLOWED TO REMEMBER ABOUT OTHER FILLER.
+ *
+ * The floor holds a hundred and seventy passers-through by year ten, and the
+ * pool TARGET grows with the arcade — so the busier the room, the heavier it
+ * gets. Each of them carries a relationship, a met-record and a head-to-head
+ * against every other person who has ever been in the building, which is a
+ * quadratic that success makes worse: measured, filler was 3.3 MB of a 4.5 MB
+ * players blob at year ten, and the save stopped fitting in a browser around
+ * year nine.
+ *
+ * Almost all of it is sediment. A filler-vs-filler relationship sitting at −2
+ * is indistinguishable from no relationship at all (`getRel` reads a missing
+ * entry as 0), a single recorded meeting is indistinguishable from strangers,
+ * and one head-to-head game is below every threshold that reads h2h. So each
+ * of them keeps the strongest N and forgets the rest.
+ *
+ * TWO THINGS ARE NEVER PRUNED, and they are what make this safe:
+ *
+ *  · anything pointing at YOUR CAST. `standingOf` reads every incoming
+ *    relationship in the building to decide how the room feels about one of
+ *    your players, so dropping a filler's opinion of them would quietly move a
+ *    number you can see on the leaderboard. Cast entries are kept whole,
+ *    however faint.
+ *  · the biggest feelings. Sorting by |value| keeps every feud, every real
+ *    friendship and every rivalry — the things that spread, poison the room,
+ *    and decide who churns out. What goes is the long tail of ±2.
+ *
+ * Monthly, not daily: this is housekeeping, and it should never be the reason
+ * a day is slow.
+ */
+const FILLER_REL_CAP = 40
+const FILLER_MET_CAP = 24
+const FILLER_H2H_CAP = 24
+
+// Keep every entry about the cast, plus the `cap` strongest about everyone
+// else. `weight` says what "strongest" means for this map.
+function capLedger(map, cap, isCast, weight) {
+  if (!map) return map
+  const keys = Object.keys(map)
+  const fillerKeys = keys.filter((k) => !isCast(k))
+  if (fillerKeys.length <= cap) return map
+  fillerKeys.sort((a, b) => weight(map[b]) - weight(map[a]))
+  for (const k of fillerKeys.slice(cap)) delete map[k]
+  return map
+}
+
+export function pruneFillerLedgers(save) {
+  const cast = new Set(Object.values(save.players).filter((p) => !p.npc).map((p) => p.id))
+  const isCast = (id) => cast.has(id)
+  for (const p of Object.values(save.players)) {
+    if (!p.npc) continue // your people keep everything; there are a dozen of them
+    capLedger(p.relationships, FILLER_REL_CAP, isCast, (v) => Math.abs(v || 0))
+    capLedger(p.met, FILLER_MET_CAP, isCast, (v) => v?.count || 0)
+    capLedger(p.h2h, FILLER_H2H_CAP, isCast, (v) => (v?.w || 0) + (v?.l || 0))
+    pruneEureka(p)
   }
 }
 

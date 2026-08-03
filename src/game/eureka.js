@@ -263,6 +263,26 @@ export function edge(save, player, { weight, stats, why }) {
   stats.slice(0, 2).forEach((stat, i) => addPressure(save, player, stat, weight * split[i], why, 'edge'))
 }
 
+/**
+ * Housekeeping for filler's pressure bag (see generate.js pruneFillerLedgers).
+ *
+ * Pressure decays toward nothing but never reaches it — CARRY multiplies the
+ * unchosen by 0.55 on every breakthrough — so a long-lived NPC accumulates a
+ * float and a source ring for all twenty-four stats, most of them holding
+ * amounts far too small to ever glow. Anything under a twentieth of its own
+ * glow requirement cannot become a candidate before it is next decayed again,
+ * so dropping it changes nothing except the size of the save.
+ */
+export function pruneEureka(player) {
+  const e = player.eureka
+  if (!e) return
+  for (const stat of Object.keys(e.pressure)) {
+    if (e.pressure[stat] >= glowRequirement(player, stat) * 0.05) continue
+    delete e.pressure[stat]
+    delete e.sources[stat]
+  }
+}
+
 // ---------- Glow, candidates, choice ----------
 
 /**
@@ -541,14 +561,20 @@ export function chooseBreakthrough(save, player, stat, { forced = false } = {}) 
   // the moment it was answered, so nothing could tell a genuine three-way
   // decision from a single button. Two integers per breakthrough; see
   // tools/balance/choice.mjs.
-  const offer = e.pending?.candidates || null
-  e.log.push({
-    absDay: today, stat, kind, cross: !!cross, forced,
-    offered: offer ? offer.length : null,
-    offeredReady: offer ? offer.filter((c) => c.ready !== false).length : null,
-    offeredKinds: offer ? new Set(offer.map((c) => c.kind)).size : null,
-  })
-  trimEurekaLog(e)
+  // Filler keeps no log. It is career history for an inspector filler does not
+  // have, and 186 passers-through carrying one is real weight in a save that
+  // has to fit a browser. `count` and `perStat` — the two things the sim reads
+  // — are kept for everybody.
+  if (!player.npc) {
+    const offer = e.pending?.candidates || null
+    e.log.push({
+      absDay: today, stat, kind, cross: !!cross, forced,
+      offered: offer ? offer.length : null,
+      offeredReady: offer ? offer.filter((c) => c.ready !== false).length : null,
+      offeredKinds: offer ? new Set(offer.map((c) => c.kind)).size : null,
+    })
+    trimEurekaLog(e)
+  }
   e.count += 1
   e.perStat[stat] = (e.perStat[stat] || 0) + 1
   e.threshold = Math.round(e.threshold * EUREKA.GROWTH * 10) / 10
@@ -776,8 +802,10 @@ export function veteranBreakthrough(save, player) {
 
   // The meter is spent exactly as a normal breakthrough spends it, so a
   // veteran keeps producing on the same cadence a young player improves on.
-  e.log.push({ absDay: today, stat: null, kind: `veteran:${kind}`, veteran: true })
-  trimEurekaLog(e)
+  if (!player.npc) {
+    e.log.push({ absDay: today, stat: null, kind: `veteran:${kind}`, veteran: true })
+    trimEurekaLog(e)
+  }
   e.count += 1
   e.veteranCount = (e.veteranCount || 0) + 1
   e.threshold = Math.round(e.threshold * EUREKA.GROWTH * 10) / 10
