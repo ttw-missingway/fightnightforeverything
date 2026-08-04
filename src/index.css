@@ -1494,6 +1494,15 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   font-size: 13px; color: var(--text);
 }
 .pool-card:hover { border-color: var(--pink); color: var(--text); }
+/* THE POOL WE ARE ABOUT TO WALK INTO. The autopilot lands on the grid before
+   every group, and the only thing that beat is FOR is saying which one is
+   next — without a mark on the card it is two seconds of an unchanged grid. */
+.pool-card.up-next {
+  border-color: var(--pink);
+  box-shadow: 0 0 18px rgba(255, 45, 120, 0.32);
+  transform: translateY(-2px);
+}
+.pool-card.toured { opacity: 0.62; }
 .pool-mini { display: flex; justify-content: space-between; gap: 6px; padding: 1px 0; font-size: 12px; }
 
 .pool-table th, .pool-table td { padding: 5px 8px; white-space: nowrap; }

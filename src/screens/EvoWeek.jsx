@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import MatchPlayback from '../components/MatchPlayback.jsx'
 
@@ -19,9 +19,16 @@ import MatchPlayback from '../components/MatchPlayback.jsx'
 // `next()` can't land on a beat with nothing to celebrate.
 const STEPS = ['intro', 'pools', 'seeded', 'chatter', 'expo', 'expoTalk', 'bracket', 'champion', 'ours', 'end']
 
+const BLANK = { step: 'intro', poolRound: 0, openPool: null, watched: [], tour: null }
+
+// How long a static beat holds when the broadcast is driving itself. "A couple
+// of seconds" — long enough to read a pool table, short enough that sixteen
+// pools is a few minutes rather than an evening.
+const HOLD_MS = 2200
+
 export default function EvoWeek({ record, onFinish }) {
   const { save, mutate } = useStore()
-  const state = save.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }
+  const state = save.evoWeek || BLANK
 
   // Did somebody from this arcade win EVO? `arcadeResults` is your players'
   // placements, so place 1 is the whole question.
@@ -30,9 +37,9 @@ export default function EvoWeek({ record, onFinish }) {
   const step = steps.includes(state.step) ? state.step : 'intro'
 
   const set = (patch) => mutate((s) => {
-    s.evoWeek = { ...(s.evoWeek || { step: 'intro', poolRound: 0, openPool: null, watched: [] }), ...patch }
+    s.evoWeek = { ...(s.evoWeek || BLANK), ...patch }
   }, { ack: true }) // stepping through the broadcast, not a choice
-  const go = (next) => set({ step: next, openPool: null })
+  const go = (next) => set({ step: next, openPool: null, tour: null })
   const idx = steps.indexOf(step)
   const next = () => go(steps[Math.min(steps.length - 1, idx + 1)])
 
@@ -40,20 +47,44 @@ export default function EvoWeek({ record, onFinish }) {
   const byId = {}
   for (const r of record.rounds || []) for (const m of r.matches || []) byId[m.id] = m
 
+  // AUTOPILOT. Only while spectating — clicked through by hand, EVO stays
+  // exactly the broadcast it was. The speed control on the spectator stage
+  // scales the holds, so 4x walks the whole day in a couple of minutes.
+  const auto = !!save.spectator?.active
+  const hold = HOLD_MS / (save.spectator?.speed || 1)
+  const pools = record.pools || []
+  const bracketCount = (record.rounds || [])
+    .filter((r) => r.phase === 'top16')
+    .reduce((n, r) => n + (r.matches || []).length, 0)
+  const finish = () => { set({ step: 'done' }); onFinish() }
+  useEvoAutopilot({ auto, hold, step, state, set, next, finish, pools, byId, bracketCount })
+
+  const skipPools = () => {
+    // Everything in pools is decided already; skipping just stops watching it.
+    set({ poolRound: 3, openPool: null, tour: null })
+    go('seeded')
+  }
+
   return (
     <div className="evo">
       {/* No chrome over a cinematic beat. `ours` joins the intro in this: a
           skip button sitting on top of the celebration undercuts it. */}
       {step !== 'intro' && step !== 'ours' && step !== 'end' && (
         <div className="row spread evo-chrome">
-          <span className="dim small">EVO {record.year} · {record.entrantCount} entrants</span>
-          <button className="small" onClick={() => go('end')}>Skip to the end →</button>
+          <span className="dim small">
+            EVO {record.year} · {record.entrantCount} entrants
+            {auto && <span className="pink"> · auto</span>}
+          </span>
+          <div className="row">
+            {step === 'pools' && <button className="small" onClick={skipPools}>⏭ Skip pools</button>}
+            <button className="small" onClick={() => go('end')}>Skip to the end →</button>
+          </div>
         </div>
       )}
 
       {step === 'intro' && <EvoIntro onDone={next} />}
       {step === 'pools' && (
-        <Pools record={record} byId={byId} state={state} set={set} onDone={next} />
+        <Pools record={record} byId={byId} state={state} set={set} onDone={next} onSkip={skipPools} />
       )}
       {step === 'seeded' && <Seeded record={record} onNext={next} />}
       {step === 'chatter' && <Chatter record={record} onNext={next} />}
@@ -65,6 +96,100 @@ export default function EvoWeek({ record, onFinish }) {
       {step === 'end' && <TheEnd record={record} onFinish={() => { set({ step: 'done' }); onFinish() }} />}
     </div>
   )
+}
+
+/**
+ * THE BROADCAST, DRIVING ITSELF.
+ *
+ * One rule: every static beat holds for a couple of seconds and then moves on,
+ * in the order the day happens. The only beat with structure inside it is
+ * pools, which walks the sixteen groups one at a time:
+ *
+ *   the grid, with the pool we are about to enter lit
+ *   -> inside that pool: the fixtures and an empty table
+ *   -> round one played, table updated
+ *   -> round two, round three
+ *   -> back to the grid, with the NEXT pool lit
+ *
+ * The tour reveals rounds by adding their match ids to `watched` rather than
+ * advancing the global `poolRound`. That counter is one number for all sixteen
+ * pools, so using it would light up round one of every pool the moment pool A
+ * played its first — the tour needs pool A finished while pool B has not
+ * started, and per-match reveal is the only thing in the model that says that.
+ *
+ * `tour.round` is -1 while the fixtures are up and nothing has been played,
+ * then 0, 1, 2 as each round airs.
+ */
+function useEvoAutopilot({ auto, hold, step, state, set, next, finish, pools, byId, bracketCount }) {
+  // The tour position is read inside a timeout, so it goes through a ref —
+  // otherwise every tick would re-arm the timer with a stale closure.
+  const latest = useRef({ state, pools, byId, set, next, step, finish, bracketCount })
+  latest.current = { state, pools, byId, set, next, step, finish, bracketCount }
+
+  useEffect(() => {
+    if (!auto) return
+    const tick = () => {
+      const { state: st, pools: ps, byId: ids, set: put, next: go, step: sp, finish: end, bracketCount: bc } = latest.current
+
+      // THE LAST BEAT HAS TO ACTUALLY END. `next()` clamps at the final step,
+      // so on 'end' it re-selects 'end' forever and the broadcast parks on its
+      // own closing card waiting for a click that, on autopilot, is never
+      // coming.
+      if (sp === 'end') { end(); return }
+
+      // THE BRACKET WALKS TOO. Top 16 is the part of the night people actually
+      // came for, and treating it as one static beat flashed the whole
+      // double-elim past in a couple of seconds. One set per beat, same as a
+      // pool round — results only, since the pace here is a broadcast running
+      // itself rather than sixteen full narrations.
+      if (sp === 'bracket') {
+        const shown = st.bracketRevealed || 0
+        if (shown < bc) { put({ bracketRevealed: shown + 1 }); return }
+        go()
+        return
+      }
+
+      if (sp !== 'pools') { go(); return }
+      if (!ps.length) { go(); return }
+
+      // FIRST BEAT: the grid, with Pool A lit and nothing entered yet. Without
+      // this the walk began by jumping straight into the first pool, so the
+      // one thing the grid beat exists to say — here is where we are going —
+      // never got said for the pool it mattered most for.
+      if (!st.tour) { put({ tour: { pool: 0, round: -1 }, openPool: null }); return }
+
+      const tour = st.tour
+      const pool = ps[tour.pool]
+
+      // On the grid with a pool lit -> go into it.
+      if (st.openPool == null) { put({ openPool: tour.pool, tour: { ...tour, round: -1 } }); return }
+
+      // Inside a pool: play the next round, or hand over to the next pool.
+      const nextRound = tour.round + 1
+      if (pool && nextRound < (pool.rounds || []).length) {
+        const ids2 = (pool.rounds[nextRound].matchIds || []).filter((id) => ids[id])
+        put({
+          watched: [...new Set([...(st.watched || []), ...ids2])],
+          tour: { ...tour, round: nextRound },
+        })
+        return
+      }
+
+      // Pool finished. Next pool, back out to the grid.
+      if (tour.pool + 1 < ps.length) {
+        put({ openPool: null, tour: { pool: tour.pool + 1, round: -1 } })
+        return
+      }
+
+      // All sixteen done: settle the grid into its final standings and move on.
+      put({ poolRound: 3, openPool: null, tour: null })
+      go()
+    }
+    const h = setTimeout(tick, hold)
+    return () => clearTimeout(h)
+    // Re-armed on every position change, which is what makes it walk.
+  }, [auto, hold, step, state.openPool, state.tour?.pool, state.tour?.round,
+    state.watched?.length, state.bracketRevealed])
 }
 
 // ---------- 1. The lights ----------
@@ -93,10 +218,11 @@ function EvoIntro({ onDone }) {
  * round two, round two has not been revealed to you yet, even though it has
  * been on the record since the moment EVO was simulated.
  */
-function Pools({ record, byId, state, set, onDone }) {
+function Pools({ record, byId, state, set, onDone, onSkip }) {
   const pools = record.pools || []
   const round = Math.min(state.poolRound || 0, 3)
   const openPool = state.openPool
+  const tour = state.tour
 
   if (!pools.length) {
     return <div className="card"><p className="dim">This EVO has no pool stage on record.</p>
@@ -105,23 +231,31 @@ function Pools({ record, byId, state, set, onDone }) {
 
   if (openPool != null) {
     const pool = pools[openPool]
-    return <PoolDetail pool={pool} round={round} byId={byId} state={state} set={set}
-      back={() => set({ openPool: null })} />
+    // ON TOUR, THE ROUND COUNTER IS PER POOL. `poolRound` is one number for all
+    // sixteen groups and stays at 0 for the whole walk (see useEvoAutopilot);
+    // inside the pool being toured, what has aired is tour.round + 1 rounds of
+    // it. Without this the fixtures below would all read "not played yet" while
+    // their results were filling in the table above them.
+    const shown = tour && tour.pool === openPool ? tour.round + 1 : round
+    return <PoolDetail pool={pool} round={shown} byId={byId} state={state} set={set}
+      back={() => set({ openPool: null, tour: null })} />
   }
 
   return (
     <div>
       <div className="row spread">
         <h2 style={{ margin: 0 }}>
-          {round >= 3 ? 'Pools · all three rounds played' : `Pools · Round ${round + 1} of 3`}
+          {tour ? `Pools · up next, Pool ${pools[tour.pool]?.letter ?? '?'}`
+            : round >= 3 ? 'Pools · all three rounds played'
+              : `Pools · Round ${round + 1} of 3`}
         </h2>
         <div className="row">
-          {round < 3 && (
+          {round < 3 && !tour && (
             <button className="primary" onClick={() => set({ poolRound: round + 1 })}>
               ▶ {round === 2 ? 'Play the final round' : 'Next round'}
             </button>
           )}
-          <button onClick={onDone}>Skip pools →</button>
+          <button onClick={onSkip || onDone}>Skip pools →</button>
         </div>
       </div>
       <p className="dim small">
@@ -130,10 +264,14 @@ function Pools({ record, byId, state, set, onDone }) {
       </p>
       <div className="pool-grid">
         {pools.map((p, i) => {
-          const done = round >= 3
+          // A pool is finished either because the whole stage is (manual play)
+          // or because the tour has already walked it.
+          const done = round >= 3 || (tour ? i < tour.pool : false)
+          const upNext = !!tour && i === tour.pool
           const leader = p.standings[0]
           return (
-            <button className="pool-card" key={p.letter} onClick={() => set({ openPool: i })}>
+            <button className={`pool-card${upNext ? ' up-next' : ''}${done ? ' toured' : ''}`}
+              key={p.letter} onClick={() => set({ openPool: i, tour: null })}>
               <div className="row spread">
                 <strong>Pool {p.letter}</strong>
                 {done && <span className="gold small">✓</span>}
