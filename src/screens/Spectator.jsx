@@ -6,7 +6,6 @@ import { moodLabel } from '../game/social.js'
 import { hiatusActive, hiatusDays } from '../game/hiatus.js'
 import { revealState } from '../game/tournament.js'
 import MatchPlayback from '../components/MatchPlayback.jsx'
-import MatchHud from '../components/MatchHud.jsx'
 import { SpeechLine, moodFace } from '../components/ui.jsx'
 import { liveToasts, dismissToast } from '../game/notify.js'
 
@@ -223,15 +222,20 @@ function Stage({ save, beat, speed, onDone }) {
     // the stage for five games and a sweep is over quickly. `key` is the match
     // id so React tears the player down and builds a fresh one per match
     // rather than trying to reconcile a half-played narration onto a new one.
+    // LET PLAYBACK OWN THE HUD. Mounting MatchHud separately and passing
+    // showHud={false} is the ALREADY-CONCLUDED arrangement (see LiveDay): with
+    // no `revealed` prop the HUD renders the fully-revealed state, so the bars
+    // sat at the end of the set from the first line onwards while the text
+    // played out underneath them. MatchPlayback's own HUD is the one wired to
+    // `revealed`, `hudState` and the per-hit tick, which is the whole point of
+    // watching a match rather than reading its result.
     return (
       <div className="spectator-match">
         <div className="dim small">{label} · the setups</div>
-        <MatchHud m={vignette.ev} />
         <MatchPlayback
           key={vignette.ev.id || `${vignette.ev.aId}-${vignette.ev.bId}-${label}`}
           m={vignette.ev}
           autoStart
-          showHud={false}
           onComplete={onDone}
         />
       </div>
@@ -307,10 +311,7 @@ function TournamentStage({ save, record, speed, onDone }) {
         </span>
       </div>
       {playable ? (
-        <>
-          <MatchHud m={m} />
-          <MatchPlayback key={m.id} m={m} autoStart showHud={false} onComplete={onDone} />
-        </>
+        <MatchPlayback key={m.id} m={m} autoStart onComplete={onDone} />
       ) : (
         <Held ms={DWELL.note / speed} onDone={onDone}>
           <div className="card spectator-card">
