@@ -341,15 +341,116 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 }
 .rollchip.used { opacity: 0.25; }
 
-/* ---------- Idle mode ---------- */
-.idlebar {
-  border: 1px solid var(--pink);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 45, 120, 0.06);
-  min-width: 260px;
+/* ---------- Spectator mode ----------
+   A stage, not a page: the app's chrome is gone, the vignette owns the middle,
+   and the overlays float over the corners like a broadcast's furniture. Sized
+   in vh so a match and its HUD fit without the page scrolling under the
+   controls — the one thing that would break the illusion of watching. */
+.spectator {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  background-image: radial-gradient(circle at 50% 0%, #221046 0%, transparent 55%),
+    radial-gradient(circle at 90% 100%, #0a2540 0%, transparent 45%);
+  z-index: 40;
 }
-.idlebar select { padding: 4px 6px; font-size: 13px; }
+.spectator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.spectator-stage {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.spectator-stage > * { width: 100%; max-width: 860px; }
+/* THE OVERLAYS MUST NOT SIT ON THE MATCH. They are floating furniture, so
+   nothing reserves space for them — the stage has to give up the gutters
+   itself, and only for the overlays actually switched on. Without this the
+   feed lands squarely on top of the health bars at any normal window size. */
+@media (min-width: 1240px) {
+  .spectator.feed-on .spectator-stage { padding-left: 280px; }
+  .spectator.board-on .spectator-stage { padding-right: 280px; }
+}
+/* The non-match beats are a single held shot, so they are centred and given
+   room rather than stacked like feed items. */
+.spectator-card {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  animation: spectator-in 260ms ease-out;
+}
+.spectator-match { animation: spectator-in 200ms ease-out; }
+@keyframes spectator-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.spectator-overlay {
+  position: absolute;
+  width: 250px;
+  max-height: 42vh;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(12, 13, 22, 0.82);
+  backdrop-filter: blur(3px);
+  pointer-events: none; /* furniture, not UI — never steals a click from the stage */
+}
+.spectator-feed { left: 14px; top: 64px; }
+.spectator-board { right: 14px; top: 64px; }
+.spectator-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(12, 13, 22, 0.9);
+}
+.spectator-controls select { padding: 4px 6px; font-size: 13px; }
+/* The decision feed. Above the controls rather than the usual bottom-right so
+   it never sits under the play button, and pointer-events restored on the
+   cards themselves so the dismiss ✕ still works inside a floating layer. */
+.spectator-toasts {
+  position: absolute;
+  right: 14px;
+  bottom: 58px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+}
+.spectator-sep { flex: 0 0 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+/* Under ~900px the overlays would sit on top of the match. They go under the
+   stage instead of away — the point of the toggles is that you chose to have
+   them, and silently hiding a thing somebody switched on is worse than
+   moving it. */
+@media (max-width: 1239px) {
+  .spectator-overlay {
+    position: static;
+    width: 100%;
+    max-width: 860px;
+    margin: 8px auto 0;
+    max-height: none;
+  }
+  .spectator { overflow-y: auto; }
+}
+
+/* ---------- Idle mode ---------- */
 .idle-badge {
   border: 1px solid var(--pink);
   color: var(--pink);

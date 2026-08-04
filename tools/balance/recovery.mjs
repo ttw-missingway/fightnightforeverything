@@ -57,6 +57,7 @@ function shiftMain(save, playerId, dir) {
 
 import { feudSource } from '../../src/game/social.js'
 import { banish } from '../../src/game/discipline.js'
+import { hiatusActive, hiatusDays, setHiatus } from '../../src/game/hiatus.js'
 
 const LAGS = [0, 7, 14, 28, 56, 112]
 // §17's first named suspect was instrument power, and it was right: at six
@@ -145,6 +146,25 @@ export const CRISES = {
     counterplayDay(save, signal) {
       const abs = (save.year - 1) * 336 + save.day
       signal.startAbs ??= abs
+      // CLOSE THE SETUPS (hiatus.js). The lever this crisis was missing: feud
+      // cooling is throttled by the room's own toxicity and reaches zero at
+      // 0.455, so past that a room that keeps playing cannot heal at all and
+      // the only counterplay left was a ban. Closing the cabinets breaks the
+      // throttle — nobody loses to anybody, cooling runs at full rate, and
+      // nothing new is recruited into a fight that isn't happening.
+      //
+      // A competent owner reaches for it EARLY (it is reversible and cheap
+      // next to a ban), reopens as soon as it worked, and does not sit dark
+      // indefinitely — the crowd loss escalates every day and outruns the
+      // problem it was closed to fix.
+      const tox = save.scene?.toxicity ?? 0
+      if (!hiatusActive(save) && tox >= 0.28) {
+        setHiatus(save, true)
+        signal.hiatusDays = (signal.hiatusDays || 0)
+      } else if (hiatusActive(save)) {
+        signal.hiatusDays = (signal.hiatusDays || 0) + 1
+        if (tox <= 0.08 || hiatusDays(save) >= 21) setHiatus(save, false)
+      }
       // Three weeks of starving the spotlight not working → the sabotage.
       if (!signal.nerfedAbs && abs - signal.startAbs > 21) {
         const chief = worstOffender(save)

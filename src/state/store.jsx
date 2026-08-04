@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../game/sim.js'
 import { HOURS_PER_DAY, absDayOf, idleSpeedOf, weekdayOf, formatDay, difficultyOf } from '../game/constants.js'
 import { runSinglesTournament, runTeamTournament, runEvo, revealState, revealNextMatch } from '../game/tournament.js'
@@ -6,7 +6,7 @@ import { runCircuitEvent, ensureRegionalField, hostsForYear } from '../game/circ
 import { buildStreamForPlayers, pickAutoStreamSetup, autoStreamAllowed, canStream } from '../game/stream.js'
 import { seedWorldFeed } from '../game/socialmedia.js'
 import { repairEvoRoster, generateEvoRoster, populateRoster } from '../game/generate.js'
-import { migrateSave, newSave, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION, toStorage, fromStorage } from '../game/model.js'
+import { migrateSave, newSave, newSpectatorState, resetPlayerForNewRun, ensureSpirit, SAVE_SCHEMA_VERSION, toStorage, fromStorage } from '../game/model.js'
 import { bindRng } from '../game/rng.js'
 import { prestigeEarned, startingBudget, arcadeBuildCost, seedFamilyCrew } from '../game/economy.js'
 import { computeMatchups } from '../game/balance.js'
@@ -14,13 +14,24 @@ import { uid } from '../game/util.js'
 import { noteDecision } from '../game/attention.js'
 import { TAB_GATES, tabOpen } from '../game/tabs.js'
 import { isUnlocked } from '../game/achievements.js'
+import {
+  DEFAULT_POLICY, DEFAULT_AUTHORITY, autoOpen, autoClose, autoStreamHour,
+} from '../game/auto.js'
+import { pushToast } from '../game/notify.js'
 
 const INDEX_KEY = 'fightnight:index'
 const saveKey = (id) => `fightnight:save:${id}`
 
-// How many advance-steps a single idle pass may run. Idle only advances with
-// the tab open, so this just keeps each foreground tick smooth.
-const IDLE_FOREGROUND_CAP = 200
+// IDLE IS NOW ONLY ABOUT TIME YOU ARE NOT HERE.
+//
+// It used to be two things wearing one coat: a foreground auto-advance loop
+// with a play/pause bar, AND the offline catch-up. The foreground half was
+// always a worse version of watching — it advanced the clock behind whatever
+// screen you happened to be on and showed you a diff afterwards. That job
+// belongs to spectator mode, which actually stages it. What is left here is
+// the question idle was always really answering: does the arcade keep running
+// while the game is shut, and how fast.
+//
 // How much away-time one return can bank. At the default 'fast' speed a step
 // is an in-game hour a minute, so this is a bit over two in-game months —
 // enough that a weekend away is fully honoured and a month away is a long
@@ -82,6 +93,12 @@ function setStorageFailure(value) {
 
 export function persistSave(save) {
   save.updatedAt = Date.now()
+  // THE OFFLINE CLOCK IS "SINCE YOU LAST DID ANYTHING". With the foreground
+  // idle loop gone there is nothing else ticking `lastTickAt`, so it is stamped
+  // on every write: time only accrues while the save is sitting still, which is
+  // exactly the time offline catch-up is supposed to honour. Stamped before the
+  // serialise below so the value that lands in storage is the one we mean.
+  if (save.idle) save.idle.lastTickAt = save.updatedAt
   const index = loadIndex().filter((e) => e.id !== save.id)
   index.unshift({
     id: save.id,
@@ -462,13 +479,26 @@ function stepSave(next) {
 }
 
 /**
- * One idle step while the player is watching the arcade. Identical to stepSave
- * on normal days, but a tournament/EVO day plays out MATCH BY MATCH at the idle
- * tick rate instead of resolving in a single step: the first tick sims the whole
- * event (deterministic) and shows the opening match; each later tick reveals one
- * more; a final tick (once the bracket is fully shown) ticks the calendar.
+ * ONE SPECTATOR BEAT — the step spectator mode watches.
+ *
+ * A normal hour resolves like stepSave, but the computer runs the place around
+ * it: the management pass fires before the doors open, the camera is aimed
+ * after each hour, and breakthroughs are answered at close. A tournament day
+ * plays out MATCH BY MATCH rather than resolving in one step — the first beat
+ * sims the whole event (deterministic) and shows the opening set, each later
+ * beat reveals one more, and a final beat ticks the calendar.
+ *
+ * `announce` is where the computer's decisions become toasts. It is passed in
+ * rather than assumed so the same brain can run silently elsewhere.
  */
-function idleArcadeStep(next) {
+function spectatorStep(next, announce = null) {
+  const opts = {
+    announce,
+    // A decision the COMPUTER made is not a decision the owner made. Counting
+    // these would quietly corrupt metric 6 for anyone who ever spectated.
+    countAttention: false,
+    authority: next.spectator?.authority,
+  }
   // Mid-broadcast: reveal one more match, or finalize once it's all shown.
   if (next.tournamentInProgress) {
     const rec = next.lastTournament && next.lastTournament.id === next.tournamentInProgress
@@ -484,8 +514,11 @@ function idleArcadeStep(next) {
     for (const v of next.vods || []) if (v.id === rec.id) v.revealed = rec.revealed
     return { type: 'tournament-reveal', record: rec }
   }
-  // Start a broadcast if today is a tournament/EVO day.
+  // A NEW DAY: the computer runs the place first, then the doors open. Ordered
+  // this way on purpose — the toasts a decision produces should land while the
+  // stage is still between days, not on top of a match.
   if (!next.dayInProgress) {
+    autoOpen(next, spectatorPolicy(next), opts)
     const today = whatHappensToday(next)
     if (today === 'evo' || today) {
       const res = today === 'evo'
@@ -503,10 +536,35 @@ function idleArcadeStep(next) {
       // Tournament fell through — run a normal day instead.
       startDay(next)
       simHour(next)
+      autoStreamHour(next, spectatorPolicy(next), opts)
       return { type: 'hour', notice: res.reason }
     }
+    startDay(next)
+    simHour(next)
+    autoStreamHour(next, spectatorPolicy(next), opts)
+    return { type: 'hour' }
   }
-  return stepSave(next)
+  if (next.hour < HOURS_PER_DAY) {
+    simHour(next)
+    autoStreamHour(next, spectatorPolicy(next), opts)
+    return { type: 'hour' }
+  }
+  endDay(next)
+  // The cast has been waiting on an answer all day. autoClose honours the
+  // authority switches — with `eureka` off it does nothing and the pending
+  // breakthroughs sit there for whenever you take the wheel back.
+  autoClose(next, spectatorPolicy(next), opts)
+  return { type: 'recap' }
+}
+
+/**
+ * The dials the computer plays by. Mostly the shared competent-owner defaults;
+ * the camera follows the arcade's own auto-stream selector when one is set, so
+ * a channel you aimed by hand keeps pointing where you aimed it.
+ */
+function spectatorPolicy(save) {
+  const sel = save.stream?.auto?.selector
+  return sel ? { ...DEFAULT_POLICY, streamSelector: sel } : DEFAULT_POLICY
 }
 
 /**
@@ -553,13 +611,22 @@ function maybeAutoStream(next) {
 }
 
 /**
- * Run whatever idle time is DUE since idle.lastTickAt (mutating `next`), up to
- * `maxSteps`. Returns a summary of what happened (for the welcome-back modal),
- * or null if nothing was due / the clock was just initialised. Advances
- * idle.lastTickAt by exactly the time consumed; if the backlog exceeded
- * maxSteps, the overflow is discarded so we don't lag forever.
+ * OFFLINE CATCH-UP. Run whatever time is due since the save was last touched
+ * (mutating `next`), up to `maxSteps`. Returns a summary for the welcome-back
+ * modal, or null if nothing was due.
+ *
+ * The one caller is openSave. There is no foreground equivalent any more: with
+ * the play/pause bar gone, "the arcade ran while I was away" is the only thing
+ * idle does, and running it anywhere but on the way in would mean time passing
+ * behind a screen you were looking at.
+ *
+ * The competent owner runs the place during catch-up, exactly as it does in
+ * spectator mode — an arcade left running for a fortnight with nobody making a
+ * single decision is not "it kept going", it is a fortnight of neglect. Toasts
+ * are suppressed: what happened comes back as the away report, and two weeks of
+ * decisions arriving as a notification queue is nobody's welcome home.
  */
-function idleRun(next, maxSteps, revealTournaments = false) {
+function idleRun(next, maxSteps) {
   const idle = next.idle
   if (!idle || runEnded(next)) return null // no idling past the end of a run
   // A speed this lineage hasn't earned can't be run, however it got onto the
@@ -583,14 +650,18 @@ function idleRun(next, maxSteps, revealTournaments = false) {
   const tournaments = []
   let hoursSimmed = 0
 
+  const opts = { countAttention: false, authority: next.spectator?.authority }
   for (let i = 0; i < due; i++) {
     if (runEnded(next)) break // the run ended mid-catch-up
-    // On the arcade tab, tournaments reveal a match per tick; everywhere else
-    // (and during offline catch-up) they resolve in one step.
-    const outcome = revealTournaments ? idleArcadeStep(next) : stepSave(next)
+    // Tournaments resolve in one step here — a match-by-match broadcast to an
+    // empty room is just a slow way of skipping it. They land in the VOD tab.
+    if (!next.dayInProgress) autoOpen(next, spectatorPolicy(next), opts)
+    const outcome = stepSave(next)
     if (outcome.type === 'hour') {
       hoursSimmed += 1
       maybeAutoStream(next)
+    } else if (outcome.type === 'recap') {
+      autoClose(next, spectatorPolicy(next), opts)
     } else if (outcome.type === 'tournament') {
       const r = outcome.record
       if (r) tournaments.push({ id: r.id, name: r.name, type: r.type, dateLabel: r.dateLabel })
@@ -625,9 +696,6 @@ export function StoreProvider({ children }) {
   const [save, _setSave] = useState(null)
   const saveRef = useRef(null)
   const [screen, setScreen] = useState({ name: 'menu' })
-  // Latest screen, readable from the idle timer without re-arming the callback.
-  const screenRef = useRef(screen)
-  useEffect(() => { screenRef.current = screen }, [screen])
 
   const setSave = useCallback((s) => {
     saveRef.current = s
@@ -701,17 +769,19 @@ export function StoreProvider({ children }) {
     // modal instead of silently mutating the world behind you.
     if (loaded.idle) {
       loaded.idle.awayReport = null
-      if (loaded.idle.enabled && loaded.idle.running && loaded.idle.lastTickAt) {
-        const report = idleRun(loaded, IDLE_AWAY_CAP, false)
+      if (loaded.idle.enabled && loaded.idle.lastTickAt) {
+        const report = idleRun(loaded, IDLE_AWAY_CAP)
         if (report) loaded.idle.awayReport = report
       } else {
-        loaded.idle.running = false
         loaded.idle.lastTickAt = null
       }
     }
     persistSave(loaded) // write migrations back immediately
     setSave(loaded)
-    setScreen({ name: 'arcade' })
+    // Spectating is a mode the run is IN, not a screen you happened to be on:
+    // leave mid-broadcast and come back to the broadcast. The stage picks up
+    // wherever the catch-up above left the clock.
+    setScreen({ name: loaded.spectator?.active ? 'spectator' : 'arcade' })
     return true
   }, [setSave])
 
@@ -776,21 +846,24 @@ export function StoreProvider({ children }) {
     setScreen({ name: 'arcade', notice })
   }, [setSave])
 
-  // One idle pass (called on a timer while idle mode runs). Runs any due
-  // steps, auto-streams, and stays put. On the arcade tab a tournament day
-  // plays out match by match (live in the arcade); elsewhere it resolves at
-  // once and lands in the VOD tab.
-  const idleAdvance = useCallback(() => {
+  /**
+   * ONE SPECTATOR BEAT, played and shown. Returns what it produced so the
+   * stage knows how long to hold it: a match plays to its own end, a
+   * conversation gets a few seconds, a recap gets a breath.
+   *
+   * Advancing is driven by the STAGE, not by a wall clock — a beat is over
+   * when the thing on screen has finished, which is why there is no tick
+   * interval here. The speed control scales the dwell times, not this.
+   */
+  const spectateStep = useCallback(() => {
     const prev = saveRef.current
-    if (!prev || !prev.idle?.enabled || !prev.idle?.running) return
+    if (!prev || runEnded(prev)) return null
     const next = structuredClone(prev)
-    const onArcade = screenRef.current?.name === 'arcade'
-    const report = idleRun(next, IDLE_FOREGROUND_CAP, onArcade)
-    // Persist even when nothing was due but the clock was just initialised.
-    if (report || next.idle.lastTickAt !== prev.idle?.lastTickAt) {
-      persistSave(next)
-      setSave(next)
-    }
+    const announce = (a) => pushToast(next, { ...a, sticky: false })
+    const outcome = spectatorStep(next, announce)
+    persistSave(next)
+    setSave(next)
+    return outcome
   }, [setSave])
 
   // Foreclosure (or a voluntary fresh start): archive the run, convert fame
@@ -808,21 +881,47 @@ export function StoreProvider({ children }) {
     })
   }, [setSave])
 
+  // Idle is two switches now: does it run while the game is closed, and how
+  // fast. Both are set-and-forget, so they are plain mutations with no loop
+  // behind them — persistSave stamps the clock (see the note there).
   const idleActions = useMemo(() => ({
-    enableIdle: (on) => mutate((s) => {
+    setIdleOffline: (on) => mutate((s) => {
       s.idle.enabled = on
-      s.idle.running = on
-      if (on) s.idle.lastTickAt = Date.now()
-    }),
-    setIdleRunning: (run) => mutate((s) => {
-      s.idle.running = run
-      if (run) s.idle.lastTickAt = Date.now() // don't count paused time
-    }),
+      s.idle.lastTickAt = on ? Date.now() : null
+    }, { ack: true }),
     setIdleSpeed: (key) => mutate((s) => {
       if (!isUnlocked(s, `idle-${key}`)) return
       s.idle.speed = key
       s.idle.lastTickAt = Date.now() // restart the clock so a speed change can't burst
-    }),
+    }, { ack: true }),
+  }), [mutate])
+
+  // Spectator mode. Entering and leaving are acknowledgements rather than
+  // decisions (metric 6): choosing to WATCH is not a move in the game, and
+  // neither is deciding to stop.
+  const spectatorActions = useMemo(() => ({
+    startSpectating: () => {
+      mutate((s) => {
+        s.spectator ??= newSpectatorState()
+        s.spectator.active = true
+        s.spectator.paused = false
+      }, { ack: true })
+      setScreen({ name: 'spectator' })
+    },
+    stopSpectating: () => {
+      mutate((s) => { if (s.spectator) s.spectator.active = false }, { ack: true })
+      // TAKING THE WHEEL LANDS YOU WHERE THE RUN IS. Mid-broadcast that is the
+      // tournament; otherwise it is the floor.
+      setScreen({ name: saveRef.current?.tournamentInProgress ? 'tournament' : 'arcade' })
+    },
+    setSpectator: (patch) => mutate((s) => {
+      s.spectator ??= newSpectatorState()
+      Object.assign(s.spectator, patch)
+    }, { ack: true }),
+    setSpectatorAuthority: (key, on) => mutate((s) => {
+      s.spectator ??= newSpectatorState()
+      s.spectator.authority = { ...DEFAULT_AUTHORITY, ...s.spectator.authority, [key]: on }
+    }, { ack: true }),
   }), [mutate])
 
   // Not an idle action any more — the camera belongs to the channel. Lists are
@@ -845,36 +944,13 @@ export function StoreProvider({ children }) {
 
   const value = useMemo(() => ({
     save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay,
-    resetCurrentRun, idleAdvance, ...idleActions, ...streamActions,
-  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay, resetCurrentRun, idleAdvance, idleActions, streamActions])
+    resetCurrentRun, spectateStep, ...idleActions, ...spectatorActions, ...streamActions,
+  }), [save, screen, nav, mutate, startSave, openSave, closeSave, advance, skipDay, resetCurrentRun,
+    spectateStep, idleActions, spectatorActions, streamActions])
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>
 }
 
 export function useStore() {
   return useContext(StoreCtx)
-}
-
-/**
- * Drives idle mode: while running, ticks idleAdvance on an interval short
- * enough to keep the countdown live, and again whenever the tab regains
- * focus so a throttled background tab catches up promptly.
- */
-export function useIdleLoop() {
-  const { save, idleAdvance } = useStore()
-  const running = !!(save?.idle?.enabled && save?.idle?.running)
-  const speedKey = save?.idle?.speed
-
-  useEffect(() => {
-    if (!running) return
-    const ms = idleSpeedOf(speedKey).ms
-    const pollMs = Math.min(ms, 1000)
-    const handle = setInterval(idleAdvance, pollMs)
-    const onVis = () => { if (document.visibilityState === 'visible') idleAdvance() }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      clearInterval(handle)
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [running, speedKey, idleAdvance])
 }

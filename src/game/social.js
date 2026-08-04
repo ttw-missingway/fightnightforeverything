@@ -6,6 +6,7 @@ import { TEAM_WORDS } from './names.js'
 import { DAYS_PER_YEAR, statLevel } from './constants.js'
 import { selectableChars } from './forms.js'
 import { tokenFeel } from './economy.js'
+import { hiatusActive } from './hiatus.js'
 import { line as chronicleLine } from '../content/index.js'
 
 export function getRel(a, b) {
@@ -434,6 +435,18 @@ function communityAvg(save, fn) {
 export function communityGameOpinion(save) {
   const avg = communityAvg(save, gameOpinionOf)
   if (avg == null) return null
+  // LEFT ALONE ON PURPOSE. Moving patch morale off the relationship layer, this
+  // was briefly doubled to 0.2 on the theory that balance should be "the
+  // interest dial". Measured, that was a mistake worth recording: community
+  // opinion feeds relevanceDaily's `sustain`, a competent owner patches to
+  // positive morale most of the time, and the result was a permanent dividend
+  // against the one slope the design says must always win. Survival went from
+  // 100% of runs dying to 8%, and the opinion funnel stopped claiming anybody
+  // at all — Act 3 simply stopped arriving (BALANCE.md, the fingerprint diff).
+  //
+  // Patch morale's interest reach belongs where it is LOCAL and answerable:
+  // who turns up (attendChance) and who walks in for the first time
+  // (awarenessFactor). Not here, where it buys the scene immortality.
   return clamp(avg + (save.patchMorale || 0) * 0.1, 0, 10)
 }
 
@@ -515,7 +528,15 @@ export function spreadFeuds(save, events = null) {
   // heals. Fixable if caught early, hopeless past a point — as a mechanism
   // rather than as a hope.
   const tox = save.scene?.toxicity ?? 0
-  const cooling = clamp(1 - tox * 2.2, 0, 1)
+  // THE HIATUS BREAKS THE THROTTLE (hiatus.js). The suppression above is what
+  // makes a poisoned room hopeless — at toxicity 0.455 cooling is exactly zero
+  // and the arithmetic has no way back. The reason it is suppressed is that
+  // the room keeps playing: every night is fresh losses, fresh sides taken,
+  // fresh reasons. Close the setups and that stops being true, so cooling runs
+  // at full rate however bad it has got. This is the counterplay the metric 9
+  // sweeps kept looking for and not finding — the one verb that works LATE.
+  const quiet = hiatusActive(save)
+  const cooling = quiet ? 1 : clamp(1 - tox * 2.2, 0, 1)
   if (cooling > 0) {
     for (const [a, b] of feuding) {
       if (!chance(0.16 * cooling)) continue
@@ -523,6 +544,12 @@ export function spreadFeuds(save, events = null) {
       shiftRel(b, a, 3)
     }
   }
+
+  // Nothing new gets recruited into a fight that isn't happening. Without this
+  // the lever would be a tug of war it could lose: at a dozen live feuds the
+  // recruitment rolls outrun a single cooling pass, and closing the arcade
+  // would visibly fail to fix the arcade.
+  if (quiet) return
 
   for (const [a, b] of feuding) {
     // One recruitment roll per feud per day. An unattended feud pulls in
@@ -694,8 +721,17 @@ export function sceneVariety(regs) {
 
 export function sceneVerdict(scene) {
   if (!scene || scene.regulars < 6) return { label: 'the scene is still forming', color: 'dim' }
-  if (scene.toxicity >= 0.5) return { label: 'turning toxic — regulars are drifting away', color: 'red' }
-  if (scene.toxicity >= 0.25) return { label: 'bad blood is brewing', color: 'gold' }
+  // THE WARNING HAS TO ARRIVE BEFORE THE CLIFF, NOT AFTER IT.
+  //
+  // Feuds cool at `0.16 × (1 - toxicity × 2.2)` (spreadFeuds), which is zero at
+  // toxicity 0.455 — past that the room cannot heal itself while it keeps
+  // playing, and the only things left are a quiet period or a banishment. The
+  // old thresholds put the red verdict at 0.50 and the gold at 0.25, so the
+  // loudest signal the game gave fired AFTER the point of no return and the
+  // quieter one had a long, ambiguous run-up. Both moved down: gold now lands
+  // while cooling is still winning, and red lands just before it stops.
+  if (scene.toxicity >= 0.4) return { label: 'turning toxic — the room can barely cool off now', color: 'red' }
+  if (scene.toxicity >= 0.18) return { label: 'bad blood is brewing', color: 'gold' }
   if (scene.rivalryIndex >= 0.4) return { label: 'a fierce, healthy competitive scene', color: 'green' }
   if (scene.rivalryIndex >= 0.18) return { label: 'rivalries are taking shape', color: 'cyan' }
   return { label: 'too friendly — players are plateauing', color: 'gold' }

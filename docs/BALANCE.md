@@ -2103,3 +2103,165 @@ Determinism green; build clean; verified in-browser (no console errors, tab
 seeding correct on a year-6 save, all six palettes correctly locked on a
 lineage that has not earned them, an NPC card opening cleanly from the day
 report with no cycler).
+
+## 26. Toxicity made legible, and a room you can close (2026-08-04)
+
+The prompt was a player report: *every run has gone down to toxic rooms*, and
+separately, *patch morale should decide the community's INTEREST in the game,
+not their morale — it isn't intuitive.* Those turn out to be the same finding
+from two directions.
+
+### The patch was the largest feud generator in the game
+
+`sim.js` subtracted `clamp(-patchMorale * 0.26, 0, 2.2)` from every post-match
+relationship read. It worked, mechanically — it taxed every match every day,
+which made it by some distance the biggest single source of bad blood — and it
+was unreadable. A player watching two regulars stop speaking has no route back
+to a damage tier moved four months ago, and every lever they reach for
+(separate them, cool the room down, stream somebody else) is not the lever that
+was pulling.
+
+Removed. Patch morale now decides how much the room wants to PLAY:
+
+| where | before | after |
+|---|---|---|
+| post-match relationship delta | up to −2.2 per match | **gone** |
+| attendance (`attendChance`) | `+morale × 0.004` | `+morale × 0.010` |
+| first-timers (`awarenessFactor`) | — | `+morale × 0.014` |
+
+### One thing that was tried and reverted, because it broke Act 3
+
+`communityGameOpinion` was briefly widened from `morale × 0.1` to `× 0.2` on
+the theory that balance should be *the* interest dial. Community opinion feeds
+`relevanceDaily`'s `sustain` term, a competent owner holds positive morale most
+of the time, and the result was a permanent dividend against the one slope the
+design says must always win. Measured at n=24: `diedShare` **0.17 → 0.08**, the
+opinion funnel claiming nobody at all. Reverted to 0.1. Patch morale's interest
+reach belongs where it is local and answerable — who turns up, and who walks in
+for the first time — not where it buys the scene immortality.
+
+### The replacement generator: being somebody's punching bag
+
+Removing the frustration term removed most of the mid-game with it (dynamics
+deaths 15/16 → 2/24). A room that cannot sour is not a room worth managing, so
+the pressure comes back through a channel a player can actually see: a
+head-to-head at ≥70% one way over ≥6 games sours the loser, scaled by the
+winner's `sportsmanship` (a gracious rival can beat you forever and stay a
+rival). The head-to-head is on their page. The sportsmanship stat is on their
+page. Every lever in the game answers it.
+
+### The hiatus — closing the setups (src/game/hiatus.js)
+
+Feuds cool at `0.16 × (1 - toxicity × 2.2)`, which is **zero at toxicity
+0.455**. Past that a room that keeps playing cannot heal at all, and the only
+counterplay was a ban — nuclear, priced, and requiring a correct read on who
+the source is. A player who missed that window had a dead run and no verb.
+
+Now you can stop. Doors open, counter selling, cabinets dark: no matches, no
+money match, your own brackets postponed (EVO and the circuit are held
+elsewhere and go ahead without you). Cooling runs at **full rate regardless of
+toxicity**, and recruitment is suspended entirely — without that second half
+the lever loses a tug of war it should win, because at a dozen live feuds the
+recruitment rolls outrun a single cooling pass.
+
+Priced by the crowd, escalating: `clamp(0.72 - days × 0.035 + elsewhere, 0.20,
+0.92)` on attendance, so ~25% gone on day one and ~50% within a week, floor at
+80% gone. Rent does not pause and neither does passion decay. `save.quietDays`
+— the empty-floor collapse funnel — **holds** while the shutters are down: it
+does not advance (using the counterplay must not end the run, the same
+contradiction §2.6 had with banishment) and does not reset (a hiatus cannot
+launder a room that was already emptying).
+
+**Measured** (n=12, normal, room injected into two camps at −80, 14-day lag,
+120-day window):
+
+| arm | tox at inject | tox at end | recovered (≤0.08) | trailing att | cash |
+|---|---|---|---|---|---|
+| keep playing | 0.96 | 0.75 | 0/12 | 17.4 | $1028 |
+| close the setups | 0.96 | **0.13** | **6/12** | 22.6 | $906 |
+
+Average 57 days dark. Attendance ends *higher* in the hiatus arm — a poisoned
+room is already bleeding, so paying to fix it is nearly free by comparison,
+which is the intended economics. Deaths 2/12 → 3/12.
+
+### The warnings moved before the cliff instead of after it
+
+The red scene verdict fired at toxicity 0.50 and the feud-source toast at 0.30
+— both at or past the 0.455 where cooling stops. The loudest signal the game
+gave arrived after the point of no return.
+
+| signal | was | now |
+|---|---|---|
+| "bad blood is brewing" (gold) | 0.25 | 0.18 |
+| "turning toxic" (red) | 0.50 | 0.40 |
+| names the feud source | 0.30 | 0.18 |
+
+### THE COMMITTED FINGERPRINT BASELINE IS STALE — read this before trusting a diff
+
+Clean `HEAD`, with none of this work applied, fingerprints at `diedShare 1 →
+0.17` and `medianLastedDays 1660 → 3361` against `baseline.json`. The baseline
+predates P5 (which took survival 4.3y → 12.8y by its own §19 note), so **every
+fingerprint since P5 has been reporting a phantom two-fold survival
+regression**, and this pass nearly got tuned against it. The honest control is
+a worktree of HEAD, not the committed file.
+
+Against clean HEAD at n=24, this pass reads:
+
+| metric | HEAD | this pass |
+|---|---|---|
+| survival.diedShare | 0.17 | 0.17 |
+| medianLastedDays | 3361 | 3361 |
+| funnels.dynamics | 2 | 4 |
+| funnels.economy / opinion | 1 / 1 | 0 / 0 |
+
+Net effect on difficulty: neutral, with slightly more mid-game room pressure —
+now from a legible source with real counterplay. `funnels.economy` and
+`funnels.opinion` are one run each; noise at n=24 (a single run is 0.042).
+`baseline.json` should be re-blessed off current HEAD before the next phase.
+
+### The brain moved into the engine (src/game/auto.js)
+
+`tools/balance/policy.mjs`'s competent player is now an engine module that both
+the harness and spectator mode import. One brain: two would drift, and the day
+they drifted the harness would stop measuring the game the player gets. The
+harness runs at full authority on the reversible-with-money moves (downsizing —
+P6 measured exactly that); the in-app default grants only breakthroughs.
+
+Determinism green. Difficulty ladder re-checked (n=16, 336d): easy 0%, normal
+6%, difficult 0%, master 44%.
+
+### §26 addendum — metric 9, and what the lever costs the curve
+
+Metric 9's toxicity sweep, rerun with the hiatus added to the counterplay kit
+(n=23, normal):
+
+| lag | 0d | 7d | 14d | 28d | 56d | 112d |
+|---|---|---|---|---|---|---|
+| recovered | 0.48 | 0.30 | 0.57 | 0.52 | 0.52 | 0.57 |
+
+**Flat. Acting on day 0 is worth no more than acting on day 112**, and this is
+not noise to be sampled away — it is the lever working as specified. A
+counterplay that is *always available and works late* is, by construction, a
+counterplay that flattens a lag curve. §2.3 asks for "fixable if caught early,
+hopeless past a point"; the hiatus makes toxicity fixable at any point, at a
+price. Those two goals are in direct tension and this pass chose the player's
+side of it deliberately, because the reported problem was runs dying with no
+verb available.
+
+Two honest caveats on the number itself:
+
+1. **The injection never reaches the cliff.** `CRISES.toxicity.inject` sets
+   three players to −80 in a room of ~25, which tops out around toxicity 0.17
+   — nowhere near the 0.455 where cooling stops. So most runs in this sweep
+   never crossed the hiatus threshold at all, and the table is largely
+   measuring the *old* kit. The A/B in §26 above uses a two-camp injection that
+   actually reaches 0.96, which is why it can see the lever at all. The fixture
+   is due a severity that matches what the counterplay is for.
+2. **Metric 9 still stands at partial**, and for toxicity it is now partial for
+   a different reason than before: not "no counterplay measurable" but "the
+   counterplay is lag-insensitive by design".
+
+If the cliff matters more than the verb, the knob is the hiatus's price — make
+the crowd loss steeper, or gate re-closing behind a cooldown so a room can only
+be saved this way once. That is a design call, not a tuning one, and it is left
+open rather than guessed at.

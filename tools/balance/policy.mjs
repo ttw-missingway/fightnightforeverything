@@ -18,64 +18,29 @@
 import { newSave, newTournamentEntry, newCharacter, newPlayer, legalizeBuild, ensureSpirit } from '../../src/game/model.js'
 import { generateCharacter, populateRoster, generateEvoRoster, randomIdentity, randomPreferences } from '../../src/game/generate.js'
 import {
-  TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS, AD_CHANNELS,
+  TEMPERAMENTS, SOCIAL_TEMPERAMENTS, STAT_UNIT, PERSONAL_KEYS, SOCIAL_KEYS,
   HOURS_PER_DAY, runAge, difficultyOf,
 } from '../../src/game/constants.js'
 import { computeMatchups } from '../../src/game/balance.js'
 import { startDay, simHour, endDay, advanceDay, whatHappensToday } from '../../src/game/sim.js'
 import { runSinglesTournament, runTeamTournament, runEvo } from '../../src/game/tournament.js'
 import { runCircuitEvent } from '../../src/game/circuit.js'
-import { audienceMix, hasFreeInstall, claimFreeInstall } from '../../src/game/catalog.js'
-import { ATTRACTION_PACKS } from '../../src/game/names.js'
 import * as eco from '../../src/game/economy.js'
-import { buildStreamForPlayers, pickAutoStreamSetup, STREAM_RIG_COST } from '../../src/game/stream.js'
+import { STREAM_RIG_COST } from '../../src/game/stream.js'
 import { fitsBandwidth } from '../../src/game/bandwidth.js'
-import { releasePatch, daysSincePatch, charPower } from '../../src/game/patch.js'
-import { applyMoveDescriptors, DAMAGE_TIERS } from '../../src/game/design.js'
-import { isUnlocked } from '../../src/game/achievements.js'
-import { selectableChars } from '../../src/game/forms.js'
 import { bindStream, bindRng, newRngState } from '../../src/game/rng.js'
 import { noteDecision } from '../../src/game/attention.js'
-import { autoPickStat, chooseBreakthrough } from '../../src/game/eureka.js'
-import { pendingAsks, fundAsk, denyAsk } from '../../src/game/travel.js'
-import { prospectsFor, canTakeOn, takeUnderWing, mentorsFor, castSize, MAX_CAST } from '../../src/game/succession.js'
+import {
+  DEFAULT_POLICY, autoManage, autoPatch, autoEureka, autoStreamHour,
+} from '../../src/game/auto.js'
 
 const { startingBudget, arcadeBuildCost } = eco
 
-export const DEFAULT_POLICY = {
-  rig: true,              // buy the streaming setup on day one
-  stream: true,           // put a match on the channel every day
-  // WHO gets the camera is the first real cultivation decision (REVISION
-  // §1.8: exposure is a prerequisite for growth — belief gates the eureka
-  // split). 'closest' spread the spotlight evenly and the cast rose as one
-  // block; a competent owner building toward an elite win streams their
-  // best, and the divergence that starts is the separation metric moving.
-  streamSelector: 'best',
-  foods: 3,               // how many lines to stock
-  foodPrice: 3,
-  // THE PRICE IS costPerPlay = tokenPrice × playTokens. The overhaul that
-  // split it (2026-07-28) also moved typical comfort to ~$1.20 a match, and
-  // this default sat at $2.00 — measured dies 5/5 — for a while afterwards,
-  // which made every default-policy number a measurement of an over-pricer.
-  // Post nut-cut sweep (n=8, 336d, normal): $1.50 and $1.75 die 0%, $1.25
-  // 13%, ≥$2.00 dies 100%. $1.50 banks the most ($3.4k median).
-  tokenPrice: 0.5,
-  playTokens: 3,          // tokens the main game takes per match — $1.50/play
-  cabinets: 2,
-  maxEmployees: 2,
-  growSetups: true,       // add cabinets as the room fills
-  patchEvery: 100,        // days between balance patches, once the Studio is earned
-  manager: false,
-  ads: ['flyers'],
-  cast: 6,                // players YOU made — the whole game is about these
-  weekly: 8,              // weekly singles bracket size (0 = none)
-  monthly: 0,             // monthly bracket size (0 = none)
-  hireAt: [600, 1400, 2600], // cash thresholds for employees 1..3
-  managerAt: 2200,
-  // Buy into unlocked attraction packs (new audiences first) once the books
-  // can carry the build. Off by default: it is the room-builder's move.
-  attractions: false,
-}
+// The competent owner's dials live with the brain now (src/game/auto.js) and
+// are re-exported here so every instrument that imports them from this module
+// keeps working. Individual harnesses still spread-and-override freely —
+// { ...DEFAULT_POLICY, patchEvery: 0 } and friends are the whole A/B method.
+export { DEFAULT_POLICY }
 
 /**
  * Build a world the way the setup wizard would, then apply the policy's
@@ -208,216 +173,24 @@ export function makeRun({ chars = 8, difficulty = 'normal', policy = DEFAULT_POL
   return save
 }
 
-/**
- * The between-days decisions: staffing and advertising, paid out of cash.
- *
- * A competent owner watches the floor, not a spreadsheet — the trigger to hire
- * is "this place is filthy", which is exactly what the in-game coaching tip
- * says. The first version of this hired on cash thresholds alone and left every
- * run at 28% clean for ten months, which measured the arcade's difficulty and
- * the harness's stupidity at the same time.
- */
-function manage(save, policy) {
-  const cash = save.economy.money
-  const { employees, managers } = eco.staffCounts(save)
-  const clean = save.arcade.cleanliness ?? 80
-  const runway = cash / Math.max(1, eco.projectedMonthlyCost(save) / 28)
+// THE BRAIN MOVED (src/game/auto.js). Every decision this harness used to
+// make itself — hiring, the rig, ads, growing and shrinking the floor, the
+// road, succession, pots, attractions, patches, breakthroughs — now lives in
+// the engine, because spectator mode needs the same competent owner and two
+// copies would drift. The day they drifted, this harness would stop measuring
+// the game the player actually gets.
+//
+// The harness runs at FULL AUTHORITY on the reversible-with-money moves:
+// downsizing is not a default for a player who will take the wheel back, but a
+// headless competent owner absolutely lays people off and sells cabinets
+// rather than foreclosing, and P6 measured exactly that. It still does not
+// banish or close the setups on its own — recovery.mjs reaches for those
+// deliberately, which is the point of a counterplay instrument.
+const HARNESS_AUTHORITY = { eureka: true, downsize: true, banish: false, hiatus: false }
+const harnessOpts = { authority: HARNESS_AUTHORITY }
 
-  // Hire when the room needs it AND there is more than a fortnight of runway.
-  const needHands = clean < 62 || save.economy.history.at(-1)?.attendance > 14
-  if (employees < policy.maxEmployees && needHands && runway > 14 && cash > 300) {
-    if (eco.trySpend(save, eco.HIRE_COST, 'hired an employee')) {
-      save.staffing.staff.push(eco.newStaffMember('employee'))
-      noteDecision(save, 'hire')
-    }
-  }
-  // One manager per four employees keeps the floor working (the game says so).
-  if (policy.manager && managers < Math.floor(employees / 3) && runway > 20) {
-    if (eco.trySpend(save, eco.HIRE_COST, 'hired a manager')) {
-      save.staffing.staff.push(eco.newStaffMember('manager'))
-      noteDecision(save, 'hire')
-    }
-  }
-  // Let staff go rather than go under — the last thing before foreclosure.
-  if (runway < 6 && employees > 1) {
-    const idx = save.staffing.staff.findIndex((x) => !x.family && x.role === 'employee')
-    if (idx >= 0) {
-      save.staffing.staff.splice(idx, 1)
-      noteDecision(save, 'layoff')
-    }
-  }
-  // GROW THE FLOOR. A setup is six matches a day and a token a match, so a
-  // room with more people than cabinets is leaving money on the tables. This
-  // is the arcade's main growth lever and the first policy missed it entirely.
-  const att = save.economy.history.at(-1)?.attendance ?? 0
-  if (policy.growSetups && att > save.settings.setups * 6 && runway > 25
-      && save.settings.setups < 8 && eco.trySpend(save, eco.SETUP_COST, 'new setup cabinet')) {
-    save.settings.setups += 1
-    noteDecision(save, 'setup')
-  }
-  // SHRINK IT AGAIN (P6). A competent owner does not keep paying rent and
-  // upkeep on cabinets nobody sits at. Downsizing is the Act 3 answer to a
-  // thinning crowd, and until economy.js grew a `sellSetup` there was no way
-  // to express it — a large part of why every mature run ended in foreclosure.
-  //
-  // Measured against a SUSTAINED average, never against today. Two traps, both
-  // hit on the first attempt: `history.at(-1).attendance` is null on every
-  // tournament day (the field is only written on normal days), so reading
-  // today's number sold a cabinet after every bracket night; and a single
-  // quiet Tuesday is not a trend. Selling into a temporary dip cuts capacity,
-  // which cuts revenue, which reads as a worse dip — the first cut of this
-  // took median survival from year 13 to year 4.
-  const attWindow = save.economy.history.slice(-28).map((h) => h.attendance).filter((a) => a != null)
-  const attAvg = attWindow.length >= 14
-    ? attWindow.reduce((s2, a) => s2 + a, 0) / attWindow.length
-    : null
-  if (policy.growSetups && attAvg != null && save.settings.setups > 2
-      && attAvg < (save.settings.setups - 2) * 4 && runway < 30) {
-    if (eco.sellSetup(save)) noteDecision(save, 'setup')
-  }
-  // THE RIG, IF IT COULDN'T BE AFFORDED ON DAY ONE.
-  //
-  // makeRun only tries at opening, out of the leftover float. That was fine
-  // while the rig cost $180 and every difficulty cleared the bar on night one
-  // — and it silently became a measurement bug the moment the price went up,
-  // because "can't afford it at open" turned into "never owns a channel for
-  // the entire run" and every follower/hype/exhibition number was quietly
-  // measuring a rigless arcade. A competent player saves up and buys it.
-  if (policy.rig && !save.arcade.streamRig && runway > 20
-      && eco.trySpend(save, STREAM_RIG_COST, 'streaming setup')) {
-    save.arcade.streamRig = true
-    noteDecision(save, 'rig')
-  }
-  // Advertising is a weekly bill — only run what the books can carry, and
-  // only channels this lineage has EARNED. The policy used to write
-  // `arcade.ads` directly, which quietly bought achievement-locked channels a
-  // real first-run player cannot have (radio is $44/week AND locked) — the
-  // harness was measuring a player who cannot exist.
-  const legalAds = policy.ads.filter((k) => {
-    const c = AD_CHANNELS.find((x) => x.key === k)
-    return c && (!c.unlock || isUnlocked(save, c.unlock))
-  })
-  const nextAds = runway > 30 ? legalAds : runway > 15 ? legalAds.slice(0, 1) : []
-  if (nextAds.join() !== (save.arcade.ads || []).join()) noteDecision(save, 'ads')
-  save.arcade.ads = nextAds
-  // THE ROAD (travel.js): back your people when the books can carry it. A
-  // competent owner funds the ask or says no promptly — sitting on one until
-  // it lapses is the timid owner's move, and the game reads it as a no.
-  // `moneyLever` pins both money moves for A/B instruments: 'off' spends
-  // nothing on competition, 'max' spends everything (latency.mjs).
-  for (const ask of pendingAsks(save)) {
-    const cashNow = save.economy.money
-    if (policy.moneyLever === 'off') {
-      denyAsk(save, ask.id)
-      noteDecision(save, 'travel')
-    } else if (policy.moneyLever === 'max' || (runway > 16 && cashNow > ask.cost * 2)) {
-      if (fundAsk(save, ask.id)) noteDecision(save, 'travel')
-      else if (policy.moneyLever !== 'max') { denyAsk(save, ask.id); noteDecision(save, 'travel') }
-    } else if (runway < 10 || cashNow < ask.cost * 1.2) {
-      denyAsk(save, ask.id)
-      noteDecision(save, 'travel')
-    }
-  }
-  // SUCCESSION (P5, §0 Act 3): a competent owner keeps somebody coming up
-  // behind the people who built the place. Takes on the best prospect
-  // available whenever there is a mentor free and a seat open — and takes a
-  // flagged prodigy over a merely-good regular every time, because ceiling is
-  // the only thing scouting is actually for. `succession: false` pins this
-  // off for the A/B that proves the mechanic is what carries a long run.
-  if (policy.succession !== false && canTakeOn(save)) {
-    const best = prospectsFor(save)[0]
-    // Only spend a seat on someone with a real ceiling — filling the roster
-    // with journeymen is how you arrive at year twelve with eight people who
-    // cannot win anything.
-    if (best && ['talent', 'prospect'].includes(best.player.ceilingTier)) {
-      const mentor = mentorsFor(save)[0]
-      if (takeUnderWing(save, best.player.id, mentor?.id)) noteDecision(save, 'succession')
-    }
-  }
-  // THE POT: stake past the minimum as the books allow — better fields come
-  // to you, and your own stars keep turning up. Ambition is a standing bill.
-  for (const e of save.arcade.schedule) {
-    if (e.type !== 'singles') continue
-    const cashNow = save.economy.money
-    // 'max' stakes the highest SUSTAINABLE tier, not the highest tier — a pot
-    // the house can't keep putting up cancels brackets, which buys less
-    // adversity than staking nothing (measured; the overreach arm read
-    // NEGATIVE on the money lever).
-    const want = policy.moneyLever === 'off' ? 0
-      : policy.moneyLever === 'max' ? (cashNow > 900 ? 2 : 1)
-      : cashNow > 3000 && runway > 30 ? 2 : cashNow > 1200 && runway > 20 ? 1 : 0
-    if ((e.potBoost || 0) !== want) {
-      e.potBoost = want
-      noteDecision(save, 'pot')
-    }
-  }
-  // Exhibitions were cut by the revision (docs/DEPRECATED.md) — the competent
-  // player no longer stages showcase nights.
-  // AN ATTRACTION IS A CROWD YOU DO NOT HAVE YET, or it is furniture
-  // (catalog.js). The room-builder buys into a pack it has EARNED, one room at
-  // a time, preferring an audience the floor doesn't serve — and takes the
-  // earned free install even when money is tight, because that is what the
-  // free install is for.
-  if (policy.attractions) {
-    const owned = new Set(save.arcade.otherGames)
-    const mix = audienceMix(save)
-    const candidates = ATTRACTION_PACKS
-      .filter((p) => isUnlocked(save, p.key))
-      .map((p) => ({ p, missing: p.items.filter((i) => !owned.has(i)) }))
-      .filter((x) => x.missing.length)
-      .sort((a, b) => (mix.has(a.p.audience) ? 1 : 0) - (mix.has(b.p.audience) ? 1 : 0))
-    const item = candidates[0]?.missing[0]
-    if (item) {
-      const cost = eco.gameItem(item).price
-      const bought = hasFreeInstall(save, item)
-        ? claimFreeInstall(save, item)
-        : (runway > 30 && cash > cost * 2.5 && eco.trySpend(save, cost, `installed ${item}`))
-      if (bought) {
-        save.arcade.otherGames.push(item)
-        save.arcade.gameTokens[item] ??= 1
-        noteDecision(save, 'attraction')
-      }
-    }
-  }
-}
-
-/**
- * Balance the game: nudge the strongest cast members down and the weakest up.
- *
- * Patching is the only lever against relevance decay, so a policy that never
- * patches measures a player who has decided to lose slowly. This is the
- * ordinary, sensible patch a designer ships — a couple of characters moved a
- * tier, nothing structural.
- */
-export function maybePatch(save, policy) {
-  if (!policy.patchEvery || !isUnlocked(save, 'studio')) return
-  if (save.gameDraft) return
-  if (daysSincePatch(save) < policy.patchEvery) return
-  const chars = selectableChars(save.game)
-  if (chars.length < 4) return
-  const draft = structuredClone(save.game)
-  const ranked = [...chars].sort((a, b) => charPower(save.game, b.id) - charPower(save.game, a.id))
-  const shift = (charId, dir) => {
-    const c = draft.characters.find((x) => x.id === charId)
-    if (!c) return
-    // Move the biggest-damage move one tier, which is what a real patch note
-    // looks like: "Heavy Slash: damage heavy → normal".
-    const mv = [...c.moves].sort((a, b) => (b.damage || 0) - (a.damage || 0))[0]
-    if (!mv) return
-    const i = DAMAGE_TIERS.indexOf(mv.d?.damage ?? 'normal')
-    const next = DAMAGE_TIERS[Math.min(DAMAGE_TIERS.length - 1, Math.max(0, i + dir))]
-    if (!next || next === mv.d.damage) return
-    mv.d = { ...mv.d, damage: next }
-    applyMoveDescriptors(mv)
-  }
-  shift(ranked[0].id, -1)
-  shift(ranked[1].id, -1)
-  shift(ranked[ranked.length - 1].id, +1)
-  shift(ranked[ranked.length - 2].id, +1)
-  save.gameDraft = draft
-  releasePatch(save)
-  noteDecision(save, 'patch')
-}
+const manage = (save, policy) => autoManage(save, policy, harnessOpts)
+export const maybePatch = (save, policy) => autoPatch(save, policy, harnessOpts)
 
 /** One day, played. Streams a match if the policy says to and the rig exists. */
 export function playDay(save, policy = DEFAULT_POLICY) {
@@ -443,48 +216,19 @@ export function playDay(save, policy = DEFAULT_POLICY) {
   let streamedToday = false
   while (save.hour < HOURS_PER_DAY) {
     simHour(save)
-    if (policy.stream && !streamedToday && save.arcade.streamRig) {
-      const dip = save.dayInProgress
-      const hour = dip?.hours?.[dip.hours.length - 1]
-      if (hour && hour.streamedSetup == null) {
-        // A policy may aim the camera itself (recovery.mjs points it at a
-        // burning-out star); the default is the auto-stream 'closest' pick.
-        const idx = policy.streamPick
-          ? policy.streamPick(save, hour)
-          : pickAutoStreamSetup(save, hour, policy.streamSelector || 'closest')
-        if (idx != null) {
-          const ev = hour.events.find((e) => e.type === 'match' && e.setupIndex === idx)
-          const a = ev && save.players[ev.aId]
-          const b = ev && save.players[ev.bId]
-          if (a && b && !ev.stream) {
-            hour.streamedSetup = idx
-            ev.stream = buildStreamForPlayers(save, a, b, ev, 'daily')
-            streamedToday = true
-            noteDecision(save, 'stream')
-          }
-        }
-      }
-    }
+    // One match a day on the channel. A policy may aim the camera itself
+    // (recovery.mjs points it away from a toxic star); autoStreamHour honours
+    // policy.streamPick and falls back to the auto-stream selector.
+    if (!streamedToday && autoStreamHour(save, policy, harnessOpts) != null) streamedToday = true
   }
   endDay(save)
   // Answer any breakthrough the day armed. The cast waits for the OWNER —
   // in the browser that is a real choice on the Players screen; here the
   // competent player answers promptly with the same heuristic the sim uses,
   // and it counts as a mutating decision (metric 6) because it is one.
-  for (const p of Object.values(save.players)) {
-    if (p.npc || p.createdBy !== 'user' || !p.eureka?.pending) continue
-    // STEERING (§0's eureka lever): a crisis counterplay can name the stats
-    // it wants broken through — a toxic star pushed toward sensitivity, a
-    // burning-out one toward temperance. The glow list still decides what is
-    // ON OFFER; the policy only chooses among what arrived.
-    const prefer = policy.eurekaPrefer
-    const steered = prefer && p.eureka.pending.candidates.find((c) => prefer.includes(c.stat))?.stat
-    const stat = steered || autoPickStat(p, p.eureka.pending.candidates)
-    if (stat) {
-      chooseBreakthrough(save, p, stat)
-      noteDecision(save, 'eureka')
-    }
-  }
+  // policy.eurekaPrefer still steers (recovery.mjs pushes a burning-out star
+  // toward temperance); the glow list decides what is ON OFFER.
+  autoEureka(save, policy, harnessOpts)
 }
 
 export const isDead = (save) => !!(save.gameOver || save.economy?.foreclosed)

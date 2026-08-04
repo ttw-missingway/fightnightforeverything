@@ -247,8 +247,14 @@ function SceneHealthBanner({ scene }) {
         {meter('Toxicity', scene.toxicity, 'linear-gradient(90deg, var(--gold), var(--red))')}
       </div>
       <p className="dim small" style={{ margin: '6px 0 0' }}>
-        Rivalries push players to improve; a scene of only friends plateaus. But bad blood — fed by a
-        frustrating, unbalanced meta — turns toxic and drives regulars away (a clean, well-staffed venue softens the blow).
+        Rivalries push players to improve; a scene of only friends plateaus. But bad blood spreads — people
+        take sides, and a feud becomes a faction — and a toxic room drives regulars away.
+        {/* THE COUNTERPLAY, SAID OUT LOUD. Feud cooling is throttled by the
+            scene's own toxicity, so past roughly 0.45 the room cannot heal
+            while it keeps playing. That is a real cliff and it was completely
+            undocumented in the UI — the meter went red at 0.50, which is
+            already past the point of no return. */}
+        {' '}Closing the setups for a while lets it cool off.
       </p>
     </div>
   )

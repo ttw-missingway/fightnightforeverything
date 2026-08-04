@@ -14,6 +14,7 @@ import { resolveMatch, winProbability, gainSkill, seriesNoteFor, upsetSeverityOf
 import { narrateSet } from './fight.js'
 import { buildStream, canStream, personalityOf, applyStageReps, addHype, hypeCeiling } from './stream.js'
 import { attractionDrawFactor } from './catalog.js'
+import { hiatusActive, hiatusAttendanceFactor, hiatusDaily } from './hiatus.js'
 import {
   staffDaily, playerSpending, settleRecurring, staffCounts,
   landlordDaily, tokenPlayShift, arcadeClosed, isStaffed,
@@ -331,8 +332,13 @@ function attendChance(save, player) {
   // Weekends draw everyone; weekdays belong to the RELIABLE — the put-together
   // player is the one keeping your Tuesday room alive.
   p += wd === 0 || wd === 6 ? 0.16 : (-0.05 + statLevel(player.social?.reliability) * 0.006)
-  // A hated (or beloved) patch changes how much anyone wants to play.
-  if (save.settings.mode !== 'sandbox') p += (save.patchMorale || 0) * 0.004
+  // A hated (or beloved) patch changes how much anyone wants to play. This is
+  // now the PRIMARY thing balance does — it used to also tax every post-match
+  // relationship in the building (see the frustration term this replaces), and
+  // that reading was both invisible and unactionable. Weighted to land around
+  // the size of the weekend bonus at full morale, so a genuinely loved build
+  // fills a Tuesday and a genuinely hated one empties a Saturday.
+  if (save.settings.mode !== 'sandbox') p += (save.patchMorale || 0) * 0.010
   for (const f of player.foods) if (save.arcade.foods.includes(f)) p += 0.03
   for (const g of player.otherGames) if (save.arcade.otherGames.includes(g)) p += 0.03
   const main = save.game.characters.find((c) => c.id === player.mainCharId)
@@ -396,6 +402,10 @@ function attendChance(save, player) {
   // you already serve barely moves this (see audienceMix), so the question is
   // never "can I afford a room", it is "whose room is this".
   p *= attractionDrawFactor(save)
+  // THE SHUTTERS ARE DOWN. Most of the room came to play, and the cabinets are
+  // off — this is the whole price of a hiatus, and it escalates every day the
+  // setups stay dark so that "closed indefinitely" is never the answer.
+  p *= hiatusAttendanceFactor(save)
   // THE FAMOUS NAME (P5). A room that has actually produced champions is a
   // place people make a trip to stand in — the game already pays an EVO
   // winner's arcade for "sponsors & pilgrimage", and this is the same fact
@@ -463,8 +473,16 @@ function awarenessFactor(save) {
   // has to come back at the concession counter instead of the change machine.
   const price = save.arcade.prices?.token ?? 1
   const wordOfMouth = clamp((1.6 - price) * 0.42, 0, 0.55)
+  // IS THE GAME WORTH TRYING RIGHT NOW? The other half of moving balance out of
+  // the relationship layer and into interest: a patch the scene loves is a
+  // reason for somebody who has never been to come and find out what the fuss
+  // is, and a patch it hates is the thing they heard about instead. It belongs
+  // in awareness rather than in the loyalty term for the same reason cheap play
+  // does — it decides who walks in the door for the first time, not how fond
+  // the regulars already are.
+  const buzz = (save.patchMorale || 0) * 0.014
   return clamp(0.3 + daysOpen / 30 + followers / 1000 + hype / 100
-    + adAwarenessBoost(save) + wordOfMouth, 0.3, 1.35)
+    + adAwarenessBoost(save) + wordOfMouth + buzz, 0.3, 1.35)
 }
 
 // ---------- Innovations & techniques ----------
@@ -1408,7 +1426,10 @@ export function simHour(save) {
   // 7 PM: money match time. The whole arcade stops to watch — no other
   // matches happen this hour.
   const mm = moneyMatchToday(save)
-  if (mm && mm.status === 'scheduled' && hourIdx === 3 && present.length > 0) {
+  // A hiatus postpones the money match too — it is the loudest match in the
+  // game and the whole point of closing the setups is that nobody loses to
+  // anybody. It keeps its 'scheduled' status and runs on the first open night.
+  if (mm && mm.status === 'scheduled' && hourIdx === 3 && present.length > 0 && !hiatusActive(save)) {
     runMoneyMatch(save, mm, present, events)
     dip.hours.push({
       label: HOUR_LABELS[hourIdx],
@@ -1425,7 +1446,12 @@ export function simHour(save) {
     // Only some players are itching to play this hour — and fatigue builds
     // with every game played today. Stamina is how long the tank lasts,
     // and steep token prices make the wallet-conscious sit a few out.
-    const wantsToPlay = present.filter((p) => {
+    // THE CABINETS ARE OFF (hiatus.js). Nobody plays, so nobody loses, so no
+    // post-match reads sour and no fresh grudge is minted — everyone present
+    // falls through to the social pass below instead. This is the mechanism the
+    // whole lever rests on, and it is deliberately total: a "mostly closed"
+    // hiatus would just be a slower version of the problem it answers.
+    const wantsToPlay = hiatusActive(save) ? [] : present.filter((p) => {
       const played = dip.gamesToday[p.id] || 0
       const fatigue = played * Math.max(0.015, 0.12 - p.personal.stamina * 0.0105)
       // SIGNED: a dear token makes them sit one out, a cheap one buys "go on
@@ -1528,12 +1554,53 @@ export function simHour(save) {
           `${pName(save, winner)} taking that one off ${pName(save, loser)}`,
           { subjectIds: [winner.id, loser.id], exclude: [winner.id, loser.id] })
       }
-      // A frustrating, unbalanced meta makes every loss feel unfair — bad
-      // blood spreads, and a healthy rivalry can curdle into real toxicity.
-      // Keeping the game balanced (patch morale up) is how the owner keeps the
-      // competition productive instead of poisonous.
-      const frustration = save.settings.mode !== 'sandbox' ? clamp(-(save.patchMorale || 0) * 0.26, 0, 2.2) : 0
-      const d = socialDelta(loser, winner, { justLostTo: true }) - frustration
+      // THE PATCH IS NOT WHY THEY HATE EACH OTHER.
+      //
+      // This used to subtract `clamp(-patchMorale * 0.26, 0, 2.2)` from every
+      // post-match read — a hated build made losing to a friend feel like being
+      // cheated, and the room split over it. It worked, mechanically: patch
+      // morale was by some distance the largest single generator of feuds in
+      // the game, because it taxed EVERY match every day.
+      //
+      // It was also the least intuitive thing in the game. A player watching
+      // two regulars stop speaking has no way to trace that back to a damage
+      // tier they moved four months ago, and the lever they reach for — talk to
+      // them, separate them, cool the room down — is not the lever that was
+      // pulling. Balance belongs to how much the room wants to PLAY (interest:
+      // attendance, awareness, relevance, how long the scene stays worth
+      // watching), not to how much they like each other. It is priced there
+      // now, and only there.
+      // BEING SOMEBODY'S PUNCHING BAG — the replacement generator.
+      //
+      // Taking the patch out of the relationship layer removed the largest
+      // single source of bad blood in the game, and measured, it removed most
+      // of the mid-game with it: the dynamics funnel went from claiming 15 runs
+      // in 16 to claiming 2 in 24. A room that cannot sour is not a room worth
+      // managing, so the pressure comes back — through the channel a player can
+      // actually SEE.
+      //
+      // This is how scenes really curdle: not over a damage tier, but over one
+      // person who beats you every single time and does not carry it well. The
+      // head-to-head is on their page, the sportsmanship stat is on their page,
+      // and every lever the game has answers it — stream somebody else, break
+      // through into sportsmanship, close the setups, or take the ban. Nothing
+      // about it requires remembering a patch note from four months ago.
+      //
+      // Gated at six games so it is a HISTORY and not a bad night, and scaled
+      // by the winner's grace: a gracious rival can beat you forever and stay a
+      // rival, which is exactly the "iron sharpens iron" pairing the scene
+      // health read wants to protect.
+      const h = loser.h2h?.[winner.id]
+      const played = h ? h.w + h.l : 0
+      let lopsided = 0
+      if (played >= 6) {
+        const lossShare = h.l / played
+        if (lossShare >= 0.7) {
+          const grace = clamp(winner.social.sportsmanship / 4, 0, 1) // 0 at none, 1 at invested
+          lopsided = (lossShare - 0.7) / 0.3 * 1.9 * (1 - grace * 0.85)
+        }
+      }
+      const d = socialDelta(loser, winner, { justLostTo: true }) - lopsided
       shiftRel(loser, winner, d)
       shiftRel(winner, loser, socialDelta(winner, loser) * 0.6)
 
@@ -1708,7 +1775,14 @@ export function checkSceneCollapse(save, attendanceToday, events = null) {
   // died, even though four isn't zero. Measuring against the crowd the arcade
   // once drew is what makes the decline legible instead of a cliff at empty.
   const quiet = established && attendanceToday <= Math.max(2, Math.round(save.peakAttendance * 0.22))
-  save.quietDays = quiet ? (save.quietDays || 0) + 1 : 0
+  // A DELIBERATELY CLOSED FLOOR IS NOT AN ABANDONED ONE. The hiatus lever costs
+  // most of the crowd by design (hiatus.js), which would otherwise feed this
+  // counter and end the run for using the counterplay — the same contradiction
+  // §2.6 had with banishment, arriving through a different door. The counter
+  // holds where it is while the setups are dark: it does not advance, and it
+  // does not reset either, so a hiatus can't be used to launder a room that was
+  // already emptying on its own.
+  if (!hiatusActive(save)) save.quietDays = quiet ? (save.quietDays || 0) + 1 : 0
   // Say something on the way down. This funnel used to fire with no warning
   // whatsoever — the room emptied for weeks and the first word about it was
   // the modal ending the run.
@@ -2062,6 +2136,12 @@ export function whatHappensToday(save) {
   const circuit = circuitEventOn(save.day)
   if (circuit) return { circuit }
   if (arcadeClosed(save)) return null
+  // A HIATUS POSTPONES YOUR OWN BRACKETS, not the world's. Weekly and monthly
+  // entries simply don't fire while the setups are dark and come back around on
+  // their next date. EVO and the circuit are checked above this line on
+  // purpose: those are held elsewhere, your players still travel to them, and
+  // closing your cabinets was never going to stop a major.
+  if (hiatusActive(save)) return null
   const hits = save.arcade.schedule.filter((s) => {
     if (s.done) return false
     if (s.cadence === 'weekly') return weekdayOf(save.day) === (s.weekday || 0)
@@ -2160,6 +2240,8 @@ export function advanceDay(save) {
       ? (save.tally.fullFloorDays || 0) + 1
       : 0
   }
+  // What the shutters are costing tonight, said out loud on a schedule.
+  hiatusDaily(save)
   // The world keeps talking whether or not it has heard of you.
   worldFeedDaily(save)
   // The world's own results, and the shocks that make the feed.
@@ -2177,7 +2259,11 @@ export function advanceDay(save) {
   // room finally saying out loud what everyone already knew.
   {
     const tox = save.scene?.toxicity ?? 0
-    if (tox >= 0.3 && !save.feudSourceNamed) {
+    // Named EARLY (was 0.3): the read is only worth having while there is still
+    // time to act on it, and cooling stops entirely at 0.455. At 0.18 nearly
+    // every grudge in the room still traces to one person, which is exactly the
+    // window where cutting them out actually fixes it (discipline.js).
+    if (tox >= 0.18 && !save.feudSourceNamed) {
       const src = feudSource(save)
       if (src) {
         save.feudSourceNamed = src.player.id

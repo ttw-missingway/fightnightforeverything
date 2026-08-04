@@ -3,6 +3,8 @@ import { getSoundSettings, setSoundSettings, unlockAudio, play } from '../audio/
 import { Field, NumField, StringListEditor, PillPicker, Portrait } from './ui.jsx'
 import { newCharacter, newMove, newStage, newTournamentEntry, cloneCharacterFresh, duplicateCharacter } from '../game/model.js'
 import { POT_STAKES, tournamentPot } from '../game/tournament.js'
+import { hiatusActive, hiatusDays, hiatusForecast, setHiatus } from '../game/hiatus.js'
+import { sceneVerdict } from '../game/social.js'
 import { downloadJson, fileStem } from '../state/store.jsx'
 import {
   generateCharacter, generateGameTitle, generateArcadeName,
@@ -1945,6 +1947,70 @@ function scheduleWarnings(save, t) {
   return out
 }
 
+/**
+ * CLOSING THE SETUPS. The room's one non-nuclear answer to bad blood, and the
+ * only one that works late — see hiatus.js for why the arithmetic needs it.
+ *
+ * The panel exists to make the trade legible in both directions BEFORE the
+ * switch is thrown: what it fixes (the toxicity reading, and the fact that
+ * cooling is currently throttled) and what it costs (a named percentage of the
+ * crowd, today and a week from today). A lever whose price you find out
+ * afterwards is a trap, and this one is expensive on purpose.
+ */
+function HiatusPanel({ save, update }) {
+  const on = hiatusActive(save)
+  const days = hiatusDays(save)
+  const f = hiatusForecast(save)
+  const scene = save.scene
+  const tox = scene?.toxicity ?? 0
+  // The throttle, quoted as the player experiences it: how much of the room's
+  // natural healing is still running. Zero is the cliff.
+  const coolingPct = Math.round(Math.max(0, 1 - tox * 2.2) * 100)
+  const verdict = scene && scene.regulars >= 6 ? sceneVerdict(scene) : null
+
+  return (
+    <div style={{
+      border: `1px solid var(--${on ? 'gold' : 'line'})`,
+      borderRadius: 6,
+      padding: '8px 10px',
+      marginBottom: 12,
+      background: on ? 'rgba(255, 200, 60, 0.06)' : 'transparent',
+    }}>
+      <div className="row spread">
+        <span className="small">{on ? '🔌 The setups are closed' : '🔌 Close the setups'}</span>
+        <button className={on ? 'primary small' : 'small'}
+          onClick={() => update((s) => setHiatus(s, !on))}>
+          {on ? `🔛 Reopen (${days} day${days === 1 ? '' : 's'} dark)` : 'Close the setups'}
+        </button>
+      </div>
+
+      {on ? (
+        <p className="dim small" style={{ margin: '6px 0 0' }}>
+          No matches, no money matches, and your own brackets are postponed until you reopen — EVO and the
+          circuit are held elsewhere and go ahead without you. Bad blood is cooling at{' '}
+          <span className="green">full speed</span> and nobody new is being pulled into a fight.
+          {' '}You are down about <span className="red">{f.crowdLostPct}%</span> of your crowd, and it will be
+          around <span className="red">{f.crowdLostPctInAWeek}%</span> if you are still dark in a week. Rent
+          does not pause, and neither does anyone getting bored of playing nothing.
+        </p>
+      ) : (
+        <p className="dim small" style={{ margin: '6px 0 0' }}>
+          Dark cabinets for a while: nobody plays, nobody loses, and the room cools off. Costs about{' '}
+          <span className="gold">{f.crowdLostPct}%</span> of your crowd on the first day and more every day after.
+          {' '}
+          {verdict && (
+            <>Right now the scene is <span style={{ color: `var(--${verdict.color})` }}>{verdict.label}</span>, and
+            {coolingPct > 0
+              ? <> grudges are healing at <span className={coolingPct < 40 ? 'gold' : 'green'}>{coolingPct}%</span> of their natural rate.</>
+              : <> grudges are <span className="red">not healing at all</span> — the room is too poisonous to cool itself while it keeps playing, and this is the only lever left that isn't a ban.</>}
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function ScheduleEditor({ save, update }) {
   const consequential = save.settings.mode !== 'sandbox'
   // Consequential worlds hold real tournaments to a floor: no sub-8-player
@@ -1971,6 +2037,8 @@ export function ScheduleEditor({ save, update }) {
 
   return (
     <div className="card">
+      <HiatusPanel save={save} update={update} />
+
       <div className="row spread">
         <h3>Recurring Tournaments</h3>
         <button className="small" onClick={() => update((s) => {

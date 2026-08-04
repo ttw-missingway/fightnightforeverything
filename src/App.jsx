@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStore, useIdleLoop, storageFailure, onStorageFailure } from './state/store.jsx'
+import { useStore, storageFailure, onStorageFailure } from './state/store.jsx'
 import MainMenu from './screens/MainMenu.jsx'
 import Setup from './screens/Setup.jsx'
 import Arcade from './screens/Arcade.jsx'
@@ -17,6 +17,7 @@ import { isVodWatched } from './game/model.js'
 import DangerBanner from './components/dangers.jsx'
 import EvoWeek from './screens/EvoWeek.jsx'
 import GrandOpening from './screens/GrandOpening.jsx'
+import Spectator from './screens/Spectator.jsx'
 import DevSuite from './screens/DevSuite.jsx'
 import World from './screens/World.jsx'
 import { ACHIEVEMENTS, isUnlocked, howToUnlock } from './game/achievements.js'
@@ -29,7 +30,6 @@ import { displayName } from './game/util.js'
 
 export default function App() {
   const { save, screen, nav, closeSave, mutate } = useStore()
-  useIdleLoop() // drives idle mode when it's running (no-op otherwise)
   // SOUND (REVISION §5-P7). Observes the notification layer and voices what
   // lands; the engine has no idea it exists. See audio/useSound.jsx for why
   // the dependency points this way.
@@ -73,6 +73,13 @@ export default function App() {
   }
 
   const newVods = (save.vods || []).filter((v) => !isVodWatched(v)).length
+
+  // SPECTATOR MODE takes the whole screen, for the same reason EVO does below:
+  // it is not a tab you visit, it is a posture the run is in. The nav would
+  // say the opposite, and the overlays need the corners.
+  if (screen.name === 'spectator' && save.spectator?.active) {
+    return <Spectator />
+  }
 
   // EVO takes over the whole screen while it is on. It is the one night of the
   // year the game stops being a management sim and puts on a broadcast, and a

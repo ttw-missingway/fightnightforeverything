@@ -746,6 +746,10 @@ export function newSave(partial = {}) {
     gameOver: null, // {funnel: 'economy'|'dynamics'|'opinion', title, text, day, year}
     peakAttendance: 0, // busiest night this run — the yardstick a decline is measured against
     quietDays: 0, // consecutive days the floor was effectively empty — the dynamics funnel
+    // Deliberately closing the setups to cool a poisoned room (hiatus.js). Not
+    // to be confused with `quietDays` above, which counts the room emptying on
+    // its own — that one is a failure funnel, this one is a verb.
+    hiatus: newHiatusState(),
     fadedDays: 0, // consecutive days nobody outside cares anymore — the opinion funnel
     // Everything on this object outlives the run. `achievements` and `unlocks`
     // are the lineage's permanent record — see achievements.js — and
@@ -781,7 +785,8 @@ export function newSave(partial = {}) {
     nextInvasionAbs: 0,
     tournamentInProgress: null, // record id while idle mode reveals a bracket match by match
     vods: [], // full tournament/EVO records kept for spoiler-free replay, newest first
-    idle: newIdleState(), // idle-mode config + runtime clock
+    idle: newIdleState(), // does the arcade run while the game is closed, and how fast
+    spectator: newSpectatorState(), // watching the run play itself — see auto.js for the brain
     ...partial,
   }
 }
@@ -831,15 +836,47 @@ export function newAutoStream() {
   }
 }
 
-// Idle mode: auto-advancing config. `running`/`lastTickAt` are the runtime
-// clock; the rest is user-chosen config. See constants.IDLE_SPEEDS.
+// The hiatus: setups deliberately closed so a poisoned room can cool off. The
+// behaviour lives in hiatus.js; the shape lives here with every other piece of
+// save state, so hiatus.js can import this without model.js importing back.
+export function newHiatusState() {
+  return {
+    active: false,
+    sinceAbs: null, // absolute day the shutters came down
+    totalDays: 0, // lifetime days dark this run
+    lastEndedAbs: null,
+  }
+}
+
+// Idle mode: ONE question, and how fast. Does the arcade keep running while
+// the game is shut, and at what rate. It used to also drive a foreground
+// auto-advance loop; that job is spectator mode's now, which stages it instead
+// of running it behind whatever screen you were on. See constants.IDLE_SPEEDS.
 export function newIdleState() {
   return {
-    enabled: false, // is the idle UI active
-    running: false, // is the loop currently ticking / accruing offline time
+    enabled: false, // does time pass while the game is closed
     speed: 'fast', // key into IDLE_SPEEDS
-    lastTickAt: null, // wall-clock ms of the last processed step (for catch-up)
+    lastTickAt: null, // wall-clock ms the save was last touched (persistSave stamps it)
     awayReport: null, // {steps, daysPassed, tournaments, headlines, ...} for the welcome-back modal
+  }
+}
+
+/**
+ * SPECTATOR MODE — watching the run play itself.
+ *
+ * `authority` is what the computer may do without you (see auto.js
+ * DEFAULT_AUTHORITY): breakthroughs yes, anything that permanently removes a
+ * person or shrinks the business, no, unless you say so. Overlays are
+ * remembered because a viewing preference should not reset every session.
+ */
+export function newSpectatorState() {
+  return {
+    active: false,
+    paused: false,
+    speed: 1, // dwell multiplier for the non-match beats; matches play at their own pace
+    showFeed: true,
+    showBoard: true,
+    authority: { eureka: true, banish: false, hiatus: false, downsize: false },
   }
 }
 
@@ -1132,6 +1169,16 @@ export function migrateSave(save) {
     save.stream.auto.exclude ??= []
   }
   if (save.idle) delete save.idle.autoStream
+  save.hiatus ??= newHiatusState()
+  save.spectator ??= newSpectatorState()
+  save.spectator.authority ??= newSpectatorState().authority
+  // Idle lost its `running` flag when the foreground loop was cut: a save that
+  // was left auto-advancing keeps running while closed, which is the nearest
+  // honest translation of what it was doing.
+  if (save.idle && 'running' in save.idle) {
+    save.idle.enabled = !!(save.idle.enabled && save.idle.running)
+    delete save.idle.running
+  }
   for (const t of save.arcade?.schedule || []) t.potBoost ??= 0
   for (const p of Object.values(save.players || {})) {
     p.memoriesWritten ??= (p.memories || []).length

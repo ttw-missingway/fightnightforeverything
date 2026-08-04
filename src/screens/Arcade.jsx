@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '../state/store.jsx'
 import { formatDay, formatLocation, EVO_DAY, DAYS_PER_YEAR, HOURS_PER_DAY, HOUR_LABELS, WEEKDAYS, weekdayOf,
-  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, idleSpeedOf, helperOn, seasonOf } from '../game/constants.js'
+  IDLE_SPEEDS, AUTO_STREAM_SELECTORS, AUTO_STREAM_CADENCES, helperOn, seasonOf } from '../game/constants.js'
 import { whatHappensToday, scheduledMoneyMatch } from '../game/sim.js'
 import { upcomingCircuit, circuitEventName } from '../game/circuit.js'
 import { moodLabel } from '../game/social.js'
@@ -15,9 +15,10 @@ import { buildStreamForPlayers, canStream, hypeLabel } from '../game/stream.js'
 import { revealState } from '../game/tournament.js'
 import { gatherRumors, allRumors, rumorHeatLabel } from '../game/rumors.js'
 import { isUnlocked, howToUnlock } from '../game/achievements.js'
+import { hiatusActive, hiatusDays, hiatusForecast, setHiatus } from '../game/hiatus.js'
 
 export default function Arcade() {
-  const { save, screen, advance, skipDay, nav, enableIdle } = useStore()
+  const { save, screen, advance, skipDay, nav, mutate, startSpectating } = useStore()
   const dip = save.dayInProgress
   const report = save.lastDayReport
   const today = whatHappensToday(save)
@@ -42,6 +43,23 @@ export default function Arcade() {
   return (
     <div>
       {screen.notice && <div className="notice">{screen.notice}</div>}
+
+      {/* A hiatus is a state you can lose track of — the day still runs, the
+          feed still moves, and the only visible symptom is a room that keeps
+          getting smaller. It says itself, on the screen you spend the day on,
+          with the way out one click away. */}
+      {hiatusActive(save) && (
+        <div className="notice" style={{ borderColor: 'var(--gold)' }}>
+          <div className="row spread">
+            <span>
+              🔌 <strong>The setups are closed</strong> — {hiatusDays(save)} day{hiatusDays(save) === 1 ? '' : 's'} dark.
+              {' '}<span className="dim">No matches or brackets. Bad blood is cooling at full speed; the crowd is
+              thinning by about {hiatusForecast(save).crowdLostPct}%.</span>
+            </span>
+            <button className="small" onClick={() => mutate((s) => setHiatus(s, false))}>🔛 Reopen</button>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="row spread">
@@ -98,23 +116,22 @@ export default function Arcade() {
             )}
           </div>
           <div className="col" style={{ alignItems: 'flex-end' }}>
-            {save.idle.enabled ? (
-              <IdleBar save={save} buttonLabel={buttonLabel} />
-            ) : (
-              <div className="row">
-                {/* Idle is free at all speeds from the start — the time-locks
-                    were deprecated in the revision (docs/DEPRECATED.md). An
-                    endless dynasty REQUIRES a good let-it-run mode; gating it
-                    behind tenure punished exactly the player it was for. */}
-                <button className="small" title="auto-advance the arcade over real time" onClick={() => enableIdle(true)}>
-                  🎮 Idle mode
-                </button>
-                <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
-                  ⏩ Skip to recap
-                </button>
-                <button className="primary" onClick={advance}>{buttonLabel}</button>
-              </div>
-            )}
+            <div className="row">
+              {/* WATCHING AND WORKING ARE DIFFERENT VERBS, and they used to
+                  share a button. The old idle bar auto-advanced the clock
+                  behind whichever screen you were on and handed you a diff;
+                  spectator mode actually stages it, and hands the wheel back
+                  the moment you want it. */}
+              <button className="small" title="sit back and watch the run play itself — take the wheel any time"
+                onClick={startSpectating}>
+                📺 Spectate
+              </button>
+              <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
+                ⏩ Skip to recap
+              </button>
+              <button className="primary" onClick={advance}>{buttonLabel}</button>
+            </div>
+            <OfflineSwitch save={save} />
             <span className="dim small">{daysToEvo === 0 ? 'EVO today!' : `${daysToEvo} days until EVO`}</span>
             {(() => {
               // The world's calendar, always in view: the next circuit date is
@@ -257,76 +274,49 @@ function LiveBracketMatch({ m, offScreen, revealed, determined, isNext }) {
   )
 }
 
-// ---------- Idle-mode controls ----------
+// ---------- Time, while you are not here ----------
 
-function formatCountdown(ms) {
-  const s = Math.ceil(ms / 1000)
-  if (s >= 3600) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
-  if (s >= 60) return `${Math.floor(s / 60)}m ${s % 60}s`
-  return `${s}s`
-}
-
-function IdleBar({ save, buttonLabel }) {
-  const { setIdleRunning, setIdleSpeed, enableIdle, advance, skipDay } = useStore()
+/**
+ * DOES THE ARCADE RUN WHILE THE GAME IS SHUT? That is all idle is now.
+ *
+ * It used to be a whole console — play, pause, a live countdown to the next
+ * hour — because it doubled as the foreground auto-advance. That job is
+ * spectator mode's. What is left is one switch and one rate, which is a
+ * set-once preference and is sized like one.
+ *
+ * §6 calls the let-it-run mode STRUCTURAL rather than quality-of-life: P5 made
+ * a lineage twenty years long, and an endless dynasty that only advances while
+ * observed is a dynasty nobody finishes.
+ */
+function OfflineSwitch({ save }) {
+  const { setIdleOffline, setIdleSpeed } = useStore()
   const idle = save.idle
-  const speed = idleSpeedOf(idle.speed)
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const h = setInterval(() => setNow(Date.now()), 500)
-    return () => clearInterval(h)
-  }, [])
-  const nextInMs = idle.running && idle.lastTickAt != null
-    ? Math.max(0, idle.lastTickAt + speed.ms - now)
-    : null
-  const revealing = save.tournamentInProgress && save.lastTournament?.id === save.tournamentInProgress
+  const on = !!idle.enabled
 
   return (
-    <div className="idlebar">
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="primary small" onClick={() => setIdleRunning(!idle.running)}>
-          {idle.running ? '⏸ Pause' : '▶ Play'}
-        </button>
-        <select value={idle.speed} onChange={(e) => setIdleSpeed(e.target.value)}>
-          {IDLE_SPEEDS.map((s) => {
+    <div className="row small" style={{ gap: 6, marginTop: 4 }}>
+      <label className="row" style={{ gap: 4, display: 'inline-flex' }}
+        title="the arcade keeps running while this tab is closed, and tells you what happened when you come back">
+        <input type="checkbox" checked={on} onChange={(e) => setIdleOffline(e.target.checked)} />
+        <span className="dim">🌙 runs while closed</span>
+      </label>
+      {on && (
+        <select value={idle.speed} onChange={(e) => setIdleSpeed(e.target.value)}
+          title="how much time passes per real-world interval while you are away">
+          {IDLE_SPEEDS.map((sp) => {
             // THE SPEED YOU HAVE EARNED. Blitz is the one tier that changes
             // what the game IS — eight seconds a day is a spreadsheet filling
-            // itself in, and it is far too tempting to reach for on day one.
-            // The rest stay free (the revision deprecated those time-locks on
-            // purpose); this one is back on the ladder, where it started.
-            const locked = !isUnlocked(save, `idle-${s.key}`)
+            // itself in. The rest stay free (the revision deprecated those
+            // time-locks); this one is back on the ladder, where it started.
+            const locked = !isUnlocked(save, `idle-${sp.key}`)
             return (
-              <option key={s.key} value={s.key} disabled={locked}>
-                {locked ? `🔒 ${s.label} — ${howToUnlock(`idle-${s.key}`)}` : s.label}
+              <option key={sp.key} value={sp.key} disabled={locked}>
+                {locked ? `🔒 ${sp.label} — ${howToUnlock(`idle-${sp.key}`)}` : sp.label}
               </option>
             )
           })}
         </select>
-        <button className="small" title="return to manual play" onClick={() => enableIdle(false)}>
-          ✕ Exit
-        </button>
-      </div>
-      {/* THE CLOCK IS STILL YOURS (§6). Idle mode used to take the manual
-          controls away with it, so wanting to see the next hour NOW meant
-          exiting idle, stepping, and switching it back on — three clicks to do
-          the thing the game is about. Auto-advance is a floor for how fast time
-          moves, never a ceiling. */}
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="small" title="simulate the rest of the day and jump to the recap" onClick={skipDay}>
-          ⏩ Skip to recap
-        </button>
-        <button className="small" title="step forward now, without waiting for the timer" onClick={advance}>
-          {buttonLabel}
-        </button>
-      </div>
-      <div className="small dim" style={{ textAlign: 'right' }}>{speed.blurb}</div>
-      <div className="small" style={{ textAlign: 'right' }}>
-        {idle.running
-          ? <span className="cyan">▶ auto-advancing · next {revealing ? 'match' : 'hour'} in {formatCountdown(nextInMs)}</span>
-          : <span className="dim">paused</span>}
-      </div>
-      {/* The camera moved to the console header, beside the channel it points
-          — see AutoStreamPanel. It ran only inside this loop, so auto-stream
-          was silently a feature of auto-advance rather than of the channel. */}
+      )}
     </div>
   )
 }
