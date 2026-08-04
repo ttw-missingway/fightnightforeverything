@@ -525,6 +525,16 @@ function spectatorStep(next, announce = null) {
         ? runEvo(next)
         : today.circuit ? runCircuitEvent(next, today.circuit)
           : today.type === 'teams' ? runTeamTournament(next, today) : runSinglesTournament(next, today)
+      // EVO NIGHT BELONGS TO EvoWeek, not to this stage. runEvo arms
+      // `save.evoWeek`, App renders the purpose-built broadcast ahead of the
+      // spectator, and when it finishes it navigates back here. So the day is
+      // ticked and NOT registered as a bracket to reveal — otherwise the whole
+      // event would play twice, once as the broadcast and again as 128 beats
+      // of generic stage.
+      if (res.ok && today === 'evo') {
+        advanceDay(next)
+        return { type: 'tournament', record: res.record }
+      }
       if (res.ok) {
         const rec = res.record
         rec.revealed = 0

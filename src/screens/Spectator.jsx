@@ -95,7 +95,14 @@ export default function Spectator() {
   const crashed = beat?.kind === 'error'
 
   return (
-    <div className={`spectator${spec.showFeed || spec.showBracket ? ' feed-on' : ''}${spec.showBoard ? ' board-on' : ''}`}>
+    <div className={[
+      'spectator',
+      spec.showFeed || spec.showBracket ? 'feed-on' : '',
+      spec.showBoard ? 'board-on' : '',
+      // The bracket only exists during an event, and only then does the left
+      // rail need the extra width a fork needs.
+      spec.showBracket && beat?.kind === 'tournament' ? 'bracket-live' : '',
+    ].filter(Boolean).join(' ')}>
       <StageHeader save={save} />
 
       <div className="spectator-stage">
@@ -441,77 +448,195 @@ function StageHeader({ save }) {
 }
 
 /**
- * WHERE WE ARE IN THE BRACKET.
+ * WHERE WE ARE IN THE BRACKET — the real shape, not a progress bar.
  *
- * Only up during an event, and grouped by PHASE rather than listing rounds:
- * a Weekly has seven sets across three rounds and EVO has a hundred and
- * twenty-eight across sixty, so a flat list of round titles is either trivial
- * or unreadable and never in between. Phases collapse EVO to "pools, media
- * day, top 16" while a local bracket, which has no phases, falls back to its
- * rounds — the same widget reads correctly at both sizes.
+ * Three shapes, because three things are actually happening and a single
+ * generic one would misrepresent all of them:
  *
- * Deliberately shows PROGRESS, never the result: `rec.champion` is written the
- * moment the event is simulated, so anything that peeks past the reveal
- * counter is a spoiler (the stage itself learned this the hard way).
+ *   FORK     a singles bracket, drawn as the tree it is — rounds as columns
+ *            narrowing to one name, with the elbow connectors that make a
+ *            bracket readable at a glance.
+ *   POOLS    EVO's group stage. Sixteen pools running at once is not a tree,
+ *            it is a grid, and what you want to know is which pool is on and
+ *            how far through it is.
+ *   CREW     a team battle is two crews and four seats. The tree is between
+ *            crews; the interesting shape is the tie itself, seat by seat.
+ *
+ * NOTHING HERE MAY PEEK PAST THE REVEAL COUNTER. The whole record is decided
+ * the instant the event is simulated, so every name and every result is
+ * already sitting in it — an unrevealed match must render as TBD or as its two
+ * entrants, never as its winner.
  */
 function BracketOverlay({ save, beat }) {
-  const rec = beat?.kind === 'tournament'
-    ? (beat.record || save.lastTournament)
-    : null
+  const rec = beat?.kind === 'tournament' ? (beat.record || save.lastTournament) : null
   if (!rec || !(rec.rounds || []).length) return null
   const state = revealState(rec)
   const here = currentRound(rec)
+  const phase = here?.phase || null
 
-  // Phase -> {label, done, total}. Rounds carry `phase` on the big events;
-  // a local bracket has none, so each round stands as its own group.
-  const groups = []
+  // How many sets are revealed BEFORE a given round starts — the cursor, per
+  // round, which is what decides TBD vs entrants vs result.
+  const offsets = []
   let seen = 0
-  for (const round of rec.rounds) {
-    const n = (round.matches || []).length
-    const key = round.phase || round.title
-    const label = round.phase ? PHASE_LABELS[round.phase] || round.phase : round.title
-    let g = groups.find((x) => x.key === key)
-    if (!g) { g = { key, label, total: 0, done: 0, current: false }; groups.push(g) }
-    g.total += n
-    g.done += Math.max(0, Math.min(n, state.revealedCount - seen))
-    if (round === here) g.current = true
-    seen += n
-  }
+  for (const r of rec.rounds) { offsets.push(seen); seen += (r.matches || []).length }
+  const shownIn = (ri) => state.revealedCount - offsets[ri]
+
+  const body = phase === 'pools'
+    ? <PoolGrid rec={rec} here={here} shownIn={shownIn} />
+    : rec.type === 'teams'
+      ? <CrewShape rec={rec} here={here} shownIn={shownIn} />
+      : <ForkShape rec={rec} here={here} shownIn={shownIn} />
 
   return (
-    <div className="spectator-overlay">
-      <div className="row spread" style={{ marginBottom: 4 }}>
+    <div className="spectator-overlay spectator-bracket">
+      <div className="row spread" style={{ marginBottom: 5 }}>
         <span className="dim small">🏆 the bracket</span>
         <span className="dim small">{state.revealedCount}/{state.flat.length}</span>
       </div>
-      {groups.map((g) => (
-        <div key={g.key} style={{ marginBottom: 5 }}>
-          <div className="row spread">
-            <span className={`small ${g.current ? 'pink' : g.done >= g.total ? 'dim' : ''}`}>
-              {g.current ? '▶ ' : g.done >= g.total ? '✓ ' : ''}{g.label}
-            </span>
-            <span className="dim small">{g.done}/{g.total}</span>
-          </div>
-          <div style={{ height: 3, background: 'var(--bg2)', borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
-            <div style={{
-              width: `${g.total ? Math.round((g.done / g.total) * 100) : 0}%`,
-              height: '100%',
-              background: g.current ? 'var(--pink)' : 'var(--cyan)',
-            }} />
-          </div>
-        </div>
-      ))}
-      {here?.title && <div className="dim small" style={{ marginTop: 2 }}>{here.title}</div>}
+      {body}
+      {here?.title && <div className="dim small" style={{ marginTop: 4 }}>{here.title}</div>}
     </div>
   )
 }
 
-const PHASE_LABELS = {
-  pools: 'Pools',
-  media: 'Media Day',
-  top16: 'Top 16',
-  bracket: 'Bracket',
+// Names in a 300px tree have no room to be polite about it.
+const shortName = (n) => {
+  if (!n) return 'TBD'
+  const t = String(n).replace(/^.*\|\s*/, '') // drop a sponsor tag
+  return t.length > 11 ? `${t.slice(0, 10)}…` : t
 }
+
+/**
+ * THE FORK. One column per round of the current phase, each match a two-name
+ * box, connected by elbows drawn in CSS. Rounds narrow left to right exactly
+ * as a bracket does, so the shape itself tells you how far in you are.
+ *
+ * Scoped to the CURRENT PHASE. EVO's top 16 is a double-elimination bracket
+ * whose winners and losers sides are ten rounds together — drawn as one tree
+ * that is unreadable at any width this widget can have, and drawn as its
+ * current side it is exactly the fork people picture.
+ */
+function ForkShape({ rec, here, shownIn }) {
+  const phase = here?.phase || null
+  const rounds = rec.rounds
+    .map((r, ri) => ({ r, ri }))
+    .filter(({ r }) => (r.phase || null) === phase)
+  if (!rounds.length) return null
+  // Winners and losers are separate trees living in one phase; showing both
+  // at once is two forks side by side and reads as neither.
+  const side = /Losers/i.test(here?.title || '') ? 'Losers' : /Winners|Grand/i.test(here?.title || '') ? 'Winners' : null
+  const all = side
+    ? rounds.filter(({ r }) => new RegExp(side === 'Losers' ? 'Losers' : 'Winners|Grand', 'i').test(r.title || ''))
+    : rounds
+
+  // A WINDOW, NOT THE WHOLE TREE, once the tree is deep. A round of 32 is five
+  // columns, and five columns in a 330px rail is five columns of ellipsis —
+  // the shape survives but every name is gone, which defeats the point of
+  // drawing names at all. Four columns is the most that stays legible, so a
+  // deep bracket shows the round you are on and the three it feeds into: still
+  // a fork, still narrowing, and you can read who is in it.
+  const MAX_COLS = 4
+  const at = Math.max(0, all.findIndex(({ r }) => r === here))
+  const cols = all.length <= MAX_COLS
+    ? all
+    : all.slice(Math.min(at, all.length - MAX_COLS), Math.min(at, all.length - MAX_COLS) + MAX_COLS)
+
+  return (
+    <div className="fork">
+      {cols.map(({ r, ri }) => {
+        const shown = shownIn(ri)
+        return (
+          <div className="fork-col" key={ri}>
+            {(r.matches || []).map((m, mi) => {
+              const revealed = mi < shown
+              const live = mi === shown && r === here
+              if (m.bye) {
+                return <div className="fork-m bye" key={m.id || mi}><span className="dim">{shortName(m.aName)}</span></div>
+              }
+              return (
+                <div className={`fork-m${live ? ' live' : ''}${revealed ? '' : ' pending'}`} key={m.id || mi}>
+                  <span className={revealed && m.winnerName === m.aName ? 'won' : revealed ? 'lost' : ''}>
+                    {shortName(m.aName)}
+                  </span>
+                  <span className={revealed && m.winnerName === m.bName ? 'won' : revealed ? 'lost' : ''}>
+                    {shortName(m.bName)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * THE POOLS. Sixteen groups running in parallel — a grid of letters, each with
+ * how much of it has been called, the one currently on lit up.
+ */
+function PoolGrid({ rec, here, shownIn }) {
+  const pools = []
+  rec.rounds.forEach((r, ri) => {
+    if ((r.phase || null) !== 'pools') return
+    // "Pool A · Round 1" -> "A"
+    const letter = (r.title || '').match(/Pool\s+(\S+)/)?.[1] || '?'
+    let p = pools.find((x) => x.letter === letter)
+    if (!p) { p = { letter, total: 0, done: 0, current: false }; pools.push(p) }
+    const n = (r.matches || []).length
+    p.total += n
+    p.done += Math.max(0, Math.min(n, shownIn(ri)))
+    if (r === here) p.current = true
+  })
+  if (!pools.length) return null
+  return (
+    <>
+      <div className="dim small" style={{ marginBottom: 4 }}>pools · {pools.length} groups</div>
+      <div className="poolgrid">
+        {pools.map((p) => (
+          <div key={p.letter}
+            className={`pool ${p.current ? 'live' : p.done >= p.total ? 'done' : ''}`}
+            title={`Pool ${p.letter} — ${p.done}/${p.total} sets`}>
+            <span className="pool-letter">{p.letter}</span>
+            <span className="pool-bar"><span style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }} /></span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/**
+ * THE CREW BATTLE. Two names and four seats, which is what a tie actually is.
+ * Each duel carries its seat, the two crews and the running score
+ * (tournament.js), so the shape can be read straight off the set being aired
+ * rather than reconstructed.
+ */
+function CrewShape({ rec, here, shownIn }) {
+  const ri = rec.rounds.indexOf(here)
+  const shown = ri >= 0 ? shownIn(ri) : 0
+  const m = ri >= 0 ? (here.matches || [])[Math.max(0, Math.min(shown, (here.matches || []).length - 1))] : null
+  if (!m) return <ForkShape rec={rec} here={here} shownIn={shownIn} />
+  const revealed = ri >= 0 && (here.matches || []).indexOf(m) < shown
+  const duels = m.duels || []
+  return (
+    <>
+      <div className="crew-head">
+        <span className={revealed && m.winnerName === m.aName ? 'won' : ''}>{shortName(m.aName)}</span>
+        <span className="dim small">{revealed && m.score ? m.score : 'vs'}</span>
+        <span className={revealed && m.winnerName === m.bName ? 'won' : ''}>{shortName(m.bName)}</span>
+      </div>
+      {duels.map((d, i) => (
+        <div className="crew-seat" key={i}>
+          <span className="dim small">{d.tiebreaker ? 'ace' : `seat ${d.seat}`}</span>
+          <span className="small">{revealed ? (d.scoreAfter || '') : '–'}</span>
+        </div>
+      ))}
+      {!revealed && <div className="dim small" style={{ marginTop: 2 }}>on now</div>}
+    </>
+  )
+}
+
 
 /**
  * THE FEED, as an overlay. Deliberately the world's chatter rather than the

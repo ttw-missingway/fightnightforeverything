@@ -74,24 +74,30 @@ export default function App() {
 
   const newVods = (save.vods || []).filter((v) => !isVodWatched(v)).length
 
-  // SPECTATOR MODE takes the whole screen, for the same reason EVO does below:
-  // it is not a tab you visit, it is a posture the run is in. The nav would
-  // say the opposite, and the overlays need the corners.
-  if (screen.name === 'spectator' && save.spectator?.active) {
-    return <Spectator />
-  }
-
   // EVO takes over the whole screen while it is on. It is the one night of the
   // year the game stops being a management sim and puts on a broadcast, and a
   // tab bar over the top of it would say the opposite.
+  //
+  // AHEAD OF SPECTATOR MODE ON PURPOSE. Spectator is the general-purpose stage;
+  // EvoWeek is the one night that has a purpose-built one. Watching the run
+  // play itself should not mean getting the generic treatment for the biggest
+  // event of the year — so on EVO night the broadcast wins, and when it ends
+  // the spectator picks the run back up rather than dumping you on the floor.
   const evoLive = save.evoWeek && save.evoWeek.step !== 'done' && save.lastTournament?.type === 'evo'
   if (evoLive) {
     return (
       <EvoWeek
         record={save.lastTournament}
-        onFinish={() => nav('arcade')}
+        onFinish={() => nav(save.spectator?.active ? 'spectator' : 'arcade')}
       />
     )
+  }
+
+  // SPECTATOR MODE takes the whole screen for the same reason: it is not a tab
+  // you visit, it is a posture the run is in. The nav would say the opposite,
+  // and the overlays need the corners.
+  if (screen.name === 'spectator' && save.spectator?.active) {
+    return <Spectator />
   }
 
   // The Tournament screen lost its tab (VODs cover replays) but still shows

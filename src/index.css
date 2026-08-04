@@ -381,6 +381,7 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
 @media (min-width: 1240px) {
   .spectator.feed-on .spectator-stage { padding-left: 280px; }
   .spectator.board-on .spectator-stage { padding-right: 280px; }
+  .spectator.bracket-live.feed-on .spectator-stage { padding-left: 360px; }
 }
 /* The non-match beats are a single held shot, so they are centred and given
    room rather than stacked like feed items. */
@@ -410,6 +411,11 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   pointer-events: none; /* furniture, not UI — never steals a click from the stage */
 }
 .spectator-rail-left { left: 14px; }
+/* The bracket wants more width than a text panel does — a fork with four
+   columns in 250px is four columns of ellipsis. The rail widens for it, and
+   the stage's gutter widens to match (below), so the tree never lands on the
+   match it is describing. */
+.spectator.bracket-live .spectator-rail-left { width: 330px; }
 .spectator-rail-right { right: 14px; }
 .spectator-overlay {
   padding: 8px 10px;
@@ -432,6 +438,88 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   background: rgba(12, 13, 22, 0.9);
 }
 .spectator-controls select { padding: 4px 6px; font-size: 13px; }
+
+/* ---------- The bracket, drawn as its own shape ---------- */
+/* A FORK. Columns narrowing left to right, with the elbow connectors that are
+   the whole reason a bracket is legible at a glance — each match reaches right
+   toward the round it feeds, and every column but the first reaches back. */
+.fork { display: flex; gap: 14px; align-items: stretch; }
+.fork-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 6px;
+}
+.fork-m {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(26, 29, 51, 0.7);
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fork-m.pending { opacity: 0.45; border-style: dashed; }
+.fork-m.live { border-color: var(--pink); box-shadow: 0 0 10px rgba(255, 45, 120, 0.3); opacity: 1; }
+.fork-m.bye { opacity: 0.3; font-style: italic; }
+.fork-m .won { color: var(--gold); font-weight: 700; }
+.fork-m .lost { color: var(--dim); }
+/* The elbow out of each match toward the next round. */
+.fork-col:not(:last-child) .fork-m::after {
+  content: '';
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  width: 14px;
+  height: 1px;
+  background: var(--border);
+}
+/* ...and the stub the next round reaches back with. */
+.fork-col:not(:first-child) .fork-m::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 14px;
+  height: 1px;
+  background: var(--border);
+}
+
+/* POOLS. Sixteen groups at once is a grid, not a tree. */
+.poolgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.pool {
+  display: flex; flex-direction: column; gap: 3px; align-items: center;
+  padding: 3px 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  opacity: 0.55;
+}
+.pool.done { opacity: 0.85; }
+.pool.live { opacity: 1; border-color: var(--pink); box-shadow: 0 0 10px rgba(255, 45, 120, 0.28); }
+.pool-letter { font-size: 11px; font-weight: 700; }
+.pool-bar { display: block; width: 100%; height: 3px; background: var(--bg2); border-radius: 2px; overflow: hidden; }
+.pool-bar > span { display: block; height: 100%; background: var(--cyan); }
+.pool.live .pool-bar > span { background: var(--pink); }
+
+/* A CREW BATTLE is two crews and four seats. */
+.crew-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  font-size: 12px; margin-bottom: 4px;
+}
+.crew-head .won { color: var(--gold); font-weight: 700; }
+.crew-seat {
+  display: flex; justify-content: space-between;
+  padding: 2px 4px;
+  border-left: 2px solid var(--border);
+  margin-bottom: 2px;
+}
 /* The decision feed. Above the controls rather than the usual bottom-right so
    it never sits under the play button, and pointer-events restored on the
    cards themselves so the dismiss ✕ still works inside a floating layer. */
