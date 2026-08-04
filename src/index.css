@@ -396,20 +396,31 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-.spectator-overlay {
+/* A RAIL, not a pile. Each widget used to position itself, which worked for
+   exactly two of them and broke the moment the bracket made three. */
+.spectator-rail {
   position: absolute;
+  top: 64px;
   width: 250px;
-  max-height: 42vh;
+  max-height: calc(100vh - 130px);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none; /* furniture, not UI — never steals a click from the stage */
+}
+.spectator-rail-left { left: 14px; }
+.spectator-rail-right { right: 14px; }
+.spectator-overlay {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(12, 13, 22, 0.82);
   backdrop-filter: blur(3px);
-  pointer-events: none; /* furniture, not UI — never steals a click from the stage */
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-height: 0;
 }
-.spectator-feed { left: 14px; top: 64px; }
-.spectator-board { right: 14px; top: 64px; }
 .spectator-controls {
   flex: 0 0 auto;
   display: flex;
@@ -440,7 +451,7 @@ p.speech { padding-left: 6px; border-left: 2px solid var(--cyan); }
    them, and silently hiding a thing somebody switched on is worse than
    moving it. */
 @media (max-width: 1239px) {
-  .spectator-overlay {
+  .spectator-rail {
     position: static;
     width: 100%;
     max-width: 860px;

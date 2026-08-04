@@ -876,6 +876,7 @@ export function newSpectatorState() {
     speed: 1, // dwell multiplier for the non-match beats; matches play at their own pace
     showFeed: true,
     showBoard: true,
+    showBracket: true, // where we are in the bracket — only renders during an event
     authority: { eureka: true, banish: false, hiatus: false, downsize: false },
   }
 }
@@ -1172,6 +1173,7 @@ export function migrateSave(save) {
   save.hiatus ??= newHiatusState()
   save.spectator ??= newSpectatorState()
   save.spectator.authority ??= newSpectatorState().authority
+  save.spectator.showBracket ??= true
   // Idle lost its `running` flag when the foreground loop was cut: a save that
   // was left auto-advancing keeps running while closed, which is the nearest
   // honest translation of what it was doing.

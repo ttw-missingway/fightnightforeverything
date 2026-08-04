@@ -95,7 +95,7 @@ export default function Spectator() {
   const crashed = beat?.kind === 'error'
 
   return (
-    <div className={`spectator${spec.showFeed ? ' feed-on' : ''}${spec.showBoard ? ' board-on' : ''}`}>
+    <div className={`spectator${spec.showFeed || spec.showBracket ? ' feed-on' : ''}${spec.showBoard ? ' board-on' : ''}`}>
       <StageHeader save={save} />
 
       <div className="spectator-stage">
@@ -112,8 +112,16 @@ export default function Spectator() {
             : <Stage save={save} beat={beat} speed={speed} onDone={step} />}
       </div>
 
-      {spec.showFeed && <FeedOverlay save={save} />}
-      {spec.showBoard && <BoardOverlay save={save} />}
+      {/* Two rails of furniture. Stacked in a column rather than positioned
+          individually, because the moment there was a third widget the
+          absolute-positioned ones started landing on each other. */}
+      <div className="spectator-rail spectator-rail-left">
+        {spec.showBracket && <BracketOverlay save={save} beat={beat} />}
+        {spec.showFeed && <FeedOverlay save={save} />}
+      </div>
+      <div className="spectator-rail spectator-rail-right">
+        {spec.showBoard && <BoardOverlay save={save} />}
+      </div>
       <DecisionToasts save={save} />
 
       <Controls
@@ -134,7 +142,7 @@ export default function Spectator() {
 
 // How long a non-match beat holds the stage, in ms at 1x. A conversation needs
 // long enough to actually read; a one-line note does not.
-const DWELL = { talk: 4200, note: 2600, recap: 3400, quiet: 1800 }
+const DWELL = { talk: 4200, note: 2600, recap: 3400, quiet: 1800, pool: 1500 }
 // How long a self-timing beat may hold the stage before the loop moves on
 // regardless. Long enough that no real set is ever cut short — a five-game
 // narration runs well under this — and short enough that a stall is a pause,
@@ -176,6 +184,15 @@ function currentSet(record) {
   if (state.revealedCount <= 0) return null
   const m = state.flat[state.revealedCount - 1]?.m
   return m && !m.bye ? m : null
+}
+
+/** Which round that set belongs to — "Pool N · Round 2", "Top 16 · Grand Finals". */
+function currentRound(record) {
+  if (!record) return null
+  const state = revealState(record)
+  if (state.revealedCount <= 0) return null
+  const ri = state.flat[state.revealedCount - 1]?.ri
+  return ri == null ? null : record.rounds?.[ri] || null
 }
 
 /**
@@ -300,18 +317,55 @@ function TournamentStage({ save, record, speed, onDone }) {
   if (!rec) return <Held ms={DWELL.note / speed} onDone={onDone}><div className="card"><p className="dim">…</p></div></Held>
   const state = revealState(rec)
   const m = currentSet(rec)
-  const playable = m && (m.narration || []).length > 0
+  const round = currentRound(rec)
+  // A SET WITH NO HEALTH BARS IS A SCORELINE, NOT A BROADCAST.
+  //
+  // EVO's pool rounds keep their narration but lose `narrationHud` — model.js
+  // `compactRecord` strips per-line playback data from pools once a record
+  // grows past 700k, because one EVO is otherwise heavy enough that the browser
+  // refuses the write. Played through the full player, those sets render as an
+  // unmoored wall of text with no fight above it, which is what a HUD-less
+  // broadcast looks like.
+  //
+  // They are also, in compactRecord's own words, "sixty rounds of two-player
+  // sets between people you have never heard of" — ninety-six of them at 128
+  // entrants. Reading every line of those at broadcast pace is not a watch, it
+  // is a sentence. So a set the game threw the bars away for is CALLED rather
+  // than aired: who beat whom, briefly, and on to the next. Everything from
+  // Media Day forward keeps its full playback.
+  const aired = m && (m.narration || []).length > 0 && (m.narrationHud || []).length > 0
+  const called = m && !aired && !!m.winnerName
 
   return (
     <div className="spectator-match">
       <div className="row spread">
-        <span className="pink">🏆 {rec.name}</span>
+        <span className="pink">🏆 {rec.name}{round?.title ? <span className="dim"> · {round.title}</span> : null}</span>
         <span className="dim small">
           {state.done ? 'the bracket is complete' : `match ${state.revealedCount} of ${state.flat.length}`}
         </span>
       </div>
-      {playable ? (
+      {aired ? (
         <MatchPlayback key={m.id} m={m} autoStart onComplete={onDone} />
+      ) : called ? (
+        <Held ms={DWELL.pool / speed} onDone={onDone}>
+          <div className="card spectator-card" style={{ minHeight: 120 }}>
+            <div className="row spread">
+              <span className={m.winnerName === m.aName ? 'gold' : 'dim'}>
+                {m.aName} {m.aChar && <span className="small dim">({m.aChar})</span>}
+              </span>
+              <span className="dim small">vs</span>
+              <span className={m.winnerName === m.bName ? 'gold' : 'dim'}>
+                {m.bName} {m.bChar && <span className="small dim">({m.bChar})</span>}
+              </span>
+            </div>
+            <p style={{ fontSize: 18, margin: '8px 0 0' }}>
+              <span className="gold">{m.winnerName}</span> takes it{m.score ? ` ${m.score}` : ''}.
+            </p>
+            <p className="dim small" style={{ margin: '6px 0 0' }}>
+              Pool sets are called from the desk — the bracket gets the full broadcast.
+            </p>
+          </div>
+        </Held>
       ) : (
         <Held ms={DWELL.note / speed} onDone={onDone}>
           <div className="card spectator-card">
@@ -387,6 +441,79 @@ function StageHeader({ save }) {
 }
 
 /**
+ * WHERE WE ARE IN THE BRACKET.
+ *
+ * Only up during an event, and grouped by PHASE rather than listing rounds:
+ * a Weekly has seven sets across three rounds and EVO has a hundred and
+ * twenty-eight across sixty, so a flat list of round titles is either trivial
+ * or unreadable and never in between. Phases collapse EVO to "pools, media
+ * day, top 16" while a local bracket, which has no phases, falls back to its
+ * rounds — the same widget reads correctly at both sizes.
+ *
+ * Deliberately shows PROGRESS, never the result: `rec.champion` is written the
+ * moment the event is simulated, so anything that peeks past the reveal
+ * counter is a spoiler (the stage itself learned this the hard way).
+ */
+function BracketOverlay({ save, beat }) {
+  const rec = beat?.kind === 'tournament'
+    ? (beat.record || save.lastTournament)
+    : null
+  if (!rec || !(rec.rounds || []).length) return null
+  const state = revealState(rec)
+  const here = currentRound(rec)
+
+  // Phase -> {label, done, total}. Rounds carry `phase` on the big events;
+  // a local bracket has none, so each round stands as its own group.
+  const groups = []
+  let seen = 0
+  for (const round of rec.rounds) {
+    const n = (round.matches || []).length
+    const key = round.phase || round.title
+    const label = round.phase ? PHASE_LABELS[round.phase] || round.phase : round.title
+    let g = groups.find((x) => x.key === key)
+    if (!g) { g = { key, label, total: 0, done: 0, current: false }; groups.push(g) }
+    g.total += n
+    g.done += Math.max(0, Math.min(n, state.revealedCount - seen))
+    if (round === here) g.current = true
+    seen += n
+  }
+
+  return (
+    <div className="spectator-overlay">
+      <div className="row spread" style={{ marginBottom: 4 }}>
+        <span className="dim small">🏆 the bracket</span>
+        <span className="dim small">{state.revealedCount}/{state.flat.length}</span>
+      </div>
+      {groups.map((g) => (
+        <div key={g.key} style={{ marginBottom: 5 }}>
+          <div className="row spread">
+            <span className={`small ${g.current ? 'pink' : g.done >= g.total ? 'dim' : ''}`}>
+              {g.current ? '▶ ' : g.done >= g.total ? '✓ ' : ''}{g.label}
+            </span>
+            <span className="dim small">{g.done}/{g.total}</span>
+          </div>
+          <div style={{ height: 3, background: 'var(--bg2)', borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
+            <div style={{
+              width: `${g.total ? Math.round((g.done / g.total) * 100) : 0}%`,
+              height: '100%',
+              background: g.current ? 'var(--pink)' : 'var(--cyan)',
+            }} />
+          </div>
+        </div>
+      ))}
+      {here?.title && <div className="dim small" style={{ marginTop: 2 }}>{here.title}</div>}
+    </div>
+  )
+}
+
+const PHASE_LABELS = {
+  pools: 'Pools',
+  media: 'Media Day',
+  top16: 'Top 16',
+  bracket: 'Bracket',
+}
+
+/**
  * THE FEED, as an overlay. Deliberately the world's chatter rather than the
  * day's events — what is happening is already on the stage, and the thing a
  * broadcast wants alongside it is the room talking about it.
@@ -395,7 +522,7 @@ function FeedOverlay({ save }) {
   const posts = (save.socialFeed || []).slice(0, 6)
   if (!posts.length) return null
   return (
-    <div className="spectator-overlay spectator-feed">
+    <div className="spectator-overlay">
       <div className="dim small" style={{ marginBottom: 4 }}>📱 the feed</div>
       {posts.map((p) => (
         <div key={p.id} className="small" style={{ marginBottom: 6, opacity: 0.92 }}>
@@ -414,7 +541,7 @@ function BoardOverlay({ save }) {
     .slice(0, 8)
   if (!top.length) return null
   return (
-    <div className="spectator-overlay spectator-board">
+    <div className="spectator-overlay">
       <div className="dim small" style={{ marginBottom: 4 }}>🏅 the room</div>
       {top.map((p, i) => (
         <div key={p.id} className="row spread small" style={{ gap: 10 }}>
@@ -527,6 +654,11 @@ function Controls({ spec, onPause, onSpeed, onToggle, onSkip, onLeave, onAuthori
       <label className="small" style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
         <input type="checkbox" checked={!!spec.showBoard} onChange={() => onToggle('showBoard')} />
         <span className="dim">leaderboard</span>
+      </label>
+      <label className="small" style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}
+        title="where we are in the bracket — only up during an event">
+        <input type="checkbox" checked={!!spec.showBracket} onChange={() => onToggle('showBracket')} />
+        <span className="dim">bracket</span>
       </label>
       <span className="spectator-sep" />
       <AuthorityPanel spec={spec} onSet={onAuthority} />
